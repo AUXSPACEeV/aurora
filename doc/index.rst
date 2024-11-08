@@ -1,7 +1,7 @@
 Welcome to Example Application's documentation!
 ===============================================
 
-This is a simple Sphinx documentation setup for ``example-application``.
+This is a simple Sphinx documentation setup for ``zephyr-example-setup``.
 
 .. toctree::
    :maxdepth: 2

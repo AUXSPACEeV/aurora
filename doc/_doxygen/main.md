@@ -1,5 +1,6 @@
 # Introduction
 
-This is the Doxygen documentation for [example-application].
+This is the Doxygen documentation for [zephyr-example-setup].
 
-[example-application]: https://github.com/zephyrproject-rtos/example-application
+[zephyr-example-setup]: https://github.com/AUXSPACEeV/zephyr-example-setup
+

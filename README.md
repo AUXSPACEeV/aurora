@@ -1,136 +1,110 @@
-# Zephyr Example Application
+# `zephyr-example-setup`
 
-<a href="https://github.com/zephyrproject-rtos/example-application/actions/workflows/build.yml?query=branch%3Amain">
-  <img src="https://github.com/zephyrproject-rtos/example-application/actions/workflows/build.yml/badge.svg?event=push">
-</a>
-<a href="https://github.com/zephyrproject-rtos/example-application/actions/workflows/docs.yml?query=branch%3Amain">
-  <img src="https://github.com/zephyrproject-rtos/example-application/actions/workflows/docs.yml/badge.svg?event=push">
-</a>
-<a href="https://zephyrproject-rtos.github.io/example-application">
-  <img alt="Documentation" src="https://img.shields.io/badge/documentation-3D578C?logo=sphinx&logoColor=white">
-</a>
-<a href="https://zephyrproject-rtos.github.io/example-application/doxygen">
-  <img alt="API Documentation" src="https://img.shields.io/badge/API-documentation-3D578C?logo=c&logoColor=white">
-</a>
+> Example setup of applications using the Auxspace Zephyr port
 
-This repository contains a Zephyr example application. The main purpose of this
-repository is to serve as a reference on how to structure Zephyr-based
-applications. Some of the features demonstrated in this example are:
+## General Info
 
-- Basic [Zephyr application][app_dev] skeleton
-- [Zephyr workspace applications][workspace_app]
-- [Zephyr modules][modules]
-- [West T2 topology][west_t2]
-- [Custom boards][board_porting]
-- Custom [devicetree bindings][bindings]
-- Out-of-tree [drivers][drivers]
-- Out-of-tree libraries
-- Example CI configuration (using GitHub Actions)
-- Custom [west extension][west_ext]
-- Doxygen and Sphinx documentation boilerplate
+### Technical Terms
 
-This repository is versioned together with the [Zephyr main tree][zephyr]. This
-means that every time that Zephyr is tagged, this repository is tagged as well
-with the same version number, and the [manifest](west.yml) entry for `zephyr`
-will point to the corresponding Zephyr tag. For example, the `example-application`
-v2.6.0 will point to Zephyr v2.6.0. Note that the `main` branch always
-points to the development branch of Zephyr, also `main`.
+* `RTOS`: **R**eal-**T**ime **O**perating **S**ystem
+* `µC`: **Mi**cro**C**ontroller (µ - Controller)
+* `MCU`: **M**icro**C**ontroller **Unit**
+* `SOC`: **S**ystem **O**n **C**hip
+* `Zephyr`: Open-Source RTOS Kernel for a large variety of MCUs and SOCs
+* `fork`: A *forked* repository is a direct clone of another, with custom
+modifications made
+* `Docker`: "Docker Engine is an open source containerization technology
+for building and containerizing your applications"
+(<https://docs.docker.com/engine/>)
+* `device-tree`: Tree-like configuration for hardware integration
 
-[app_dev]: https://docs.zephyrproject.org/latest/develop/application/index.html
-[workspace_app]: https://docs.zephyrproject.org/latest/develop/application/index.html#zephyr-workspace-app
-[modules]: https://docs.zephyrproject.org/latest/develop/modules.html
-[west_t2]: https://docs.zephyrproject.org/latest/develop/west/workspaces.html#west-t2
-[board_porting]: https://docs.zephyrproject.org/latest/guides/porting/board_porting.html
-[bindings]: https://docs.zephyrproject.org/latest/guides/dts/bindings.html
-[drivers]: https://docs.zephyrproject.org/latest/reference/drivers/index.html
-[zephyr]: https://github.com/zephyrproject-rtos/zephyr
-[west_ext]: https://docs.zephyrproject.org/latest/develop/west/extensions.html
+### Project Information
 
-## Getting Started
+This Project is a fork of the official
+[Zephyr Example Project](https://github.com/zephyrproject-rtos/example-application)
+with a few tweaks:
 
-Before getting started, make sure you have a proper Zephyr development
-environment. Follow the official
-[Zephyr Getting Started Guide](https://docs.zephyrproject.org/latest/getting_started/index.html).
+* Implementation of the RPI Pico and Pico2 MCUs
+* Removal of the example west script
+* Docker container for easy build and development setup
+* Initialization blinking sequence in main.c
+* Change README.md to a more specific one
 
-### Initialization
+The Zephyr Kernel acts **application-centric**, which means that
+the application implements the main entrypoint and includes the
+Zephyr Kernel.
+Zephyr supports memory protection (`MP`), simultaneous multi-processing
+(`SMP`) and many more useful features.
+Integrating custom boards is kept straighforward with
+device-tree and Kconfig hardware configuration, similar
+to the [Linux Kernel](https://github.com/torvalds/linux).
 
-The first step is to initialize the workspace folder (``my-workspace``) where
-the ``example-application`` and all Zephyr modules will be cloned. Run the following
-command:
+## Setup
 
-```shell
-# initialize my-workspace for the example-application (main branch)
-west init -m https://github.com/zephyrproject-rtos/example-application --mr main my-workspace
-# update Zephyr modules
-cd my-workspace
+Setup Zephyr using either the docker container in this directory or follow the
+[Getting Started Guide](https://docs.zephyrproject.org/latest/develop/getting_started/index.html)
+from the Zephyr project.
+
+### SSH Keys for GitHub
+
+To clone the sources, you also have to have an SSH keypair, which is connected to
+your github account.
+
+Create a keypair like this:
+
+```bash
+ssh-keygen -t rsa
+```
+
+This command creates two files (if run exacly as shown above):
+
+* `$HOME/.ssh/id_rsa` (Private Key)
+* `$HOME/.ssh/id_rsa.pub` (Public Key)
+
+The private key is to be kept secret from everyone, while the
+public key can be shared.
+Next, head to Github and into your
+[profile settings](https://github.com/settings/profile)
+and choose [`SSH and GPG Keys`](https://github.com/settings/keys)
+in the menu on the left side.
+Use the `New SSH Key` button to add your public key and click `save`.
+
+Done! You now have linked your ssh key to your GitHub profile and
+can continue with the next steps.
+
+### Docker Container and Zephyr Workspace
+
+```bash
+# Open a shell in the development container
+./run.sh --ssh-key PUT_SSH_PRIVATE_KEY shell
+
+# Install this example repo into the container
+# use "/workdir/zephyr-workspace" instead of "zephyr-workspace"
+# to access it from outside the container as well
+west init -m git@github.com:AUXSPACEeV/zephyr-example-setup --mr main zephyr-workspace
+cd zephyr-workspace
 west update
+
+# Python requirements
+pip3 install -r ./zephyr/scripts/requirements.txt
 ```
 
-### Building and running
+## Build
 
-To build the application, run the following command:
+```bash
+# use "/workdir/zephyr-workspace" instead of "~/zephyr-workspace"
+# if you used "/workdir/zephyr-workspace" in setup
+cd ~/zephyr-workspace/zephyr-example-setup
 
-```shell
-cd example-application
-west build -b $BOARD app
+# Build the project for the m33 core on the rpi pico 2 (example)
+west build -b rpi_pico2/rp2350a/m33 app
 ```
 
-where `$BOARD` is the target board.
+The output from the build will be at `zephyr-workspace/zephyr-example-setup/build/zephyr`
+called `zephyr.uf2`.
 
-You can use the `custom_plank` board found in this
-repository. Note that Zephyr sample boards may be used if an
-appropriate overlay is provided (see `app/boards`).
+## Deployment
 
-A sample debug configuration is also provided. To apply it, run the following
-command:
+Deploy the binary to your board by either using `west flash` or in case of the
+Raspberry Pi Pico series, copy it onto the Pi's storage.
 
-```shell
-west build -b $BOARD app -- -DOVERLAY_CONFIG=debug.conf
-```
-
-Once you have built the application, run the following command to flash it:
-
-```shell
-west flash
-```
-
-### Testing
-
-To execute Twister integration tests, run the following command:
-
-```shell
-west twister -T tests --integration
-```
-
-### Documentation
-
-A minimal documentation setup is provided for Doxygen and Sphinx. To build the
-documentation first change to the ``doc`` folder:
-
-```shell
-cd doc
-```
-
-Before continuing, check if you have Doxygen installed. It is recommended to
-use the same Doxygen version used in [CI](.github/workflows/docs.yml). To
-install Sphinx, make sure you have a Python installation in place and run:
-
-```shell
-pip install -r requirements.txt
-```
-
-API documentation (Doxygen) can be built using the following command:
-
-```shell
-doxygen
-```
-
-The output will be stored in the ``_build_doxygen`` folder. Similarly, the
-Sphinx documentation (HTML) can be built using the following command:
-
-```shell
-make html
-```
-
-The output will be stored in the ``_build_sphinx`` folder. You may check for
-other output formats other than HTML by running ``make help``.

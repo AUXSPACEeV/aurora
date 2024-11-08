@@ -43,19 +43,22 @@ int main(void)
 		return 0;
 	}
 
+	printk("Starting LED init blinking sequence ...");
+	blink_set_period_ms(blink, BLINK_PERIOD_MS_MAX);
+
 	printk("Use the sensor to change LED blinking period\n");
 
 	while (1) {
 		ret = sensor_sample_fetch(sensor);
 		if (ret < 0) {
 			LOG_ERR("Could not fetch sample (%d)", ret);
-			return 0;
+			goto free_all;
 		}
 
 		ret = sensor_channel_get(sensor, SENSOR_CHAN_PROX, &val);
 		if (ret < 0) {
 			LOG_ERR("Could not get sample (%d)", ret);
-			return 0;
+			goto free_all;
 		}
 
 		if ((last_val.val1 == 0) && (val.val1 == 1)) {
@@ -75,6 +78,10 @@ int main(void)
 		k_sleep(K_MSEC(100));
 	}
 
+free_all:
+	ret = blink_off(blink);
+	if (ret < 0) {
+		LOG_ERR("Could not turn off LED (%d)", ret);
+	}
 	return 0;
 }
-
