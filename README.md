@@ -22,13 +22,9 @@ for building and containerizing your applications"
 
 This Project is a fork of the official
 [Zephyr Example Project](https://github.com/zephyrproject-rtos/example-application)
-with a few tweaks:
-
-* Implementation of the RPI Pico and Pico2 MCUs
-* Removal of the example west script
-* Docker container for easy build and development setup
-* Initialization blinking sequence in main.c
-* Change README.md to a more specific one
+with a few tweaks.
+All changes made in comparison to the zephyr example application are
+traceable through the well-documented git history of this project.
 
 The Zephyr Kernel acts **application-centric**, which means that
 the application implements the main entrypoint and includes the
