@@ -25,11 +25,17 @@ This Project is a fork of the official
 with a few tweaks.
 All changes made in comparison to the zephyr example application are
 traceable through the well-documented git history of this project.
+The original README.md from the upstream repository has been moved to
+[doc/README.md](./doc/README.md) for the sole purpose of having an
+easier and more specific entrypoint for newcomers and first semester
+students with this Auxspace-specific document.
 
+As the title of this repository suggests, the application is using zephyr
+as an RTOS.
 The Zephyr Kernel acts **application-centric**, which means that
 the application implements the main entrypoint and includes the
 Zephyr Kernel.
-Zephyr supports memory protection (`MP`), simultaneous multi-processing
+Zephyr supports memory protection, simultaneous multi-processing
 (`SMP`) and many more useful features.
 Integrating custom boards is kept straighforward with
 device-tree and Kconfig hardware configuration, similar
