@@ -17,3 +17,4 @@ manifest:
           - cmsis      # required by the ARM port
           - hal_rpi_pico   # required by the rpi_pico boards (raspberrypi based)
           - hal_stm32  # required by the nucleo_f302r8 board (STM32 based)
+          - fatfs      # required for filesystem operations (ff.h)
