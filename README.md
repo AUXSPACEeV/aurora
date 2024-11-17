@@ -47,62 +47,49 @@ Setup Zephyr using either the docker container in this directory or follow the
 [Getting Started Guide](https://docs.zephyrproject.org/latest/develop/getting_started/index.html)
 from the Zephyr project.
 
-### SSH Keys for GitHub
+### Docker
 
-To clone the sources, you also have to have an SSH keypair, which is connected to
-your github account.
+If you don't want to install all Zephyr dependencies by yourself and system-wide,
+this repository also comes with a configured docker container.
 
-Create a keypair like this:
+To install docker, head to the
+[docker install instructions](https://docs.docker.com/engine/install/),
+select your distro and follow the instructions.
 
-```bash
-ssh-keygen -t rsa
-```
+[podman](https://podman.io/docs/installation)
+should also work in this project and can be selected using the `-e`
+option in the `run.sh` wrapper.
 
-This command creates two files (if run exacly as shown above):
+### Container and Zephyr Workspace
 
-* `$HOME/.ssh/id_rsa` (Private Key)
-* `$HOME/.ssh/id_rsa.pub` (Public Key)
-
-The private key is to be kept secret from everyone, while the
-public key can be shared.
-Next, head to Github and into your
-[profile settings](https://github.com/settings/profile)
-and choose [`SSH and GPG Keys`](https://github.com/settings/keys)
-in the menu on the left side.
-Use the `New SSH Key` button to add your public key and click `save`.
-
-Done! You now have linked your ssh key to your GitHub profile and
-can continue with the next steps.
-
-### Docker Container and Zephyr Workspace
+After installing docker, all requirements are met to run the wrapper script:
 
 ```bash
 # Open a shell in the development container
-./run.sh --ssh-key PUT_SSH_PRIVATE_KEY shell
-
-# Install this example repo into the container
-# use "/workdir/zephyr-workspace" instead of "zephyr-workspace"
-# to access it from outside the container as well
-west init -m git@github.com:AUXSPACEeV/zephyr-example-setup --mr main zephyr-workspace
-cd zephyr-workspace
-west update
-
-# Python requirements
-pip3 install -r ./zephyr/scripts/requirements.txt
+./run.sh shell
 ```
+
+The Zephyr workspace is configured to be at */builder/zephyr-workspace*.
+Zephyr itself is then found at */builder/zephyr-workspace/zephyr* and this
+application at */builder/zephyr-workspace/zephyr-example-setup*.
+
+*/builder/zephyr-workspace/zephyr-example-setup* is mounted into the container,
+so changes that you perform inside the container will take effect in this
+repository and vice-versa.
+
+Run `west update` in */builder/zephyr-workspace* to update modules.
 
 ## Build
 
 ```bash
-# use "/workdir/zephyr-workspace" instead of "~/zephyr-workspace"
-# if you used "/workdir/zephyr-workspace" in setup
-cd ~/zephyr-workspace/zephyr-example-setup
+cd /builder/zephyr-workspace/zephyr-example-setup
 
 # Build the project for the m33 core on the rpi pico 2 (example)
 west build -b rpi_pico2/rp2350a/m33 app
 ```
 
-The output from the build will be at `zephyr-workspace/zephyr-example-setup/build/zephyr`
+The output from the build will be at
+*/builder/zephyr-workspace/zephyr-example-setup/build/zephyr*
 called `zephyr.uf2`.
 
 ## Deployment
@@ -110,3 +97,5 @@ called `zephyr.uf2`.
 Deploy the binary to your board by either using `west flash` or in case of the
 Raspberry Pi Pico series, copy it onto the Pi's storage.
 
+Currently, flashing from inside the docker container is untested and
+might need patching.

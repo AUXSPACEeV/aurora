@@ -60,20 +60,10 @@ function print_help() {
     echo "                                 $LOG_LEVEL_DEBUG  -> DEBUG"
     echo "   --rebuild                     Rebuild the container image even"
     echo "                                 if it exists."
-    echo "   --ssh-key PRIVATE_KEYFILE     Add a private key to your ssh-agent."
-    echo "   --variant { dev | build }     Set the container variant."
-    echo "                                 Defaults to $CONTAINER_VARIANT."
     echo "-v|--verbose                     Set DEBUG log level (+set -x)."
 }
 
 function check_and_build_container() {
-    log_info "Checking for the ssh agent ..."
-    if [ ! -S "${SSH_AUTH_SOCK}" ]; then
-        log_err "SSH agent is not setup."
-        log_warn "  > Use $0 --ssh-key PRIVATE_KEYFILE for a fast setup." 
-        exit 1
-    fi
-
     log_info "Checking container engine ..."
     if [ "${CONTAINER_ENGINE}" = "podman" ]; then
         _CONTAINER_BIN="podman"
@@ -102,7 +92,7 @@ function check_and_build_container() {
 }
 
 function build_container {
-    log_info "Building container variant '$CONTAINER_VARIANT' for '$CONTAINER_TAG' ..."
+    log_info "Building container '$CONTAINER_TAG' ..."
     if [ -z "${_CONTAINER_BUILD_BIN}" ]; then
         log_err "No container build command passed."
         exit 1
@@ -112,39 +102,9 @@ function build_container {
         --build-arg PUID=$(id -u) \
         --build-arg PGID=$(id -g) \
         --build-arg ZEPHYR_SOURCE_SW_VERSION=${ZEPHYR_SOURCE_SW_VERSION} \
-        --ssh default=${SSH_AUTH_SOCK} \
         --tag $CONTAINER_TAG \
-        --file "$CONTAINER_DIR/$CONTAINER_VARIANT/Dockerfile" \
+        --file "$CONTAINER_DIR/Dockerfile" \
         "$CONTAINER_DIR"
-}
-
-function configure_ssh_agent() {
-    log_info "Setting up the ssh agent ..."
-    # Prompt the user for the path to the private SSH key
-    local ssh_key_path="${1}"
-    local ssh_key_path_default="${HOME/.ssh/id_rsa}"
-    if [ -z "$ssh_key_path" ]; then
-        log_info "Enter the path to your private SSH key."
-        read -p "(default: $ssh_key_path_default): " ssh_key_path
-    fi
-
-    # Check if the file exists
-    if [ ! -f "$ssh_key_path" ]; then
-        log_err "File '$ssh_key_path' does not exist."
-        exit 1
-    fi
-    
-    SSH_PRIVATE_KEYFILE="$ssh_key_path"
-
-    # Start the ssh-agent if it's not already running
-    if [ ! -S "$SSH_AUTH_SOCK" ]; then
-        eval "$(ssh-agent -s)"
-    fi
-
-    # Add the SSH key to the ssh-agent
-    ssh-add "$ssh_key_path"
-
-    log_info "SSH key added to the ssh-agent."
 }
 
 function start_container {
@@ -158,7 +118,6 @@ function run_container_cmd {
         log_info "Running '$CONTAINER_TAG' ..."
         $_CONTAINER_BIN run \
             $CONTAINER_RUNTIME_ARGS \
-            -v "${SSH_AUTH_SOCK}:/ssh-agent" \
             $CONTAINER_TAG \
             $COMMAND
     else
@@ -215,14 +174,12 @@ declare -i LOG_LEVEL=${LOG_LEVEL_INFO}
 CONTAINER_DIR="${THISDIR}/container"
 CONTAINER_NAME="auxspace-zephyr-builder"
 CONTAINER_TAG="${CONTAINER_NAME}:local"
-CONTAINER_VARIANT="dev"
 CONTAINER_ENGINE="docker"
 _CONTAINER_BIN="docker"
 _CONTAINER_BUILD_BIN="docker buildx"
 ZEPHYR_SOURCE_SW_VERSION="main"
-
-# SSH
-SSH_DIR="${CONTAINER_DIR}/.ssh"
+ZEPHYR_WORKSPACE="/builder/zephyr-workspace"
+ZEPHYR_APPLICATION="${ZEPHYR_WORKSPACE}/zephyr-example-setup"
 
 ################################################################################
 # Commandline arg parser                                                       #
@@ -250,14 +207,6 @@ while [ $# -gt 0 ]; do
         --rebuild)
             REBUILD_CONTAINER_IMAGE="1"
             shift
-            ;;
-        --ssh-key)
-            SSH_PRIVATE_KEYFILE="$2"
-            shift 2
-            ;;
-        --variant)
-            CONTAINER_VARIANT="$2"
-            shift 2
             ;;
         -v|--verbose)
             set -x
@@ -295,9 +244,8 @@ CONTAINER_RUNTIME_ARGS=" \
     -e PUID=`id -u` \
     -e PGID=`id -g` \
     --user $(id -u):$(id -g) \
-    -v "${THISDIR}:/workdir:rw" \
-    -e SSH_AUTH_SOCK=/ssh-agent \
-    --workdir /workdir \
+    -v "${THISDIR}:${ZEPHYR_APPLICATION}:rw" \
+    --workdir ${ZEPHYR_APPLICATION} \
 "
 
 ################################################################################
@@ -313,10 +261,6 @@ fi
 ################################################################################
 # Main                                                                         #
 ################################################################################
-
-if [ -n "${SSH_PRIVATE_KEYFILE}" ]; then
-    configure_ssh_agent $SSH_PRIVATE_KEYFILE
-fi
 
 check_and_build_container
 
