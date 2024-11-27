@@ -11,8 +11,6 @@
 #define DISK_DRIVE_NAME "SD"
 #define DISK_MOUNT_PT "/"DISK_DRIVE_NAME":"
 
-static FATFS fat_fs;
-
 #define FS_RET_OK FR_OK
 
 #define MAX_PATH 128
@@ -20,6 +18,6 @@ static FATFS fat_fs;
 #define SOME_DIR_NAME "some"
 #define SOME_REQUIRED_LEN MAX(sizeof(SOME_FILE_NAME), sizeof(SOME_DIR_NAME))
 
-static int lsdir(const char *path);
+int init_sd();
 
 #endif /* APP_IO_SDCARD_H_ */

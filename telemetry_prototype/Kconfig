@@ -13,3 +13,13 @@ endmenu
 module = TELEMETRY_PROT
 module-str = TELEMETRY_PROT
 source "subsys/logging/Kconfig.template.log_config"
+
+config STORAGE_SDCARD
+	bool "Support for sdcard storage"
+	help
+	  This option enables functionality for data storage (SD Card)
+
+config USB_SERIAL
+	bool "Support for USB serial console"
+	help
+	  This option enables functionality for a serial console via USB.

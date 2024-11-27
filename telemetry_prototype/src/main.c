@@ -9,8 +9,13 @@
 #include <app_version.h>
 
 #if defined(CONFIG_STORAGE_SDCARD)
-#include "io/storage/sdcard.h"
+#include "sdcard.h"
 #endif /* CONFIG_STORAGE_SDCARD */
+
+#if defined(CONFIG_USB_SERIAL)
+#include "usb_serial.h"
+#endif /* CONFIG_USB_SERIAL */
+
 
 LOG_MODULE_REGISTER(main, CONFIG_TELEMETRY_PROT_LOG_LEVEL);
 
@@ -19,10 +24,26 @@ LOG_MODULE_REGISTER(main, CONFIG_TELEMETRY_PROT_LOG_LEVEL);
 
 int main(void)
 {
+	int ret;
+
+#if defined(CONFIG_USB_SERIAL)
+	ret = init_usb_serial();
+	if (ret) {
+		LOG_ERR("Could not initialize USB Serial (%d)", ret);
+		return 1;
+	}
+#endif /* CONFIG_USB_SERIAL */
+
 	printk("Zephyr Weather Station %s\n", APP_VERSION_STRING);
 
 #if defined(CONFIG_STORAGE_SDCARD)
-	init_sd();
+	ret = init_sd();
+	if (ret) {
+		LOG_ERR("Could not initialize SD card (%d)", ret);
+		return 1;
+	}
 #endif /* CONFIG_STORAGE_SDCARD */
+
+	printk("Telemetry prototype exiting.\n");
 	return 0;
 }
