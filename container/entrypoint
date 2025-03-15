@@ -1,0 +1,114 @@
+#!/bin/bash
+#
+# Auxspace avionics application entrypoint for docker
+#
+# Author: Maximilian Stephan @ Auxspace e.V.
+# Copyright (c) 2025 Auxspace e.V.
+#
+
+set -e
+
+################################################################################
+# Functions                                                                    #
+################################################################################
+
+function first_boot_actions() {
+  # TODO: first boot actions
+
+  # Signal first boot success
+  sudo mkdir -p "$(dirname $FIRST_BOOT_TMP_FLAG)"
+  sudo touch "$FIRST_BOOT_TMP_FLAG"
+}
+
+# TODO: Build functions
+
+function build_app() {
+  set -e
+
+  # compile picotool
+  mkdir -p ${PICOTOOL_PATH}/build
+  cd ${PICOTOOL_PATH}/build
+  cmake -DCMAKE_INSTALL_PREFIX=~/.local ..
+  make
+  make install
+
+  # prepare build env
+  echo "Preparing buildenv ..."
+  mkdir -p "${BUILDER_APPLICATION}/build"
+  cd "${BUILDER_APPLICATION}/build"
+  cmake -G "Unix Makefiles" ../src
+
+  # compile and link project
+  echo "Compiling sources ..."
+  make
+  echo "Project compiled. Output is at \"${BUILDER_APPLICATION}/build\"."
+}
+
+function clean_app() {
+  set -e
+
+  cd "${BUILDER_APPLICATION}/build"
+  make clean
+  echo "Build dir cleaned."
+}
+
+################################################################################
+# Variables                                                                    #
+################################################################################
+
+COMMAND="/bin/bash"
+declare -a ARGS=()
+
+# Flag that shows if everything has already been initialized.
+FIRST_BOOT_TMP_FLAG="/var/auxspace/first_boot"
+
+################################################################################
+# Run first boot code to setup the environment correctly                       #
+################################################################################
+
+if [ ! -f "$FIRST_BOOT_TMP_FLAG" ]; then
+  first_boot_actions
+fi
+
+################################################################################
+# Commandline arg parser                                                       #
+################################################################################
+
+while [ $# -gt 0 ]; do
+  case $1 in
+    build)
+      build_app
+      exit 0
+      ;;
+    clean)
+      clean_app
+      exit 0
+      ;;
+    shell)
+      COMMAND="/bin/bash"
+      shift
+      ;;
+    --*)
+      echo "ERROR: No such option: $1"
+      exit 1
+      ;;
+    *)
+      log_err "ERROR: No such command: ${COMMAND}"
+      exit 1
+      ;;
+  esac
+done
+
+################################################################################
+# Run command                                                                  #
+################################################################################
+
+set +e
+$COMMAND ${ARGS[@]}
+declare -i RET=$?
+set -e
+
+if [ $RET -ne 0 ]; then
+  echo "Command failed with exit code $RET."
+  echo "  Command: $COMMAND ${ARGS[@]}"
+fi

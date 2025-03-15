@@ -1,0 +1,4 @@
+#!/bin/env bash
+
+alias ll="ls -alF"
+alias vim="nvim"
