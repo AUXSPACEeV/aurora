@@ -64,7 +64,7 @@ function print_help() {
 }
 
 function check_and_build_submodules() {
-    
+    cd $THISDIR && git submodule init && git submodule update
 }
 
 function check_and_build_container() {
