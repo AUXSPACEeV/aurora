@@ -187,6 +187,7 @@ _CONTAINER_BIN="$(which docker)"
 _CONTAINER_BUILD_BIN="${_CONTAINER_BIN} buildx"
 BUILDER_WORKSPACE="/builder/workspace"
 BUILDER_APPLICATION="${BUILDER_WORKSPACE}/aurora"
+FREERTOS_KERNEL_PATH="${BUILDER_APPLICATION}/src/kernel"
 
 ################################################################################
 # Commandline arg parser                                                       #
@@ -255,6 +256,7 @@ CONTAINER_RUNTIME_ARGS=" \
     -e PUID=`id -u` \
     -e PGID=`id -g` \
     -e BUILDER_APPLICATION="${BUILDER_APPLICATION}" \
+    -e FREERTOS_KERNEL_PATH="${FREERTOS_KERNEL_PATH}" \
     --user $(id -u):$(id -g) \
     -v "${THISDIR}:${BUILDER_APPLICATION}:rw" \
     --workdir ${BUILDER_APPLICATION} \
