@@ -20,17 +20,22 @@ function first_boot_actions() {
   sudo touch "$FIRST_BOOT_TMP_FLAG"
 }
 
-# TODO: Build functions
+function build_picotool() {
+  if [ ! -d ${PICOTOOL_PATH}/build ]; then
+    mkdir -p ${PICOTOOL_PATH}/build
+  fi
+
+  cd ${PICOTOOL_PATH}/build
+  cmake -DCMAKE_INSTALL_PREFIX=~/.local ..
+  make
+  make install
+}
 
 function build_app() {
   set -e
 
   # compile picotool
-  mkdir -p ${PICOTOOL_PATH}/build
-  cd ${PICOTOOL_PATH}/build
-  cmake -DCMAKE_INSTALL_PREFIX=~/.local ..
-  make
-  make install
+  test -x ~/.local/bin/picotool || build_picotool
 
   # prepare build env
   echo "Preparing buildenv ..."

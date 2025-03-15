@@ -183,7 +183,7 @@ CONTAINER_DIR="${THISDIR}/container"
 CONTAINER_NAME="auxspace-avionics-builder"
 CONTAINER_TAG="${CONTAINER_NAME}:local"
 CONTAINER_ENGINE="docker"
-_CONTAINER_BIN="$(which docker)"
+_CONTAINER_BIN="docker"
 _CONTAINER_BUILD_BIN="${_CONTAINER_BIN} buildx"
 BUILDER_WORKSPACE="/builder/workspace"
 BUILDER_APPLICATION="${BUILDER_WORKSPACE}/aurora"
@@ -276,6 +276,11 @@ fi
 # Main                                                                         #
 ################################################################################
 
-check_and_build_container
+# run entrypoint directly if in container
+if [ -x /sbin/entrypoint ]; then
+    exec /sbin/entrypoint $COMMAND
+fi
 
+# build, start and run container with given command
+check_and_build_container
 run_container
