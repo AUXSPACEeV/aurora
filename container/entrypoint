@@ -82,12 +82,12 @@ fi
 while [ $# -gt 0 ]; do
   case $1 in
     build)
-      build_app
-      exit 0
+      COMMAND=build_app
+      shift
       ;;
     clean)
-      clean_app
-      exit 0
+      COMMAND=clean_app
+      shift
       ;;
     shell)
       COMMAND="/bin/bash"
@@ -98,7 +98,7 @@ while [ $# -gt 0 ]; do
       exit 1
       ;;
     *)
-      log_err "ERROR: No such command: ${COMMAND}"
+      echo "ERROR: No such command: ${COMMAND}"
       exit 1
       ;;
   esac
@@ -113,7 +113,12 @@ $COMMAND ${ARGS[@]}
 declare -i RET=$?
 set -e
 
-if [ $RET -ne 0 ]; then
-  echo "Command failed with exit code $RET."
-  echo "  Command: $COMMAND ${ARGS[@]}"
-fi
+case $RET in
+  0|130)
+    # Do nothing - success
+    ;;
+  *)
+    echo "Command failed with exit code $RET."
+    echo "  Command: $COMMAND ${ARGS[@]}"
+    ;;
+esac
