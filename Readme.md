@@ -29,8 +29,8 @@ expertise in aerospace engineering!
 ## Building AURORA
 
 <details> <summary> <b>Build Dependencies</b> (<i>click</i> to open) </summary>
-The only dependency that is needed for <b>AURORA</b> to be built is
-<b>Docker</b>.
+The only build dependency of <b>AURORA</b> is
+<a href="https://docs.docker.com/engine/install/"><b>Docker</b></a>.
 </details>
 
 Building AURORA works with the `run.sh` script in this git repositories
