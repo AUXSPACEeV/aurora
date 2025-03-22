@@ -108,17 +108,4 @@ done
 # Run command                                                                  #
 ################################################################################
 
-set +e
 $COMMAND ${ARGS[@]}
-declare -i RET=$?
-set -e
-
-case $RET in
-  0|130)
-    # Do nothing - success
-    ;;
-  *)
-    echo "Command failed with exit code $RET."
-    echo "  Command: $COMMAND ${ARGS[@]}"
-    ;;
-esac
