@@ -38,11 +38,12 @@ function log_err() {
 
 function print_help() {
     echo "Usage:"
-    echo "  $0 [OPTIONS] { build | checkout | cleanall | shell }"
+    echo "  $0 [OPTIONS] { build | checkout | container | clean | shell }"
     echo
     echo "Positional arguments:"
     echo "  build                          Build the platform image."
     echo "  clean                          Clean the build directory."
+    echo "  container { build | rm }       Build or remove the dev container."
     echo "  setup                          Setup submodules, docker, etc."
     echo "  shell                          Open a shell in the container."
     echo
@@ -95,7 +96,7 @@ function check_and_build_container() {
     fi
 }
 
-function build_container {
+function build_container() {
     log_info "Building container '$CONTAINER_TAG' ..."
     if [ -z "${_CONTAINER_BUILD_BIN}" ]; then
         log_err "No container build command passed."
@@ -110,12 +111,37 @@ function build_container {
         "$CONTAINER_DIR"
 }
 
-function start_container {
+function remove_container() {
+    log_info "Removing aurora build container '$CONTAINER_NAME'."
+
+    # Stop running container
+    if [ -n "$($_CONTAINER_BIN ps -a | grep ${CONTAINER_NAME})" ]; then
+        log_info "Stopping running container ..."
+        $_CONTAINER_BIN stop ${CONTAINER_NAME}
+    fi
+
+    # remove container
+    if [ -n "$($_CONTAINER_BIN container ls -a \
+        | grep ${CONTAINER_NAME})" ]; then
+        log_info "Removing container ..."
+        $_CONTAINER_BIN container rm ${CONTAINER_NAME}
+    fi
+
+    # remove image
+    if [ -n "$($_CONTAINER_BIN images -a | grep ${CONTAINER_NAME})" ]; then
+        log_info "Removing container image ..."
+        $_CONTAINER_BIN image rm ${CONTAINER_TAG}
+    fi
+
+    log_info "Container has been removed."
+}
+
+function start_container() {
     log_info "Starting container $CONTAINER_NAME"
     $_CONTAINER_BIN start $CONTAINER_NAME
 }
 
-function run_container_cmd {
+function run_container_cmd() {
     local use_run_cmd="${1:-0}"
     if [ "$use_run_cmd" = "1" ]; then
         log_info "Running '$CONTAINER_TAG' ..."
@@ -135,11 +161,11 @@ function run_container() {
     local use_run_cmd="0"
     if ! ${_CONTAINER_BIN} container ls -a --format '{{.Names}}' \
         | grep -q "$CONTAINER_NAME"; then
-        log_warn "Container '$CONTAINER_NAME' does not exist. Using 'run' command."
+        log_warn "Container '$CONTAINER_NAME' does not exist. Using 'run'."
         use_run_cmd="1"
     elif ! ${_CONTAINER_BIN} ps --format '{{.Names}}' \
         | grep -q "$CONTAINER_NAME"; then
-        log_warn "Container '$CONTAINER_NAME' is stopped. Using 'start' command."
+        log_warn "Container '$CONTAINER_NAME' is stopped. Using 'start'."
         start_container
     fi
 
@@ -149,6 +175,18 @@ function run_container() {
 function run_setup() {
     check_and_build_submodules
     check_and_build_container
+}
+
+function do_container() {
+    local do_container_cmd="${1:-build}"
+    if [ "$do_container_cmd" = "build" ]; then
+        check_and_build_container
+    elif [ "$do_container_cmd" = "rm" ]; then
+        remove_container
+    else
+        log_err "Container command \"$do_container_cmd\" is invalid."
+        return 1
+    fi
 }
 
 ################################################################################
@@ -234,6 +272,10 @@ while [ $# -gt 0 ]; do
                     ;;
                 setup)
                     run_setup
+                    exit 0
+                    ;;
+                container)
+                    do_container "$2"
                     exit 0
                     ;;
                 *)
