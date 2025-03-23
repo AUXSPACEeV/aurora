@@ -37,6 +37,29 @@ DOCS_SRC_DIR="${DOCS_SRC_DIR:-$THISDIR/../docs}"
 # Functions                                                                    #
 ################################################################################
 
+function print_help() {
+    echo "Auxspace AURORA documentation wrapper."
+    echo
+    echo "Usage:"
+    echo "  $0 [OPTIONS] {setup | SPHINX_ARGUMENTS}"
+    echo
+    echo "Positional Arguments:"
+    echo "  setup                  Set the environment up before building."
+    echo "  <SPHINX_ARGUMENTS>     Args to run \"make\" in sphinx src dir with."
+    echo
+    echo "Options":
+    echo "-s|--src-dir DIR         Documentation source directory."
+    echo "                         Defaults to \"$DOCS_SRC_DIR\"."
+    echo "-h|--help                Print this help text."
+    echo "-l|--log-level LEVEL     Set log level to LEVEL."
+    echo "                         -1 -> logging OFF"
+    echo "                         $LOG_LEVEL_ERR  -> ERROR"
+    echo "                         $LOG_LEVEL_WARN  -> WARN"
+    echo "                         $LOG_LEVEL_INFO  -> INFO"
+    echo "                         $LOG_LEVEL_DEBUG  -> DEBUG"
+    echo "-v|--verbose             Set DEBUG log level (+set -x)."
+}
+
 function docs_setup() {
     set -e
     log_info "Setting up documentation environment in \"$DOCS_SRC_DIR\" ..."
@@ -72,6 +95,10 @@ function sphinx_cmd() {
 
 while [ $# -gt 0 ]; do
     case $1 in
+        --help)
+            print_help
+            exit 0
+            ;;
         --src-dir|-s)
             DOCS_SRC_DIR="$2"
             shift 2
