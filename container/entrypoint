@@ -42,7 +42,7 @@ function build_app() {
   echo "Preparing buildenv ..."
   mkdir -p "${BUILDER_APPLICATION}/build"
   cd "${BUILDER_APPLICATION}/build"
-  cmake -G "Unix Makefiles" ../src
+  PICO_BOARD=$PICO_BOARD cmake -G "Unix Makefiles" ../src
 
   # compile and link project
   echo "Compiling sources ..."
@@ -82,6 +82,10 @@ fi
 
 while [ $# -gt 0 ]; do
   case $1 in
+    -b|--pico-board)
+      declare -x PICO_BOARD="$2"
+      shift 2
+      ;;
     build)
       COMMAND=build_app
       shift

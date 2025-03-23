@@ -25,6 +25,12 @@ function print_help() {
     echo "  shell                          Open a shell in the container."
     echo
     echo "Options":
+    echo "-b|--pico-board BOARD            Choose a pico board from"
+    echo "                                   - pico (RPI Pico)"
+    echo "                                   - pico_w (RPI Pico + Wireless)"
+    echo "                                   - pico2 (RPI Pico 2)"
+    echo "                                   - pico2_w (RPI Pico + Wireless)"
+    echo "                                 Defaults to ${PICO_BOARD}."
     echo "   --container-dir DIR           Use custom container directory."
     echo "                                 Defaults to ${CONTAINER_DIR}."
     echo "-e|--engine { docker | podman }  Use a specific container engine."
@@ -96,6 +102,7 @@ BUILDER_APPLICATION="${BUILDER_WORKSPACE}/aurora"
 FREERTOS_KERNEL_PATH="${BUILDER_APPLICATION}/src/kernel"
 _PICO_SDK_REL_PATH="src/sdk"
 PICO_SDK_PATH="${BUILDER_APPLICATION}/$_PICO_SDK_REL_PATH"
+PICO_BOARD="pico"
 
 ################################################################################
 # Commandline arg parser                                                       #
@@ -109,6 +116,10 @@ while [ $# -gt 0 ]; do
             ;;
         -e|--engine)
             CONTAINER_ENGINE="$2"
+            shift 2
+            ;;
+        -b|--pico-board)
+            PICO_BOARD="$2"
             shift 2
             ;;
         -h|--help)
@@ -137,7 +148,7 @@ while [ $# -gt 0 ]; do
         *)
             case $1 in
                 build|shell|clean)
-                    COMMAND="$1"
+                    COMMAND="${PICO_BOARD:+ --pico-board $PICO_BOARD} $1"
                     shift
                     ;;
                 setup)
