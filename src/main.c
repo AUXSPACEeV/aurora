@@ -75,7 +75,7 @@ int main( void )
 
     watchdog_enable(WDT_CNTR_MS, 1);
 
-    ret = xTaskCreate(xWatchdogServiceTask, "My Task", WDT_RESET_TASK_STACKSIZE, NULL, tskIDLE_PRIORITY, &wdtTaskHandle);
+    ret = xTaskCreate(xWatchdogServiceTask, "Watchdog Service", WDT_RESET_TASK_STACKSIZE, NULL, WDT_RESET_TASK_PRI, &wdtTaskHandle);
     if (ret != pdPASS)
         printf("WDT service task could not be created.\n");
 
