@@ -112,14 +112,19 @@ function run_container_cmd() {
         log_info "Running '$_CONTAINER_TAG' ..."
         $CONTAINER_BIN run \
             $CONTAINER_RUNTIME_ARGS \
-            $_CONTAINER_TAG \
-            $COMMAND
-    else
-        log_info "Attaching to running container '$_CONTAINER_NAME' ..."
-        $CONTAINER_BIN exec -it \
-            $_CONTAINER_NAME \
-            /sbin/entrypoint $COMMAND
+            $_CONTAINER_TAG
     fi
+
+    if ! ${CONTAINER_BIN} ps --format '{{.Names}}' \
+        | grep -q "$_CONTAINER_NAME"; then
+        log_warn "Container '$_CONTAINER_NAME' is stopped. Using 'start'."
+        start_container
+    fi
+
+    log_info "Attaching to running container '$_CONTAINER_NAME' ..."
+    $CONTAINER_BIN exec -it \
+        $_CONTAINER_NAME \
+        /sbin/entrypoint $COMMAND
 }
 
 function run_container() {

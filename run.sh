@@ -139,11 +139,8 @@ while [ $# -gt 0 ]; do
                     exit 0
                     ;;
                 docs)
-                    shift
-                    DOCS_SRC_DIR="$THISDIR/docs"
-                    exec "$THISDIR/scripts/docs.sh" \
-                        --src-dir "${DOCS_SRC_DIR}" \
-                        $@
+                    COMMAND="$@"
+                    break
                     ;;
                 *)
                     log_err "No such command: ${COMMAND}"
