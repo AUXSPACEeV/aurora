@@ -1,0 +1,49 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "setup aurora",
+            "type": "shell",
+            "command": "./run.sh setup",
+            "problemMatcher": []
+        },
+        {
+            "label": "build aurora",
+            "type": "shell",
+            "command": "./run.sh build",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "clean aurora",
+            "type": "shell",
+            "command": "./run.sh clean",
+            "problemMatcher": []
+        },
+        {
+            "label": "setup docs",
+            "type": "shell",
+            "command": "./run.sh docs setup",
+            "problemMatcher": []
+        },
+        {
+            "label": "build html docs",
+            "type": "shell",
+            "command": "./run.sh docs html",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "clean docs",
+            "type": "shell",
+            "command": "./run.sh docs clean",
+            "problemMatcher": []
+        }
+    ]
+}
