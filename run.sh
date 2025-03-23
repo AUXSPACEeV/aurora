@@ -42,7 +42,15 @@ function print_help() {
 }
 
 function check_and_build_submodules() {
-    cd $THISDIR && git submodule init && git submodule update
+    set -e
+
+    # setup aurora submodules
+    cd "${THISDIR}"
+    git submodule update --init
+
+    # setup pico sdk submodules
+    cd "${THISDIR}/${_PICO_SDK_REL_PATH}"
+    git submodule update --init
 }
 
 function run_setup() {
@@ -86,6 +94,8 @@ source $THISDIR/scripts/lib/container.sh
 BUILDER_WORKSPACE="/builder/workspace"
 BUILDER_APPLICATION="${BUILDER_WORKSPACE}/aurora"
 FREERTOS_KERNEL_PATH="${BUILDER_APPLICATION}/src/kernel"
+_PICO_SDK_REL_PATH="src/sdk"
+PICO_SDK_PATH="${BUILDER_APPLICATION}/$_PICO_SDK_REL_PATH"
 
 ################################################################################
 # Commandline arg parser                                                       #
@@ -159,6 +169,7 @@ done
 CONTAINER_RUNTIME_ARGS+=" \
     -e BUILDER_APPLICATION="${BUILDER_APPLICATION}" \
     -e FREERTOS_KERNEL_PATH="${FREERTOS_KERNEL_PATH}" \
+    -e PICO_SDK_PATH="${PICO_SDK_PATH}" \
     -v "${THISDIR}:${BUILDER_APPLICATION}:rw" \
     --workdir ${BUILDER_APPLICATION} \
 "

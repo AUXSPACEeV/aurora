@@ -21,7 +21,6 @@ ENV BUILDER_HOME="/builder"
 
 # Path definitions
 ENV BUILD_DEPS_PATH="${BUILDER_HOME}/deps"
-ENV PICO_SDK_PATH="${BUILD_DEPS_PATH}/pico-sdk"
 ENV PICOTOOL_PATH="${BUILD_DEPS_PATH}/picotool"
 ENV PICO_PROJECT_GENERATOR_PATH="${BUILD_DEPS_PATH}/pico-project-generator"
 
@@ -68,11 +67,6 @@ RUN useradd --create-home \
 RUN echo "builder  ALL=(ALL:ALL) NOPASSWD:ALL" > /etc/sudoers.d/builder-nopasswd
 RUN echo 'Defaults env_keep += "ftp_proxy http_proxy https_proxy no_proxy"' \
     >> /etc/sudoers.d/builder-nopasswd
-
-# pico-sdk installation
-RUN mkdir -p ${BUILD_DEPS_PATH}
-RUN git clone https://github.com/raspberrypi/pico-sdk.git ${PICO_SDK_PATH}
-RUN cd ${PICO_SDK_PATH} && git submodule update --init
 
 # picotool installation
 RUN git clone https://github.com/raspberrypi/picotool.git ${PICOTOOL_PATH}
