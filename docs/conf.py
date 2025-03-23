@@ -22,7 +22,7 @@ extensions = [
     'sphinx_favicon',
     'notfound.extension',
 ]
-myst_enable_extensions = ["colon_fence"]
+myst_enable_extensions = ['colon_fence']
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '.venv']
@@ -33,7 +33,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '.venv']
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 # TODO: Replace when AURORA icon design is done
-html_logo = "_static/logo/AUXSPACE_Logo_weiss-1024x159.png"
+html_logo = '_static/logo/AUXSPACE_Logo_weiss-1024x159.png'
 html_theme_options = {
     'logo_only': True,
 }
@@ -41,18 +41,18 @@ html_theme_options = {
 # -- Sphinx Favicon ----------------------------------------------------------
 
 favicons = [
-    {"href": "favicon/cropped-Logo_signet_blau_quadrat-1-32x32.png"},  # => use `_static/icon.svg`
-    {"href": "favicon/cropped-Logo_signet_blau_quadrat-1-192x192.png"},
+    {'href': 'favicon/cropped-Logo_signet_blau_quadrat-1-32x32.png'},
+    {'href': 'favicon/cropped-Logo_signet_blau_quadrat-1-192x192.png'},
     {
-        "rel": "apple-touch-icon",
-        "href": "favicon/cropped-Logo_signet_blau_quadrat-1-180x180.png",
+        'rel': 'apple-touch-icon',
+        'href': 'favicon/cropped-Logo_signet_blau_quadrat-1-180x180.png',
     },
     {
-        "rel": "msapplication-TileImage",
-        "href": "favicon/cropped-Logo_signet_blau_quadrat-1-270x270.png",
+        'rel': 'msapplication-TileImage',
+        'href': 'favicon/cropped-Logo_signet_blau_quadrat-1-270x270.png',
     }
 ]
 
 # -- Sphinx Notfound Page ----------------------------------------------------
 
-notfound_template = "404.rst"
+notfound_template = '404.rst'
