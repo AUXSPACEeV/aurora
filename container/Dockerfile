@@ -47,6 +47,10 @@ RUN apt-get install -y --no-install-recommends \
 RUN apt-get install -y --no-install-recommends \
     python3 python3-dev python3-tk python3-venv python3-setuptools
 
+# documentation dependencies
+RUN apt-get install -y --no-install-recommends \
+    python3-sphinx python3-pip
+
 # Other packages required in the container + development tools
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

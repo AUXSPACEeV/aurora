@@ -26,6 +26,15 @@ Join us as we continue to develop and refine **AURORA**,
 contributing to the advancement of rocket technology and student
 expertise in aerospace engineering!
 
+## Documentation
+
+The projects documentation is built using
+[Sphinx](https://www.sphinx-doc.org/en/master/).
+In the current state, the documentation is empty and only a placeholder for
+what will be in the future.
+A dedicated webpage for the docs hasn't been designed yet and is a work in
+progress.
+
 ## Building AURORA
 
 <details> <summary> <b>Build Dependencies</b> (<i>click</i> to open) </summary>

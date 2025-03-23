@@ -14,12 +14,13 @@ set -e
 
 function print_help() {
     echo "Usage:"
-    echo "  $0 [OPTIONS] { build | checkout | container | clean | shell }"
+    echo "  $0 [OPTIONS] { build | clean | container | docs | setup | shell }"
     echo
     echo "Positional arguments:"
     echo "  build                          Build the platform image."
     echo "  clean                          Clean the build directory."
     echo "  container { build | rm }       Build or remove the dev container."
+    echo "  docs      ARGS                 Call the docs script with ARGS."
     echo "  setup                          Setup submodules, docker, etc."
     echo "  shell                          Open a shell in the container."
     echo
@@ -136,6 +137,13 @@ while [ $# -gt 0 ]; do
                 container)
                     do_container "$2"
                     exit 0
+                    ;;
+                docs)
+                    shift
+                    DOCS_SRC_DIR="$THISDIR/docs"
+                    exec "$THISDIR/scripts/docs.sh" \
+                        --src-dir "${DOCS_SRC_DIR}" \
+                        $@
                     ;;
                 *)
                     log_err "No such command: ${COMMAND}"
