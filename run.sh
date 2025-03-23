@@ -12,30 +12,6 @@ set -e
 # Functions                                                                    #
 ################################################################################
 
-function log_debug() {
-    if [ $LOG_LEVEL -ge $LOG_LEVEL_DEBUG ]; then
-        echo "DEBUG: $@"
-    fi
-}
-
-function log_info() {
-    if [ $LOG_LEVEL -ge $LOG_LEVEL_INFO ]; then
-        echo "INFO: $@"
-    fi
-}
-
-function log_warn() {
-    if [ $LOG_LEVEL -ge $LOG_LEVEL_WARN ]; then
-        >&2 echo "WARNING: $@"
-    fi
-}
-
-function log_err() {
-    if [ $LOG_LEVEL -ge $LOG_LEVEL_ERR ]; then
-        >&2 echo "ERROR: $@"
-    fi
-}
-
 function print_help() {
     echo "Usage:"
     echo "  $0 [OPTIONS] { build | checkout | container | clean | shell }"
@@ -68,129 +44,13 @@ function check_and_build_submodules() {
     cd $THISDIR && git submodule init && git submodule update
 }
 
-function check_and_build_container() {
-    log_info "Checking container engine ..."
-    if [ "${CONTAINER_ENGINE}" = "podman" ]; then
-        _CONTAINER_BIN="podman"
-        _CONTAINER_BUILD_BIN="buildah"
-    elif [ "${CONTAINER_ENGINE}" = "docker" ]; then
-        _CONTAINER_BIN="docker"
-        _CONTAINER_BUILD_BIN="docker buildx"
-    else
-        log_err "Unknown container engine: $CONTAINER_ENGINE"
-        exit 1
-    fi
-
-    # Check if a container with the specified name exists
-    log_info "Checking for existing $_CONTAINER_BIN images ..."
-    if ! ${_CONTAINER_BIN} images -a --format '{{.Repository}}' \
-        | grep -q "$CONTAINER_NAME"; then
-        log_warn "Image for container '$CONTAINER_NAME' not found."
-        build_container
-    elif [ -n "$REBUILD_CONTAINER_IMAGE" ]; then
-        log_info "Force rebuild activated."
-        build_container
-    else
-        log_info "Image for container '$CONTAINER_TAG' already exists."
-        log_info "Skipping container build."
-    fi
-}
-
-function build_container() {
-    log_info "Building container '$CONTAINER_TAG' ..."
-    if [ -z "${_CONTAINER_BUILD_BIN}" ]; then
-        log_err "No container build command passed."
-        exit 1
-    fi
-
-    DOCKER_BUILDKIT=1 ${_CONTAINER_BUILD_BIN} build \
-        --build-arg PUID=$(id -u) \
-        --build-arg PGID=$(id -g) \
-        --tag $CONTAINER_TAG \
-        --file "$CONTAINER_DIR/Dockerfile" \
-        "$CONTAINER_DIR"
-}
-
-function remove_container() {
-    log_info "Removing aurora build container '$CONTAINER_NAME'."
-
-    # Stop running container
-    if [ -n "$($_CONTAINER_BIN ps -a | grep ${CONTAINER_NAME})" ]; then
-        log_info "Stopping running container ..."
-        $_CONTAINER_BIN stop ${CONTAINER_NAME}
-    fi
-
-    # remove container
-    if [ -n "$($_CONTAINER_BIN container ls -a \
-        | grep ${CONTAINER_NAME})" ]; then
-        log_info "Removing container ..."
-        $_CONTAINER_BIN container rm ${CONTAINER_NAME}
-    fi
-
-    # remove image
-    if [ -n "$($_CONTAINER_BIN images -a | grep ${CONTAINER_NAME})" ]; then
-        log_info "Removing container image ..."
-        $_CONTAINER_BIN image rm ${CONTAINER_TAG}
-    fi
-
-    log_info "Container has been removed."
-}
-
-function start_container() {
-    log_info "Starting container $CONTAINER_NAME"
-    $_CONTAINER_BIN start $CONTAINER_NAME
-}
-
-function run_container_cmd() {
-    local use_run_cmd="${1:-0}"
-    if [ "$use_run_cmd" = "1" ]; then
-        log_info "Running '$CONTAINER_TAG' ..."
-        $_CONTAINER_BIN run \
-            $CONTAINER_RUNTIME_ARGS \
-            $CONTAINER_TAG \
-            $COMMAND
-    else
-        log_info "Attaching to running container '$CONTAINER_NAME' ..."
-        $_CONTAINER_BIN exec -it \
-            $CONTAINER_NAME \
-            /sbin/entrypoint $COMMAND
-    fi
-}
-
-function run_container() {
-    local use_run_cmd="0"
-    if ! ${_CONTAINER_BIN} container ls -a --format '{{.Names}}' \
-        | grep -q "$CONTAINER_NAME"; then
-        log_warn "Container '$CONTAINER_NAME' does not exist. Using 'run'."
-        use_run_cmd="1"
-    elif ! ${_CONTAINER_BIN} ps --format '{{.Names}}' \
-        | grep -q "$CONTAINER_NAME"; then
-        log_warn "Container '$CONTAINER_NAME' is stopped. Using 'start'."
-        start_container
-    fi
-
-    run_container_cmd $use_run_cmd
-}
-
 function run_setup() {
     check_and_build_submodules
     check_and_build_container
 }
 
-function do_container() {
-    local do_container_cmd="${1:-build}"
-    if [ "$do_container_cmd" = "build" ]; then
-        check_and_build_container
-    elif [ "$do_container_cmd" = "rm" ]; then
-        remove_container
-    else
-        log_err "Container command \"$do_container_cmd\" is invalid."
-        return 1
-    fi
-}
-
 ################################################################################
-# Variables and constants                                                      #
+# Basic setup                                                                  #
 ################################################################################
 
 # THISDIR
@@ -201,28 +61,27 @@ case "${unameOut}" in
     *)          machine="${unameOut}"
 esac
 
-log_info "Detected System: $machine"
+# No logging yet, need THISDIR first
+echo "Detected System: $machine"
 
 if [ "$machine" = "Mac" ]; then
-    THISDIR="$(dirname $(readlink -f $0))"
+    declare -x -r THISDIR="$(dirname $(readlink -f $0))"
 else
-    THISDIR="$(dirname $(readlink -e -- $0))"
+    declare -x -r THISDIR="$(dirname $(readlink -e -- $0))"
 fi
 
-# Logging
-declare -i LOG_LEVEL_ERR=0
-declare -i LOG_LEVEL_WARN=1
-declare -i LOG_LEVEL_INFO=2
-declare -i LOG_LEVEL_DEBUG=3
-declare -i LOG_LEVEL=${LOG_LEVEL_INFO}
+################################################################################
+# Includes                                                                     #
+################################################################################
+
+source $THISDIR/scripts/lib/log.sh
+source $THISDIR/scripts/lib/container.sh
+
+################################################################################
+# Variables and constants                                                      #
+################################################################################
 
 # Container
-CONTAINER_DIR="${THISDIR}/container"
-CONTAINER_NAME="auxspace-avionics-builder"
-CONTAINER_TAG="${CONTAINER_NAME}:local"
-CONTAINER_ENGINE="docker"
-_CONTAINER_BIN="docker"
-_CONTAINER_BUILD_BIN="${_CONTAINER_BIN} buildx"
 BUILDER_WORKSPACE="/builder/workspace"
 BUILDER_APPLICATION="${BUILDER_WORKSPACE}/aurora"
 FREERTOS_KERNEL_PATH="${BUILDER_APPLICATION}/src/kernel"
@@ -251,7 +110,7 @@ while [ $# -gt 0 ]; do
             shift 2
             ;;
         --rebuild)
-            REBUILD_CONTAINER_IMAGE="1"
+            REBUILD_CONTAINER_IMAGE=1
             shift
             ;;
         -v|--verbose)
@@ -292,14 +151,9 @@ done
 # Build vars from argparsing                                                   #
 ################################################################################
 
-CONTAINER_RUNTIME_ARGS=" \
-    -it \
-    --name ${CONTAINER_NAME} \
-    -e PUID=`id -u` \
-    -e PGID=`id -g` \
+CONTAINER_RUNTIME_ARGS+=" \
     -e BUILDER_APPLICATION="${BUILDER_APPLICATION}" \
     -e FREERTOS_KERNEL_PATH="${FREERTOS_KERNEL_PATH}" \
-    --user $(id -u):$(id -g) \
     -v "${THISDIR}:${BUILDER_APPLICATION}:rw" \
     --workdir ${BUILDER_APPLICATION} \
 "
