@@ -15,9 +15,9 @@ fi
 
 # local r/o
 declare -r _CONTAINER_NAME="auxspace-avionics-builder"
-declare -r _CONTAINER_TAG="${_CONTAINER_NAME}:local"
 
 # global r/w for container config
+declare -x CONTAINER_TAG="local"
 declare -x CONTAINER_DIR="${THISDIR}/container"
 declare -x CONTAINER_ENGINE="docker"
 declare -x CONTAINER_BIN="docker"
@@ -26,12 +26,16 @@ declare -x -i REBUILD_CONTAINER_IMAGE=0
 
 # this should only be appended and not overwritten
 declare -x CONTAINER_RUNTIME_ARGS=" \
-    -it \
     --name ${_CONTAINER_NAME} \
     -e PUID=`id -u` \
     -e PGID=`id -g` \
     --user $(id -u):$(id -g) \
 "
+if [ -z "AURORA_CI_BUILDER" ]; then
+    declare -x CONTIANER_EXEC_FLAGS="-it"
+else
+    declare -x CONTIANER_EXEC_FLAGS=""
+fi
 
 function check_and_build_container() {
     log_info "Checking container engine ..."
@@ -56,13 +60,13 @@ function check_and_build_container() {
         log_info "Force rebuild activated."
         build_container
     else
-        log_info "Image for container '$_CONTAINER_TAG' already exists."
+        log_info "Image for container '${_CONTAINER_NAME}:$CONTAINER_TAG' already exists."
         log_info "Skipping container build."
     fi
 }
 
 function build_container() {
-    log_info "Building container '$_CONTAINER_TAG' ..."
+    log_info "Building container '${_CONTAINER_NAME}:$CONTAINER_TAG' ..."
     if [ -z "${CONTAINER_BUILD_BIN}" ]; then
         log_err "No container build command passed."
         exit 1
@@ -71,7 +75,7 @@ function build_container() {
     DOCKER_BUILDKIT=1 ${CONTAINER_BUILD_BIN} build \
         --build-arg PUID=$(id -u) \
         --build-arg PGID=$(id -g) \
-        --tag $_CONTAINER_TAG \
+        --tag "${_CONTAINER_NAME}:$CONTAINER_TAG" \
         --file "$CONTAINER_DIR/Dockerfile" \
         "$CONTAINER_DIR"
 }
@@ -95,7 +99,7 @@ function remove_container() {
     # remove image
     if [ -n "$($CONTAINER_BIN images -a | grep ${_CONTAINER_NAME})" ]; then
         log_info "Removing container image ..."
-        $CONTAINER_BIN image rm ${_CONTAINER_TAG}
+        $CONTAINER_BIN image rm "${_CONTAINER_NAME}:${CONTAINER_TAG}"
     fi
 
     log_info "Container has been removed."
@@ -109,10 +113,14 @@ function start_container() {
 function run_container_cmd() {
     local use_run_cmd="${1:-0}"
     if [ "$use_run_cmd" = "1" ]; then
-        log_info "Running '$_CONTAINER_TAG' ..."
+        log_info "Running '${_CONTAINER_NAME}:$CONTAINER_TAG' ..."
         $CONTAINER_BIN run \
             $CONTAINER_RUNTIME_ARGS \
-            $_CONTAINER_TAG
+            ${_CONTAINER_NAME}:$CONTAINER_TAG \
+            ${AURORA_CI_BUILDER:+$COMMAND}
+        if [ "$AURORA_CI_BUILDER" = "1" ]; then
+            exit 0
+        fi
     fi
 
     if ! ${CONTAINER_BIN} ps --format '{{.Names}}' \
@@ -122,9 +130,10 @@ function run_container_cmd() {
     fi
 
     log_info "Attaching to running container '$_CONTAINER_NAME' ..."
-    $CONTAINER_BIN exec -it \
+    $CONTAINER_BIN exec \
+        $CONTIANER_EXEC_FLAGS \
         $_CONTAINER_NAME \
-        /sbin/entrypoint $COMMAND
+        $COMMAND
 }
 
 function run_container() {

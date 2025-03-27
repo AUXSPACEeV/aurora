@@ -1,0 +1,18 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "main", "next" ]
+  pull_request:
+    branches: [ "main", "next" ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build the Docker image
+      run: ./run.sh --container-tag $(date +%s) --engine docker --container-dir ./container container build

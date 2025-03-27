@@ -1,0 +1,35 @@
+# Simple Job to build AURORA for multiple platforms
+name: Build AURORA for multiple platforms
+
+on:
+  push:
+    branches: [ "main", "next" ]
+  pull_request:
+    branches: [ "main", "next" ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      # Set fail-fast to false to ensure that feedback is delivered for all matrix combinations. Consider changing this to true when your workflow is stable.
+      fail-fast: false
+
+      # Set up a matrix to run the following 4 configurations:
+      # 1. <Linux, Release, RPI Pico>
+      # 2. <Linux, Release, RPI Pico W>
+      # 3. <Linux, Release, RPI Pico 2>
+      # 4. <Linux, Release, RPI Pico 2 W>
+      #
+      # To add more build types (Release, Debug, RelWithDebInfo, etc.) customize the build_type list.
+      matrix:
+        os: [ubuntu-latest]
+        build_type: [Release]
+        pico_board: [pico, pico_w, pico2, pico2_w]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build
+      # Build AURORA with the given configuration..
+      run: AURORA_CI_BUILDER=1 ./run.sh --pico-board ${{ matrix.pico_board }} build

@@ -33,6 +33,8 @@ function print_help() {
     echo "                                 Defaults to ${PICO_BOARD}."
     echo "   --container-dir DIR           Use custom container directory."
     echo "                                 Defaults to ${CONTAINER_DIR}."
+    echo "   --container-tag TAG           Tag of the container."
+    echo "                                 Defaults to ${CONTAINER_TAG}."
     echo "-e|--engine { docker | podman }  Use a specific container engine."
     echo "                                 Defaults to ${CONTAINER_ENGINE}."
     echo "-h|--help                        Print this help text."
@@ -114,6 +116,10 @@ while [ $# -gt 0 ]; do
             CONTAINER_DIR="$2"
             shift 2
             ;;
+        --container-tag)
+            CONTAINER_TAG="$2"
+            shift 2
+            ;;
         -e|--engine)
             CONTAINER_ENGINE="$2"
             shift 2
@@ -181,6 +187,7 @@ CONTAINER_RUNTIME_ARGS+=" \
     -e BUILDER_APPLICATION="${BUILDER_APPLICATION}" \
     -e FREERTOS_KERNEL_PATH="${FREERTOS_KERNEL_PATH}" \
     -e PICO_SDK_PATH="${PICO_SDK_PATH}" \
+    -e AURORA_CI_BUILDER="$AURORA_CI_BUILDER" \
     -v "${THISDIR}:${BUILDER_APPLICATION}:rw" \
     --workdir ${BUILDER_APPLICATION} \
 "
@@ -205,5 +212,9 @@ if [ -x /sbin/entrypoint ]; then
 fi
 
 # build, start and run container with given command
+if [ "$AURORA_CI_BUILDER" = "1" ]; then
+    run_setup
+fi
+
 check_and_build_container
 run_container

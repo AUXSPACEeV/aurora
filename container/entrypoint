@@ -13,12 +13,17 @@ set -e
 ################################################################################
 
 function first_boot_actions() {
-  # TODO: first boot actions
-
+  local is_ci_build="${1:-0}"
   # Signal first boot success
   sudo mkdir -p "$(dirname $FIRST_BOOT_TMP_FLAG)"
   sudo touch "$FIRST_BOOT_TMP_FLAG"
-  exit 0
+
+  # Usually its smart to exit after setup, but in CI builds we want to
+  # continue to build the project, since docker containers do not run deattached
+  # in CI builds.
+  if [ "$is_ci_build" = "0" ]; then
+    exit 0
+  fi
 }
 
 function build_picotool() {
@@ -62,7 +67,7 @@ function clean_app() {
 # Variables                                                                    #
 ################################################################################
 
-COMMAND="/bin/bash"
+COMMAND=""
 declare -a ARGS=()
 
 # Flag that shows if everything has already been initialized.
@@ -73,7 +78,7 @@ FIRST_BOOT_TMP_FLAG="/var/auxspace/first_boot"
 ################################################################################
 
 if [ ! -f "$FIRST_BOOT_TMP_FLAG" ]; then
-  first_boot_actions
+  first_boot_actions ${AURORA_CI_BUILDER:+$AURORA_CI_BUILDER}
 fi
 
 ################################################################################
@@ -109,7 +114,7 @@ while [ $# -gt 0 ]; do
       exit 1
       ;;
     *)
-      echo "ERROR: No such command: ${COMMAND}"
+      echo "ERROR: No such command: ${1}"
       exit 1
       ;;
   esac
