@@ -28,7 +28,7 @@
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 
- /*-----------------------------------------------------------
+ /**
   * Application specific definitions.
   *
   * These definitions should be adjusted for your particular hardware and
@@ -38,9 +38,9 @@
   * FreeRTOS API DOCUMENTATION AVAILABLE ON THE FreeRTOS.org WEB SITE.
   *
   * See http://www.freertos.org/a00110.html
-  *----------------------------------------------------------*/
+  */
 
-/* Scheduler Related */
+  /* Scheduler Related */
 #define configUSE_PREEMPTION                    1
 #define configUSE_TICKLESS_IDLE                 1   //DeepSleep?
 #define configUSE_IDLE_HOOK                     0
@@ -103,11 +103,11 @@
 */
 
 // Single Core
-#define configNUMBER_OF_CORES                       	2
-#define configTICK_CORE                         					0
-#define configRUN_MULTIPLE_PRIORITIES         0
-#define configUSE_CORE_AFFINITY                 		1
-#define configNUM_CORES 											configNUMBER_OF_CORES  //SDK still relies on this
+#define configNUMBER_OF_CORES                   2
+#define configTICK_CORE                         0
+#define configRUN_MULTIPLE_PRIORITIES           0
+#define configUSE_CORE_AFFINITY                 1
+#define configNUM_CORES                         configNUMBER_OF_CORES  //SDK still relies on this
 
 
 /* RP2040 specific */
@@ -145,8 +145,8 @@ extern "C"
 {
 #endif
 
-void *pvPortCalloc( size_t nmemb, size_t size );
-void *pvPortRealloc( void *pv, size_t size );
+    void* pvPortCalloc(size_t nmemb, size_t size);
+    void* pvPortRealloc(void* pv, size_t size);
 
 #ifdef __cplusplus
 } // extern "C"

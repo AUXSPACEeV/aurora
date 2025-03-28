@@ -1,4 +1,4 @@
-/*
+/**
  * AURORA - AUxspace ROcket opeRAting System
  * Copyright (C) 2025 2025 Auxspace e.V.
  *
@@ -23,7 +23,7 @@
  * Maintainer: Maximilian Stephan @ Auxspace e.V.
  */
 
-/* FreeRTOS include files. */
+ /* FreeRTOS include files. */
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
@@ -39,29 +39,29 @@
 #define WDT_RESET_TASK_STACKSIZE (configMINIMAL_STACK_SIZE * 4)
 #define WDT_CNTR_MS              (10000U)
 
-/*
+/**
  * Configure the hardware as necessary
  */
-static void prvSetupHardware( void );
+static void prvSetupHardware(void);
 
-/*
+/**
  * Prototypes for the standard FreeRTOS callback/hook functions implemented
  * within this file.
  */
-void vApplicationMallocFailedHook( void );
-void vApplicationIdleHook( void );
-void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName );
-void vApplicationTickHook( void );
+void vApplicationMallocFailedHook(void);
+void vApplicationIdleHook(void);
+void vApplicationStackOverflowHook(TaskHandle_t pxTask, char* pcTaskName);
+void vApplicationTickHook(void);
 
-/*
+/**
  * Watchdog reset
  */
-static void xWatchdogServiceTask( void *args );
+static void xWatchdogServiceTask(void* args);
 static TaskHandle_t wdtTaskHandle = NULL; // globally accessible
 
 /*-----------------------------------------------------------*/
 
-int main( void )
+int main(void)
 {
     int ret;
 
@@ -86,14 +86,14 @@ int main( void )
 
 /*-----------------------------------------------------------*/
 
-static void prvSetupHardware( void )
+static void prvSetupHardware(void)
 {
     stdio_init_all();
 }
 
 /*-----------------------------------------------------------*/
 
-void vApplicationMallocFailedHook( void )
+void vApplicationMallocFailedHook(void)
 {
     /* Called if a call to pvPortMalloc() fails because there is insufficient
     free memory available in the FreeRTOS heap.  pvPortMalloc() is called
@@ -102,27 +102,27 @@ void vApplicationMallocFailedHook( void )
     configTOTAL_HEAP_SIZE configuration constant in FreeRTOSConfig.h. */
 
     /* Force an assert. */
-    configASSERT( ( volatile void * ) NULL );
+    configASSERT((volatile void*)NULL);
 }
 
 /*-----------------------------------------------------------*/
 
-void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName )
+void vApplicationStackOverflowHook(TaskHandle_t pxTask, char* pcTaskName)
 {
-    ( void ) pcTaskName;
-    ( void ) pxTask;
+    (void)pcTaskName;
+    (void)pxTask;
 
     /* Run time stack overflow checking is performed if
     configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2.  This hook
     function is called if a stack overflow is detected. */
 
     /* Force an assert. */
-    configASSERT( ( volatile void * ) NULL );
+    configASSERT((volatile void*)NULL);
 }
 
 /*-----------------------------------------------------------*/
 
-void vApplicationIdleHook( void )
+void vApplicationIdleHook(void)
 {
     volatile size_t xFreeHeapSpace;
 
@@ -136,20 +136,22 @@ void vApplicationIdleHook( void )
     xFreeHeapSpace = xPortGetFreeHeapSize();
 
     /* Remove compiler warning about xFreeHeapSpace being set but never used. */
-    ( void ) xFreeHeapSpace;
+    (void)xFreeHeapSpace;
 }
 
 /*-----------------------------------------------------------*/
 
-void vApplicationTickHook( void )
+void vApplicationTickHook(void)
 {
     /* Do nothing ATM */
 }
 
-static void xWatchdogServiceTask( void *args ) {
+/*-----------------------------------------------------------*/
+
+static void xWatchdogServiceTask(void* args) {
     /* Service the WDT every 5 seconds */
     const TickType_t xDelay = (WDT_CNTR_MS / 2) / portTICK_PERIOD_MS;
-    for( ;; ) {
+    for (;; ) {
         watchdog_update();
         vTaskDelay(xDelay);
     }
