@@ -17,13 +17,6 @@ function first_boot_actions() {
   # Signal first boot success
   sudo mkdir -p "$(dirname $FIRST_BOOT_TMP_FLAG)"
   sudo touch "$FIRST_BOOT_TMP_FLAG"
-
-  # Usually its smart to exit after setup, but in CI builds we want to
-  # continue to build the project, since docker containers do not run deattached
-  # in CI builds.
-  if [ "$is_ci_build" = "0" ]; then
-    exit 0
-  fi
 }
 
 function build_picotool() {

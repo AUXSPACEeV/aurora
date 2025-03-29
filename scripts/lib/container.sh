@@ -24,18 +24,20 @@ declare -x CONTAINER_BIN="docker"
 declare -x CONTAINER_BUILD_BIN="${CONTAINER_BIN} buildx"
 declare -x -i REBUILD_CONTAINER_IMAGE=0
 
+if [ -z "$AURORA_CI_BUILD" ] || [ "$AURORA_CI_BUILD" -eq 0 ]; then
+    declare -x CONTIANER_EXEC_FLAGS="-it"
+else
+    declare -x CONTIANER_EXEC_FLAGS=""
+fi
+
 # this should only be appended and not overwritten
-declare -x CONTAINER_RUNTIME_ARGS=" \
+CONTAINER_RUNTIME_ARGS+=" \
+    ${CONTIANER_EXEC_FLAGS} \
     --name ${_CONTAINER_NAME} \
     -e PUID=`id -u` \
     -e PGID=`id -g` \
     --user $(id -u):$(id -g) \
 "
-if [ -z "AURORA_CI_BUILDER" ]; then
-    declare -x CONTIANER_EXEC_FLAGS="-it"
-else
-    declare -x CONTIANER_EXEC_FLAGS=""
-fi
 
 function check_and_build_container() {
     log_info "Checking container engine ..."
@@ -112,12 +114,21 @@ function start_container() {
 
 function run_container_cmd() {
     local use_run_cmd="${1:-0}"
+    local run_cmd="shell"
+    local run_cmd_args="-d"
+
+    if [ "$AURORA_CI_BUILD" -eq 1 ]; then
+        run_cmd="$COMMAND"
+        run_cmd_args=""
+    fi
+
     if [ "$use_run_cmd" = "1" ]; then
         log_info "Running '${_CONTAINER_NAME}:$CONTAINER_TAG' ..."
         $CONTAINER_BIN run \
+            $run_cmd_args \
             $CONTAINER_RUNTIME_ARGS \
             ${_CONTAINER_NAME}:$CONTAINER_TAG \
-            ${AURORA_CI_BUILDER:+$COMMAND}
+            ${run_cmd}
         if [ "$AURORA_CI_BUILDER" = "1" ]; then
             exit 0
         fi
@@ -133,7 +144,7 @@ function run_container_cmd() {
     $CONTAINER_BIN exec \
         $CONTIANER_EXEC_FLAGS \
         $_CONTAINER_NAME \
-        $COMMAND
+        /sbin/entrypoint $COMMAND
 }
 
 function run_container() {
