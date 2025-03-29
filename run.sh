@@ -158,6 +158,9 @@ while [ $# -gt 0 ]; do
                     shift
                     ;;
                 setup)
+                    if [ -z "$AURORA_CI_BUILD" ]; then
+                        COMMAND="/bin/bash"
+                    fi
                     run_setup
                     exit 0
                     ;;
