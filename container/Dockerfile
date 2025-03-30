@@ -74,16 +74,15 @@ RUN git clone https://github.com/raspberrypi/picotool.git ${PICOTOOL_PATH}
 # pico project generator installation
 RUN git clone https://github.com/raspberrypi/pico-project-generator.git ${PICO_PROJECT_GENERATOR_PATH}
 
-# Change permissions for the builder user
-RUN chown -R ${PUID}:${PGID} ${BUILDER_HOME}
-
 # Configure user
-USER builder
 RUN mkdir -p -m 0700 ${BUILDER_HOME}/.ssh && ssh-keyscan github.com \
     >> ${BUILDER_HOME}/.ssh/known_hosts
 
 # Bash aliases
 COPY bash_aliases ${BUILDER_HOME}/.bash_aliases
+
+# Change permissions for the builder user
+RUN chown -R ${PUID}:${PGID} ${BUILDER_HOME}
 
 # Docker entrypoint
 COPY entrypoint /sbin/entrypoint

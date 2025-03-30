@@ -31,16 +31,12 @@ else
 fi
 
 # this should only be appended and not overwritten
-CONTAINER_RUNTIME_ARGS+=" \
+CONTAINER_RUNTIME_ARGS=" \
     ${CONTIANER_EXEC_FLAGS} \
     --name ${_CONTAINER_NAME} \
-    -e PUID=`id -u` \
-    -e PGID=`id -g` \
-    --user $(id -u):$(id -g) \
 "
 
-function check_and_build_container() {
-    log_info "Checking container engine ..."
+function set_container_bins() {
     if [ "${CONTAINER_ENGINE}" = "podman" ]; then
         CONTAINER_BIN="podman"
         CONTAINER_BUILD_BIN="buildah"
@@ -51,6 +47,10 @@ function check_and_build_container() {
         log_err "Unknown container engine: $CONTAINER_ENGINE"
         exit 1
     fi
+}
+
+function check_and_build_container() {
+    set_container_bins
 
     # Check if a container with the specified name exists
     log_info "Checking for existing $CONTAINER_BIN images ..."
@@ -117,7 +117,7 @@ function run_container_cmd() {
     local run_cmd="shell"
     local run_cmd_args="-d"
 
-    if [ "$AURORA_CI_BUILD" -eq 1 ]; then
+    if [ "$AURORA_CI_BUILD" = "1" ]; then
         run_cmd="$COMMAND"
         run_cmd_args=""
     fi
@@ -164,6 +164,8 @@ function run_container() {
 
 function do_container() {
     local do_container_cmd="${1:-build}"
+    set_container_bins
+
     if [ "$do_container_cmd" = "build" ]; then
         check_and_build_container
     elif [ "$do_container_cmd" = "rm" ]; then

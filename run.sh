@@ -195,6 +195,14 @@ CONTAINER_RUNTIME_ARGS+=" \
     --workdir ${BUILDER_APPLICATION} \
 "
 
+if [ "$CONTAINER_ENGINE" = "docker" ]; then
+    CONTAINER_RUNTIME_ARGS+=" \
+        -e PUID=`id -u` \
+        -e PGID=`id -g` \
+        --user $(id -u):$(id -g) \
+    "
+fi
+
 ################################################################################
 # Error checking                                                               #
 ################################################################################
