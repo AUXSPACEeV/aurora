@@ -82,29 +82,43 @@ function build_container() {
         "$CONTAINER_DIR"
 }
 
-function remove_container() {
-    log_info "Removing aurora build container '$_CONTAINER_NAME'."
-
-    # Stop running container
+function stop_container() {
+    # Stop the container if its running
     if [ -n "$($CONTAINER_BIN ps -a | grep ${_CONTAINER_NAME})" ]; then
         log_info "Stopping running container ..."
         $CONTAINER_BIN stop ${_CONTAINER_NAME}
+        log_info "Container has been stopped."
+    else
+        log_debug "Container \"${_CONTAINER_NAME}\" is not running."
     fi
+}
 
-    # remove container
+function remove_container() {
+    # Stop a container first
+    stop_container
+
     if [ -n "$($CONTAINER_BIN container ls -a \
         | grep ${_CONTAINER_NAME})" ]; then
         log_info "Removing container ..."
         $CONTAINER_BIN container rm ${_CONTAINER_NAME}
+        log_info "Container has been removed."
+    else
+        log_debug "Container \"${_CONTAINER_NAME}\" does not exist."
     fi
+}
+
+function remove_container_image() {
+    # stop and remove the container before removing the image
+    remove_container
 
     # remove image
     if [ -n "$($CONTAINER_BIN images -a | grep ${_CONTAINER_NAME})" ]; then
         log_info "Removing container image ..."
         $CONTAINER_BIN image rm "${_CONTAINER_NAME}:${CONTAINER_TAG}"
+        log_info "Container image has been removed."
+    else
+        log_debug "No container image to remove."
     fi
-
-    log_info "Container has been removed."
 }
 
 function start_container() {
@@ -163,15 +177,34 @@ function run_container() {
 }
 
 function do_container() {
-    local do_container_cmd="${1:-build}"
+    local do_container_cmd="${1}"
+
+    if [ -z "${do_container_cmd}" ]; then
+        log_err "No container command has been given."
+        exit 1
+    fi
+
     set_container_bins
 
-    if [ "$do_container_cmd" = "build" ]; then
-        check_and_build_container
-    elif [ "$do_container_cmd" = "rm" ]; then
-        remove_container
-    else
-        log_err "Container command \"$do_container_cmd\" is invalid."
-        return 1
-    fi
+    case $do_container_cmd in
+        build)
+            check_and_build_container
+            ;;
+        rm)
+            remove_container_image
+            ;;
+        run)
+            run_container
+            ;;
+        start)
+            start_container
+            ;;
+        stop)
+            stop_container
+            ;;
+        *)
+            log_err "Container command \"$do_container_cmd\" is invalid."
+            exit 1
+            ;;
+    esac
 }
