@@ -98,13 +98,21 @@ source $THISDIR/scripts/lib/container.sh
 # Variables and constants                                                      #
 ################################################################################
 
+# Environment from file
+if [ -f "$THISDIR/aurora.env" ]; then
+    source "$THISDIR/aurora.env"
+fi
+
 # Container
-BUILDER_WORKSPACE="/builder/workspace"
-BUILDER_APPLICATION="${BUILDER_WORKSPACE}/aurora"
-FREERTOS_KERNEL_PATH="${BUILDER_APPLICATION}/src/kernel"
-_PICO_SDK_REL_PATH="src/sdk"
-PICO_SDK_PATH="${BUILDER_APPLICATION}/$_PICO_SDK_REL_PATH"
-PICO_BOARD="pico"
+BUILDER_WORKSPACE=${BUILDER_WORKSPACE:-"/builder/workspace"}
+BUILDER_APPLICATION=${BUILDER_APPLICATION:-"${BUILDER_WORKSPACE}/aurora"}
+BUILDER_APP_SRC=${BUILDER_APP_SRC:-"${BUILDER_APPLICATION}/src"}
+FREERTOS_KERNEL_PATH=${FREERTOS_KERNEL_PATH:-"${BUILDER_APP_SRC}/kernel"}
+
+# SDK
+_PICO_SDK_REL_PATH=${_PICO_SDK_REL_PATH:-"sdk"}
+PICO_SDK_PATH=${PICO_SDK_PATH:-"${BUILDER_APP_SRC}/$_PICO_SDK_REL_PATH"}
+PICO_BOARD=${PICO_BOARD:-"pico"}
 
 ################################################################################
 # Commandline arg parser                                                       #

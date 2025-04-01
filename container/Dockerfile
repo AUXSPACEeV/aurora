@@ -1,14 +1,14 @@
 #syntax=docker/dockerfile:1.0.0-experimental
 #escape=\
 #
-# Auxspace development container for RP2040 and RP2340 projects.
+# Auxspace development container for AURORA.
 #
 # Author: Maximilian Stephan @ Auxspace e.V.
 # Copyright (c) 2025 Auxspace e.V.
 #
 
-# digests to FROM debian:bookworm-slim
-FROM debian@sha256:12c396bd585df7ec21d5679bb6a83d4878bc4415ce926c9e5ea6426d23c60bdc
+# digests to FROM debian:trixie-slim
+FROM debian@sha256:2a68788db17e6f845263ea011a249de9d78394607da22836f107fa033b70882c
 
 ARG PUID=10001
 ARG PGID=10001

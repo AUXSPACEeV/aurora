@@ -13,6 +13,7 @@
         "*.txt": "plaintext",
         "*.json": "jsonc",
         "*.cmake": "cmake",
+        "CMakeLists.txt": "cmake",
         "*.py": "python",
         "*.yaml": "yaml",
         "*.yml": "yaml",
@@ -20,5 +21,4 @@
         "*.toml": "toml"
     },
     "editor.formatOnSave": false,
-    "cmake.sourceDirectory": "/home/maxist/auxspace/aurora/src"
 }

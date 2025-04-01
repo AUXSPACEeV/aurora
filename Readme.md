@@ -1,6 +1,6 @@
 # `AURORA`
 
-> **AU**xspace **RO**cket ope**RA**ting System
+> **AU**xspace **RO**cket ope**RA**ting System
 
 ## Introduction
 
