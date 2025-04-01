@@ -44,12 +44,11 @@ endif ()
 include(${BOARD_SRC_PATH}/FreeRTOS_Kernel_import.cmake)
 
 # Project name and a few useful settings. Other commands can pick up the results
-project(
-  auxspace_aurora
-  VERSION 0.1
-  DESCRIPTION "AUxspace ROcket opeRAting System"
-  LANGUAGES C CXX ASM
-  )
+project(auxspace_aurora
+        VERSION 0.1
+        DESCRIPTION "AUxspace ROcket opeRAting System"
+        LANGUAGES C CXX ASM
+        )
 
 # Initialise the Raspberry Pi Pico SDK before diving into subdirectories
 pico_sdk_init()

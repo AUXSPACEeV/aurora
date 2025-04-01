@@ -9,6 +9,7 @@ set(AURORA_INCLUDES
         ${AURORA_SRC_PATH}/include
         )
 
+add_subdirectory(drivers)
 add_subdirectory(tasks)
 
 # Add executable. Default name is the project name, version 0.1
