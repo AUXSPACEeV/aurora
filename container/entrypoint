@@ -34,13 +34,15 @@ function build_app() {
   set -e
   local AURORA_BUILD_OUT="${BUILDER_APPLICATION}/build/src"
 
+  echo "[debug]: Building AURORA for platform \"$PICO_BOARD\""
+
   # compile picotool
   test -x ~/.local/bin/picotool || build_picotool
 
   # prepare build env
   echo "Running cmake ..."
   cd "${BUILDER_APPLICATION}"
-  PICO_BOARD="$PICO_BOARD" cmake -S . -B build
+  cmake -S . -B build
 
   # compile and link project
   echo "Compiling sources ..."

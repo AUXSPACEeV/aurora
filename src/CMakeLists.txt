@@ -26,11 +26,14 @@ target_link_libraries(aurora PRIVATE
         FreeRTOS-Kernel
         FreeRTOS-Kernel-Heap4
         pico_stdlib
+        pico_binary_info
         hardware_i2c
+        hardware_spi
         hardware_watchdog
         )
 
 target_link_libraries(aurora PUBLIC
+        aurora_flash
         aurora_tasks
         )
 
