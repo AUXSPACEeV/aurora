@@ -36,7 +36,7 @@
 #include "hardware/watchdog.h"
 
 /* Local includes */
-#include <aurora/drivers/spi_flash.h>
+#include <aurora/drivers/sdcard/spi_sd.h>
 #include <aurora/task/freertos_scheduling.h>
 #include <aurora/task/watchdog_service.h>
 
@@ -67,6 +67,8 @@ int main(void)
 
 static void prv_setup_hardware(void)
 {
+    int ret;
+
     stdio_init_all();
     init_wdt();
     spi_init(spi_default, 1000 * 1000);
@@ -84,9 +86,15 @@ static void prv_setup_hardware(void)
     // Make the CS pin available to picotool
     bi_decl(bi_1pin_with_name(PICO_DEFAULT_SPI_CSN_PIN, "SPI CS"));
 
+    ret = spi_sd_init(spi_default, PICO_DEFAULT_SPI_CSN_PIN);
+    if (ret != 0) {
+        printf("SPI SD init failed: %d\n", ret);
+        return;
+    }
+
     printf("SPI initialised, let's goooooo\n");
 
-    uint8_t page_buf[FLASH_PAGE_SIZE];
+    uint8_t page_buf[SPI_SDCARD_PAGE_SIZE];
 
     const uint32_t target_addr = 0;
 
@@ -98,19 +106,19 @@ static void prv_setup_hardware(void)
         printf("PICO_DEFAULT_SPI_SCK_PIN: %d\n", PICO_DEFAULT_SPI_SCK_PIN);
         printf("PICO_DEFAULT_SPI_CSN_PIN: %d\n", PICO_DEFAULT_SPI_CSN_PIN);
         puts("\n");
-        spi_flash_sector_erase(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr);
-        spi_flash_read(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr, page_buf, FLASH_PAGE_SIZE);
+        spi_sd_sector_erase(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr);
+        spi_sd_read(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr, page_buf, SPI_SDCARD_PAGE_SIZE);
         
         printf("After erase:\n");
-        spi_flash_dbg_printbuf(page_buf);
+        spi_sd_dbg_printbuf(page_buf);
         
-        for (int i = 0; i < FLASH_PAGE_SIZE; ++i)
+        for (int i = 0; i < SPI_SDCARD_PAGE_SIZE; ++i)
             page_buf[i] = i;
-        spi_flash_page_program(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr, page_buf);
-        spi_flash_read(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr, page_buf, FLASH_PAGE_SIZE);
+        spi_sd_page_program(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr, page_buf);
+        spi_sd_read(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr, page_buf, SPI_SDCARD_PAGE_SIZE);
         
         printf("After program:\n");
-        spi_flash_dbg_printbuf(page_buf);
+        spi_sd_dbg_printbuf(page_buf);
     }
 }
 
