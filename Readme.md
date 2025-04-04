@@ -62,14 +62,14 @@ environment variables and make sure they are visible to <b>CMake</b>:
 # env
 export PICO_SDK_PATH="${PATH_TO_PICO_SDK}"
 export FREERTOS_KERNEL_PATH="$PATH_TO_SRC_KERNEL"  # optional
+# optional (select board)
+export PICO_BOARD="pico2_w"
 
 # prepare build
-mkdir build
-cd build
-cmake -G "Unix Makefiles" ../src
+cmake -S . -B build
 
 # build
-make
+cmake --build build
 ```
 
 </details>
