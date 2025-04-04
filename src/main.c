@@ -31,12 +31,13 @@
 
 /* Library includes. */
 #include <stdio.h>
+#include <errno.h>
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
 #include "hardware/watchdog.h"
 
 /* Local includes */
-#include <aurora/drivers/sdcard/spi_sd.h>
+#include <aurora/drivers/mmc/spi_mmc.h>
 #include <aurora/task/freertos_scheduling.h>
 #include <aurora/task/watchdog_service.h>
 
@@ -86,40 +87,18 @@ static void prv_setup_hardware(void)
     // Make the CS pin available to picotool
     bi_decl(bi_1pin_with_name(PICO_DEFAULT_SPI_CSN_PIN, "SPI CS"));
 
-    ret = spi_sd_init(spi_default, PICO_DEFAULT_SPI_CSN_PIN);
-    if (ret != 0) {
+    mmc_drv_t *mmc_drv = spi_mmc_drv_init(spi_default, PICO_DEFAULT_SPI_CSN_PIN, false);
+    if (mmc_drv == NULL) {
+        printf("SPI SD init failed: %d\n", -ENOMEM);
+        return;
+    }
+    ret = mmc_drv->ops->probe(mmc_drv->dev);
+    if (ret) {
         printf("SPI SD init failed: %d\n", ret);
         return;
     }
 
     printf("SPI initialised, let's goooooo\n");
-
-    uint8_t page_buf[SPI_SDCARD_PAGE_SIZE];
-
-    const uint32_t target_addr = 0;
-
-    for(;;) {
-        puts("SPI Info:");
-        puts("---------");
-        printf("PICO_DEFAULT_SPI_RX_PIN:  %d\n", PICO_DEFAULT_SPI_RX_PIN);
-        printf("PICO_DEFAULT_SPI_TX_PIN:  %d\n", PICO_DEFAULT_SPI_TX_PIN);
-        printf("PICO_DEFAULT_SPI_SCK_PIN: %d\n", PICO_DEFAULT_SPI_SCK_PIN);
-        printf("PICO_DEFAULT_SPI_CSN_PIN: %d\n", PICO_DEFAULT_SPI_CSN_PIN);
-        puts("\n");
-        spi_sd_sector_erase(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr);
-        spi_sd_read(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr, page_buf, SPI_SDCARD_PAGE_SIZE);
-        
-        printf("After erase:\n");
-        spi_sd_dbg_printbuf(page_buf);
-        
-        for (int i = 0; i < SPI_SDCARD_PAGE_SIZE; ++i)
-            page_buf[i] = i;
-        spi_sd_page_program(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr, page_buf);
-        spi_sd_read(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr, page_buf, SPI_SDCARD_PAGE_SIZE);
-        
-        printf("After program:\n");
-        spi_sd_dbg_printbuf(page_buf);
-    }
 }
 
 /*----------------------------------------------------------------------------*/

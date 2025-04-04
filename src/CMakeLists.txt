@@ -33,7 +33,7 @@ target_link_libraries(aurora PRIVATE
         )
 
 target_link_libraries(aurora PUBLIC
-        aurora_sdcard
+        aurora_mmc
         aurora_tasks
         )
 
