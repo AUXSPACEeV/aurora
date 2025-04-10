@@ -18,7 +18,8 @@
         "*.yaml": "yaml",
         "*.yml": "yaml",
         "*.xml": "xml",
-        "*.toml": "toml"
+        "*.toml": "toml",
+        "cstdint": "c"
     },
     "editor.formatOnSave": false,
 }

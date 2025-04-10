@@ -1,6 +1,7 @@
 # Aurora SDCard Drivers
 
 add_library(aurora_mmc
+        mmc.c
         spi_mmc.c
         )
 

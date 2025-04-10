@@ -125,19 +125,17 @@
 #define SD_CMD_APP_SEND_OP_COND		41
 #define SD_CMD_APP_SEND_SCR		51
 
-
-
 typedef enum mmc_response {
     MMC_RESP_R1,
     MMC_RESP_R1b,
     MMC_RESP_R2,
     MMC_RESP_R3,
-    MMC_RESP_R4_5,
+    MMC_RESP_R6,
     MMC_RESP_R7,
+    MMC_RESP_NONE,
 } mmc_response_t;
 
-typedef struct mmc_ops mmc_ops_t;
-typedef struct mmc_dev {
+struct mmc_dev {
     char *name;
     uint32_t version;
     uint32_t blksize;
@@ -145,19 +143,21 @@ typedef struct mmc_dev {
     bool initialized;
 
     void *priv;
-} mmc_dev_t;
+};
 
-typedef struct mmc_drv {
-    mmc_dev_t *dev;
-    mmc_ops_t *ops;
-} mmc_drv_t;
-
-typedef struct mmc_ops {
-    int (*probe)(mmc_dev_t *dev);
-    int (*blk_read)(mmc_dev_t *dev, uint blk, uint8_t *buf, const size_t len);
+struct mmc_ops {
+    int (*probe)(struct mmc_dev *dev);
+    int (*blk_read)(struct mmc_dev *dev, uint blk, uint8_t *buf, const size_t len);
     int (*blk_write)
-        (mmc_dev_t *dev, uint blk, const uint8_t *buf, const size_t len);
-    int (*blk_erase)(mmc_dev_t *dev, uint32_t addr);
-} mmc_ops_t;
+        (struct mmc_dev *dev, uint blk, const uint8_t *buf, const size_t len);
+    int (*blk_erase)(struct mmc_dev *dev, uint32_t addr);
+};
+
+struct mmc_drv {
+    struct mmc_dev *dev;
+    struct mmc_ops *ops;
+};
+
+size_t mmc_get_resp_size(mmc_response_t resp_type);
 
 #endif /* _MMC_H */

@@ -87,7 +87,7 @@ static void prv_setup_hardware(void)
     // Make the CS pin available to picotool
     bi_decl(bi_1pin_with_name(PICO_DEFAULT_SPI_CSN_PIN, "SPI CS"));
 
-    mmc_drv_t *mmc_drv = spi_mmc_drv_init(spi_default, PICO_DEFAULT_SPI_CSN_PIN, false);
+    struct mmc_drv *mmc_drv = spi_mmc_drv_init(spi_default, PICO_DEFAULT_SPI_CSN_PIN, false);
     if (mmc_drv == NULL) {
         printf("SPI SD init failed: %d\n", -ENOMEM);
         return;

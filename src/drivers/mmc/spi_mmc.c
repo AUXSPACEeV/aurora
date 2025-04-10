@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
 #include "pico/malloc.h"
@@ -56,15 +57,65 @@ static inline void cs_deselect(uint cs_pin)
     asm volatile("nop \n nop \n nop"); // FIXME
 }
 
-static int send_msg(spi_inst_t *spi,
-    uint cs_pin, const struct spi_mmc_message *msg, uint8_t* response)
+static size_t spi_mmc_resp_size_raw(mmc_response_t resp_type) {
+    switch (resp_type) {
+        case MMC_RESP_R1:
+        case MMC_RESP_R1b:
+        case MMC_RESP_R3:
+        case MMC_RESP_R6:
+        case MMC_RESP_R7:
+            return 6;  // 48 Bits
+        case MMC_RESP_R2:
+            return 17;  // 136 Bits
+        default:
+            return 0;
+    }
+}
+
+static int spi_mmc_parse_response(uint8_t *dst, uint8_t *resp,
+                                  mmc_response_t resp_type) {
+// TODO parse full SPI bus response DST into just payload sized RESP
+}
+
+static int send_msg(struct spi_mmc_dev_data *data,
+                    const struct spi_mmc_message *msg, uint8_t* resp,
+                    mmc_response_t resp_type)
 {
+    /**
+     * @note: no nullptr error handling done here for better performance.
+     * Make sure values are valid before calling send_msg!
+     */
     int ret;
+    uint8_t *dst;
+    size_t resp_len;
+    uint cs_pin = data->cs_pin;
+    spi_inst_t *spi = data->spi;
+
+    if (data->use_dma) {
+        printf("DMA not supported yet\n");
+        return -ENOTSUP;
+    }
+
     cs_select(cs_pin);
-    if (response)
-        ret = spi_write_read_blocking(spi, (uint8_t *)msg, sizeof(*msg), response);
-    else
+    if (resp == NULL && resp_type == MMC_RESP_NONE) {
         ret = spi_write_blocking(spi, (uint8_t *)msg, sizeof(*msg));
+    } else {
+        resp_len = spi_mmc_resp_size_raw(resp_type);
+        dst = (uint8_t *)calloc(1, resp_len);
+        if (!dst) {
+            printf("Could not allocate response buffer: %d\n", -ENOMEM);
+            return -ENOMEM;
+        }
+
+        ret = spi_write_read_blocking(spi, (uint8_t *)msg, dst,
+                                      resp_len + sizeof(*msg));
+        if (spi_mmc_parse_response(dst, resp, resp_type)) {
+            printf("Error parsing SPI response: %d\n", ret);
+            free(dst);
+            return -EIO;
+        }
+        free(dst);
+    }
     cs_deselect(cs_pin);
     if (ret != sizeof(*msg)) {
         printf("Error: %d\n", ret);
@@ -73,7 +124,7 @@ static int send_msg(spi_inst_t *spi,
     return 0;
 }
 
-static int send_reset(spi_inst_t *spi, uint cs_pin)
+static int send_reset(struct spi_mmc_dev_data *data)
 {
     const struct spi_mmc_message reset_cmd = {
         .start = 0b01,
@@ -83,28 +134,28 @@ static int send_reset(spi_inst_t *spi, uint cs_pin)
         .stop = 1,
     };
 
-    return send_msg(spi, cs_pin, &reset_cmd, NULL);
+    return send_msg(data, &reset_cmd, NULL, MMC_RESP_NONE);
 }
 
-static int check_response(uint8_t *resp, mmc_response_t resp_type) {
+static bool check_response(uint8_t *resp, mmc_response_t resp_type) {
     if (resp == NULL) {
-        return -EINVAL;
+        printf("No response available!\n");
+        return false;
     }
 
     switch(resp_type) {
         case MMC_RESP_R1:
-            uint8_t resp_val = *resp;
-            return (resp_val & (R1_SPI_COM_CRC | R1_SPI_ERASE_SEQ |
-                                R1_SPI_ADDRESS | R1_SPI_ILLEGAL_COMMAND))
+            return (*resp & (R1_SPI_COM_CRC | R1_SPI_ERASE_SEQ |
+                                R1_SPI_ADDRESS | R1_SPI_ILLEGAL_COMMAND)) == 0;
         default:
             printf("No such response type: %s\n", resp_type);
-            return -EINVAL;
+            return false;
     }
 
-    return 0;
+    return true;
 }
 
-static int send_voltage_verify(spi_inst_t *spi, uint cs_pin)
+static int send_voltage_verify(struct spi_mmc_dev_data *data)
 {
     uint8_t response = 0;
     int ret;
@@ -123,15 +174,21 @@ static int send_voltage_verify(spi_inst_t *spi, uint cs_pin)
         .stop = 1,
     };
 
-    send_msg(spi, cs_pin, &cmd8, NULL);
-    ret = send_msg(spi, cs_pin, &reset_cmd, &response);
+    send_msg(data, &cmd8, NULL, MMC_RESP_NONE);
+    ret = send_msg(data, &acmd41, &response, MMC_RESP_R1);
     if (ret) {
         printf("Sending ACMD41 failed.\n");
     }
-    return check_response(&response, MMC_RESP_R1);
+
+    if (!check_response(&response, MMC_RESP_R1)) {
+        printf("ACMD41 failed.\n");
+        return -EIO;
+    }
+
+    return 0;
 }
 
-int spi_mmc_probe(mmc_dev_t *dev)
+int spi_mmc_probe(struct mmc_dev *dev)
 {
     if (dev->initialized == true) {
         return 0;
@@ -141,16 +198,16 @@ int spi_mmc_probe(mmc_dev_t *dev)
 
     int ret;
     uint i;
-    spi_mmc_dev_data_t *data = (spi_mmc_dev_data_t *)dev->priv;
+    struct spi_mmc_dev_data *data = (struct spi_mmc_dev_data *)dev->priv;
     if (!data) {
         printf("No SPI MMC data available!\n");
         return -EINVAL;
     }
 
     // Wait for at least 74 cycles with MOSI and CS asserted
-    memset(&spi_init_message, 1, sizeof(spi_init_message))
+    memset(&spi_init_message, 1, sizeof(spi_init_message));
     for (i = 0; i < (74 / (sizeof(spi_init_message) * 8) + 1); i++) {
-        send_msg(data->spi, data->cs_pin, &spi_init_message, NULL)
+        send_msg(data, &spi_init_message, NULL, MMC_RESP_NONE);
     }
 
     /**
@@ -167,8 +224,8 @@ int spi_mmc_probe(mmc_dev_t *dev)
      * that all cards satisfy the supplied voltage.
      * Otherwise, the host should select one of the cards and initialize.
      */
-    send_reset(data->spi, data->cs_pin);
-    ret = send_voltage_verify(data->spi, data->cs_pin);
+    send_reset(data);
+    ret = send_voltage_verify(data);
     if (ret != 0) {
         printf("SPI init CMD8 failed.\n");
         goto error;
@@ -180,7 +237,7 @@ error:
     return ret;
 }
 
-void spi_mmc_dbg_printbuf(mmc_dev_t *dev, uint8_t *buf)
+void spi_mmc_dbg_printbuf(struct mmc_dev *dev, uint8_t *buf)
 {
     uint32_t i;
     for (i = 0; i < dev->num_blocks; ++i) {
@@ -191,10 +248,10 @@ void spi_mmc_dbg_printbuf(mmc_dev_t *dev, uint8_t *buf)
     }
 }
 
-mmc_drv_t *spi_mmc_drv_init(spi_inst_t *spi, uint cs_pin, bool use_dma)
+struct mmc_drv *spi_mmc_drv_init(spi_inst_t *spi, uint cs_pin, bool use_dma)
 {
-    spi_mmc_dev_data_t *data = (spi_mmc_dev_data_t *)
-        calloc(1, sizeof(spi_mmc_dev_data_t));
+    struct spi_mmc_dev_data *data = (struct spi_mmc_dev_data *)
+        calloc(1, sizeof(struct spi_mmc_dev_data));
     if (!data) {
         printf("Could not allocate SPI MMC data: %d\n", -ENOMEM);
         return NULL;
@@ -203,7 +260,7 @@ mmc_drv_t *spi_mmc_drv_init(spi_inst_t *spi, uint cs_pin, bool use_dma)
     data->spi = spi;
     data->cs_pin = cs_pin;
 
-    mmc_dev_t *dev = (mmc_dev_t *)calloc(1, sizeof(mmc_dev_t));
+    struct mmc_dev *dev = (struct mmc_dev *)calloc(1, sizeof(struct mmc_dev));
     if (!dev) {
         printf("Could not allocate SPI MMC device: %d\n", -ENOMEM);
         goto free_data;
@@ -211,7 +268,7 @@ mmc_drv_t *spi_mmc_drv_init(spi_inst_t *spi, uint cs_pin, bool use_dma)
     dev->name = "spi_mmc";
     dev->priv = data;
 
-    mmc_ops_t *ops = (mmc_ops_t *)malloc(sizeof(mmc_ops_t));
+    struct mmc_ops *ops = (struct mmc_ops *)malloc(sizeof(struct mmc_ops));
     if (!ops) {
         printf("Could not allocate SPI MMC ops: %d\n", -ENOMEM);
         goto free_dev;
@@ -221,7 +278,7 @@ mmc_drv_t *spi_mmc_drv_init(spi_inst_t *spi, uint cs_pin, bool use_dma)
     ops->blk_write = NULL; // TODO
     ops->blk_erase = NULL; // TODO
 
-    mmc_drv_t *drv = calloc(1, sizeof(mmc_drv_t));
+    struct mmc_drv *drv = calloc(1, sizeof(struct mmc_drv));
     if (!drv) {
         printf("Could not allocate SPI MMC driver: %d\n", -ENOMEM);
         goto free_ops;
@@ -240,7 +297,7 @@ free_data:
     return NULL;
 }
 
-void spi_mmc_drv_deinit(mmc_drv_t *drv)
+void spi_mmc_drv_deinit(struct mmc_drv *drv)
 {
     if (!drv)
         return;

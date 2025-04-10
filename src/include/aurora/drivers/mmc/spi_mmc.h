@@ -18,6 +18,10 @@
 
 #include <aurora/drivers/mmc/mmc.h>
 
+#ifndef BIT
+#define BIT(x)  ((uint32_t)1 << (x))
+#endif
+
 /* MMC/SD in SPI mode reports R1 status always */
 #define R1_SPI_IDLE			BIT(0)
 #define R1_SPI_ERASE_RESET		BIT(1)
@@ -29,14 +33,14 @@
 /* R1 bit 7 is always zero, reuse this bit for error */
 #define R1_SPI_ERROR			BIT(7)
 
-typedef struct spi_mmc_dev_data {
+struct spi_mmc_dev_data {
     bool use_dma;
     spi_inst_t *spi;
     uint cs_pin;
-} spi_mmc_dev_data_t;
+};
 
-mmc_drv_t *spi_mmc_drv_init(spi_inst_t *spi, uint cs_pin, bool use_dma);
+struct mmc_drv *spi_mmc_drv_init(spi_inst_t *spi, uint cs_pin, bool use_dma);
 
-void spi_mmc_drv_deinit(mmc_drv_t *drv);
+void spi_mmc_drv_deinit(struct mmc_drv *drv);
 
 #endif /* _SPI_MMC_H */
