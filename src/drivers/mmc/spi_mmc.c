@@ -57,11 +57,14 @@ static inline void cs_deselect(uint cs_pin)
 }
 
 static int send_msg(spi_inst_t *spi,
-    uint cs_pin, const struct spi_mmc_message *msg)
+    uint cs_pin, const struct spi_mmc_message *msg, uint8_t* response)
 {
     int ret;
     cs_select(cs_pin);
-    ret = spi_write_blocking(spi, (uint8_t *)msg, sizeof(*msg));
+    if (response)
+        ret = spi_write_read_blocking(spi, (uint8_t *)msg, sizeof(*msg), response);
+    else
+        ret = spi_write_blocking(spi, (uint8_t *)msg, sizeof(*msg));
     cs_deselect(cs_pin);
     if (ret != sizeof(*msg)) {
         printf("Error: %d\n", ret);
@@ -74,13 +77,58 @@ static int send_reset(spi_inst_t *spi, uint cs_pin)
 {
     const struct spi_mmc_message reset_cmd = {
         .start = 0b01,
-        .cmd = 0,
+        .cmd = MMC_CMD_GO_IDLE_STATE,
         .arg = 0,
         .crc32_le = 0b1001010,
         .stop = 1,
     };
 
-    return send_msg(spi, cs_pin, &reset_cmd);
+    return send_msg(spi, cs_pin, &reset_cmd, NULL);
+}
+
+static int check_response(uint8_t *resp, mmc_response_t resp_type) {
+    if (resp == NULL) {
+        return -EINVAL;
+    }
+
+    switch(resp_type) {
+        case MMC_RESP_R1:
+            uint8_t resp_val = *resp;
+            return (resp_val & (R1_SPI_COM_CRC | R1_SPI_ERASE_SEQ |
+                                R1_SPI_ADDRESS | R1_SPI_ILLEGAL_COMMAND))
+        default:
+            printf("No such response type: %s\n", resp_type);
+            return -EINVAL;
+    }
+
+    return 0;
+}
+
+static int send_voltage_verify(spi_inst_t *spi, uint cs_pin)
+{
+    uint8_t response = 0;
+    int ret;
+    const struct spi_mmc_message cmd8 = {
+        .start = 0b01,
+        .cmd = MMC_CMD_SEND_EXT_CSD,
+        .arg = 0x40000000,
+        .crc32_le = 0b1001010,  // crc is ignored for this command
+        .stop = 1,
+    };
+    const struct spi_mmc_message acmd41 = {
+        .start = 0b01,
+        .cmd = SD_CMD_APP_SEND_OP_COND,
+        .arg = 0,
+        .crc32_le = 0,  // crc is ignored for this command
+        .stop = 1,
+    };
+
+    send_msg(spi, cs_pin, &cmd8, NULL);
+    ret = send_msg(spi, cs_pin, &reset_cmd, &response);
+    if (ret) {
+        printf("Sending ACMD41 failed.\n");
+    }
+    return check_response(&response, MMC_RESP_R1);
 }
 
 int spi_mmc_probe(mmc_dev_t *dev)
@@ -89,41 +137,42 @@ int spi_mmc_probe(mmc_dev_t *dev)
         return 0;
     }
 
-    const struct spi_mmc_message spi_init_message = {
-        .start = 0b01,
-        .cmd = MMC_CMD_GO_IDLE_STATE,
-        .arg = 0,
-        .crc32_le = 0b0000000,
-        .stop = 1,
-    };
+    struct spi_mmc_message spi_init_message = { 0 };
 
     int ret;
+    uint i;
     spi_mmc_dev_data_t *data = (spi_mmc_dev_data_t *)dev->priv;
     if (!data) {
         printf("No SPI MMC data available!\n");
         return -EINVAL;
     }
 
+    // Wait for at least 74 cycles with MOSI and CS asserted
+    memset(&spi_init_message, 1, sizeof(spi_init_message))
+    for (i = 0; i < (74 / (sizeof(spi_init_message) * 8) + 1); i++) {
+        send_msg(data->spi, data->cs_pin, &spi_init_message, NULL)
+    }
+
     /**
-     * First, put the SDCard into SPI mode by sendin CMD0, followed by
-     * CMD8. CMD8 is optional, but it is recommended to send it to
-     * check if the card is compatible with the SD spec. CMD8 is
-     * only supported by SDHC and SDXC cards. CMD8 is not supported
-     * by MMC cards.
+     * First, put the SDCard into SPI mode by sendin CMD0, followed by CMD8.
+     * CMD8 is optional, but it is recommended to send it to check if the card
+     * is compatible with the SD spec.
+     * CMD8 is only supported by SDHC and SDXC cards and not by MMC cards.
+     * 
+     * After CMD8, we send ACMD41.
+     * ACMD41 is a synchronization command used to negotiate the operation
+     * voltage range and to poll the cards until they are out of their power-up
+     * sequence.
+     * In case the host system connects multiple cards, the host shall check
+     * that all cards satisfy the supplied voltage.
+     * Otherwise, the host should select one of the cards and initialize.
      */
-
-    ret = send_msg(data->spi, data->cs_pin, &spi_init_message);
+    send_reset(data->spi, data->cs_pin);
+    ret = send_voltage_verify(data->spi, data->cs_pin);
     if (ret != 0) {
-        printf("SPI init CMD0 failed.\n");
+        printf("SPI init CMD8 failed.\n");
         goto error;
     }
-
-    ret = send_reset(data->spi, data->cs_pin);
-    if (ret != 0) {
-        printf("SPI reset failed.\n");
-        goto error;
-    }
-
     dev->initialized = true;
 
 error:

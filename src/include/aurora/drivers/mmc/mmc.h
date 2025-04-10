@@ -125,6 +125,17 @@
 #define SD_CMD_APP_SEND_OP_COND		41
 #define SD_CMD_APP_SEND_SCR		51
 
+
+
+typedef enum mmc_response {
+    MMC_RESP_R1,
+    MMC_RESP_R1b,
+    MMC_RESP_R2,
+    MMC_RESP_R3,
+    MMC_RESP_R4_5,
+    MMC_RESP_R7,
+} mmc_response_t;
+
 typedef struct mmc_ops mmc_ops_t;
 typedef struct mmc_dev {
     char *name;
