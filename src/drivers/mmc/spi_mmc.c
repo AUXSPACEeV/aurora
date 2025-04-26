@@ -146,7 +146,12 @@ static int send_msg(struct spi_mmc_dev_data *data,
         ret = spi_write_blocking(spi, (uint8_t *)msg, sizeof(*msg));
         for (i = 0; i < 0XFF; i++) {
             ret |= spi_read_blocking(spi, 0xFF, dst, sizeof(uint8_t));
-            if (*dst != 0xFF) {
+            /**
+             * The first response byte of every command is R1.
+             * R1 always starts with 0.
+             * Check if the first bit of R1 is 0 and stop waiting
+             */
+            if (!(*dst & 0x80)) {
                 break;
             } else if (ret) {
                 printf("Could not read from SD Card.\n");
