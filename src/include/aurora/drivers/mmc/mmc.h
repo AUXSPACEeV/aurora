@@ -125,6 +125,12 @@
 #define SD_CMD_APP_SEND_OP_COND		41
 #define SD_CMD_APP_SEND_SCR		51
 
+typedef enum mmc_type {
+    SD_CARD_TYPE_SD1,
+    SD_CARD_TYPE_SD2,
+    SD_CARD_TYPE_SDHC,
+} mmc_type_t;
+
 typedef enum mmc_response {
     MMC_RESP_R1,
     MMC_RESP_R1b,
@@ -137,7 +143,7 @@ typedef enum mmc_response {
 
 struct mmc_dev {
     char *name;
-    uint32_t version;
+    mmc_type_t version;
     uint32_t blksize;
     uint32_t num_blocks;
     bool initialized;

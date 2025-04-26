@@ -13,7 +13,6 @@
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
 #include "pico/malloc.h"
-#include "pico/mem_ops.h"
 #include "hardware/spi.h"
 #include "errno.h"
 
@@ -38,7 +37,7 @@ struct spi_mmc_message {
      * the sdcard only checks for a correct crc32 sum if it is configured
      * to do so and when evaluating CMD8
      */
-    uint8_t crc32_le : 7;
+    uint8_t crc7 : 7;
     /* at last one stop bit */
     uint8_t stop : 1;
 }__attribute__((packed));
@@ -57,7 +56,8 @@ static inline void cs_deselect(uint cs_pin)
     asm volatile("nop \n nop \n nop"); // FIXME
 }
 
-static size_t spi_mmc_resp_size_raw(mmc_response_t resp_type) {
+static size_t spi_mmc_resp_size_raw(mmc_response_t resp_type)
+{
     switch (resp_type) {
         case MMC_RESP_R1:
         case MMC_RESP_R1b:
@@ -72,9 +72,44 @@ static size_t spi_mmc_resp_size_raw(mmc_response_t resp_type) {
     }
 }
 
+static size_t spi_mmc_resp_size(mmc_response_t resp_type)
+{
+    switch (resp_type) {
+        case MMC_RESP_R1:
+        case MMC_RESP_R1b:
+            return 1;   // 8 Bits
+        case MMC_RESP_R2:
+            return 2;  // 16 Bits
+        case MMC_RESP_R3:
+        case MMC_RESP_R6:
+        case MMC_RESP_R7:
+            return 5;   // 40 Bits
+        default:
+            return 0;
+    }
+}
+
 static int spi_mmc_parse_response(uint8_t *dst, uint8_t *resp,
-                                  mmc_response_t resp_type) {
-// TODO parse full SPI bus response DST into just payload sized RESP
+                                  mmc_response_t resp_type)
+{
+    /**
+     * IMPORTANT: This function does not check the size of the resp buffer.
+     * If you call this function, make sure that your buffer has the appropriate
+     * size of the response by using spi_mmc_resp_size.
+     * 
+     * Also, dst carries sizeof(struct spi_mmc_message) garbage in the front.
+     */
+    uint8_t *raw_dst = dst + sizeof(struct spi_mmc_message);
+    uint i;
+    if (resp == NULL) {
+        printf("spi_mmc_parse_response: resp is NULL.\n");
+        return -EINVAL;
+    }
+
+    for (i = 0; i < spi_mmc_resp_size(resp_type); i++) {
+        resp[i] = raw_dst[i];
+    }
+    return 0;
 }
 
 static int send_msg(struct spi_mmc_dev_data *data,
@@ -87,7 +122,8 @@ static int send_msg(struct spi_mmc_dev_data *data,
      */
     int ret;
     uint8_t *dst;
-    size_t resp_len;
+    uint8_t tmp;
+    uint i;
     uint cs_pin = data->cs_pin;
     spi_inst_t *spi = data->spi;
 
@@ -100,16 +136,34 @@ static int send_msg(struct spi_mmc_dev_data *data,
     if (resp == NULL && resp_type == MMC_RESP_NONE) {
         ret = spi_write_blocking(spi, (uint8_t *)msg, sizeof(*msg));
     } else {
-        resp_len = spi_mmc_resp_size_raw(resp_type);
-        dst = (uint8_t *)calloc(1, resp_len);
+        dst = (uint8_t *)calloc(1, sizeof(uint8_t));
         if (!dst) {
             printf("Could not allocate response buffer: %d\n", -ENOMEM);
             return -ENOMEM;
         }
 
-        ret = spi_write_read_blocking(spi, (uint8_t *)msg, dst,
-                                      resp_len + sizeof(*msg));
-        if (spi_mmc_parse_response(dst, resp, resp_type)) {
+        // Write and read separately, since SDCard can take a while to respond
+        ret = spi_write_blocking(spi, (uint8_t *)msg, sizeof(*msg));
+        for (i = 0; i < 0XFF; i++) {
+            ret |= spi_read_blocking(spi, 0xFF, dst, sizeof(uint8_t));
+            if (*dst != 0xFF) {
+                break;
+            } else if (ret) {
+                printf("Could not read from SD Card.\n");
+                free(dst);
+                return -EIO;
+            }
+        }
+        // read the rest of the response
+        if (spi_mmc_resp_size(resp_type) > 1) {
+            tmp = *dst;
+            free(dst);
+            dst = (uint8_t *)calloc(1, spi_mmc_resp_size(resp_type));
+            spi_read_blocking(spi, 0xFF, &dst[1],
+                              spi_mmc_resp_size(resp_type) - 1);
+            memcpy(dst, &tmp, 1);
+        }
+        if (resp && spi_mmc_parse_response(dst, resp, resp_type)) {
             printf("Error parsing SPI response: %d\n", ret);
             free(dst);
             return -EIO;
@@ -126,18 +180,31 @@ static int send_msg(struct spi_mmc_dev_data *data,
 
 static int send_reset(struct spi_mmc_dev_data *data)
 {
+    int ret = 0;
+    uint retries = 0;
+    const uint max_retries = 10;
     const struct spi_mmc_message reset_cmd = {
         .start = 0b01,
         .cmd = MMC_CMD_GO_IDLE_STATE,
         .arg = 0,
-        .crc32_le = 0b1001010,
+        .crc7 = 0x4A,
         .stop = 1,
     };
+    uint8_t *resp = (uint8_t *)calloc(1, spi_mmc_resp_size(MMC_RESP_R1));
+    while (!ret && !(*resp & R1_SPI_IDLE) && (retries++ <= max_retries)) {
+        ret = send_msg(data, &reset_cmd, resp, MMC_RESP_R1);
+    }
+    if (!ret && retries > max_retries) {
+        printf("MMC SPI reset command exceeded max num of retries.\n");
+        ret = -ETIMEDOUT;
+    }
 
-    return send_msg(data, &reset_cmd, NULL, MMC_RESP_NONE);
+    free(resp);
+    return ret;
 }
 
-static bool check_response(uint8_t *resp, mmc_response_t resp_type) {
+static bool check_response(uint8_t *resp, mmc_response_t resp_type)
+{
     if (resp == NULL) {
         printf("No response available!\n");
         return false;
@@ -155,45 +222,105 @@ static bool check_response(uint8_t *resp, mmc_response_t resp_type) {
     return true;
 }
 
-static int send_voltage_verify(struct spi_mmc_dev_data *data)
+static int spi_mmc_voltage_select(struct mmc_dev *dev)
 {
-    uint8_t response = 0;
+    const uint max_num_retries = 10;
+    uint num_retries = 0;
+    uint8_t *response;
     int ret;
-    const struct spi_mmc_message cmd8 = {
-        .start = 0b01,
-        .cmd = MMC_CMD_SEND_EXT_CSD,
-        .arg = 0x40000000,
-        .crc32_le = 0b1001010,  // crc is ignored for this command
-        .stop = 1,
-    };
-    const struct spi_mmc_message acmd41 = {
+    struct spi_mmc_dev_data *data = (struct spi_mmc_dev_data *)dev->priv;
+    struct spi_mmc_message acmd41 = {
         .start = 0b01,
         .cmd = SD_CMD_APP_SEND_OP_COND,
         .arg = 0,
-        .crc32_le = 0,  // crc is ignored for this command
+        .crc7 = 0x7f,  // crc is ignored for this command
+        .stop = 1,
+    };
+    const struct spi_mmc_message cmd8 = {
+        .start = 0b01,
+        .cmd = MMC_CMD_SEND_EXT_CSD,
+        .arg = 0x1AA,
+        .crc7 = 0x43,
+        .stop = 1,
+    };
+    const struct spi_mmc_message cmd55 = {
+        .start = 0b01,
+        .cmd = MMC_CMD_APP_CMD,
+        .arg = 0,
+        .crc7 = 0x7f,
+        .stop = 1,
+    };
+    const struct spi_mmc_message cmd58 = {
+        .start = 0b01,
+        .cmd = MMC_CMD_SPI_READ_OCR,
+        .arg = 0,
+        .crc7 = 0x7f,
         .stop = 1,
     };
 
-    send_msg(data, &cmd8, NULL, MMC_RESP_NONE);
-    ret = send_msg(data, &acmd41, &response, MMC_RESP_R1);
-    if (ret) {
-        printf("Sending ACMD41 failed.\n");
+    response = (uint8_t *) calloc(1, spi_mmc_resp_size(MMC_RESP_R7));
+    ret = send_msg(data, &cmd8, response, MMC_RESP_R7);
+    if (response[0] & R1_SPI_ILLEGAL_COMMAND) {
+        dev->version = SD_CARD_TYPE_SD1;
+    // only need last byte of r7 response (echo-back)
+    } else if(response[4] & 0xAA) {
+        dev->version = SD_CARD_TYPE_SD2;
+    } else {
+        printf("Card did not respond to voltage select.\n");
+        ret = -EIO;
+        goto free_resp;
     }
 
-    if (!check_response(&response, MMC_RESP_R1)) {
-        printf("ACMD41 failed.\n");
-        return -EIO;
+    // set acmd41 arg depending on version
+    acmd41.arg = dev->version == SD_CARD_TYPE_SD2 ? 0X40000000 : 0;
+
+    // free response and alloc again with R1 size
+    free(response);
+    response = (uint8_t *)calloc(1, spi_mmc_resp_size(MMC_RESP_R1));
+    *response = 1;
+
+    do {
+        ret = send_msg(data, &cmd55, NULL, MMC_RESP_R1);
+        if (ret) {
+            printf("Sending CMD55 failed.\n");
+            ret = -EIO;
+            goto free_resp;
+        }
+
+        ret = send_msg(data, &acmd41, response, MMC_RESP_R1);
+        if (ret) {
+            printf("Sending ACMD41 failed.\n");
+            ret = -EIO;
+            goto free_resp;
+        } else if(num_retries++ >= max_num_retries) {
+            printf("Sending ACMD41 timed out.\n");
+            ret = -ETIMEDOUT;
+            goto free_resp;
+        }
+    } while(*response != 0);
+    free(response);
+
+    // if SD2 read OCR register to check for SDHC card
+    if (dev->version == SD_CARD_TYPE_SD2) {
+        response = (uint8_t *)calloc(1, spi_mmc_resp_size(MMC_RESP_R3));
+        if (send_msg(data, &cmd58, response, MMC_RESP_R3)) {
+            printf("Sending CMD58 failed.\n");
+            ret = -EIO;
+            goto free_resp;
+        }
+        if ((response[1] & 0XC0) == 0XC0) {
+            dev->version = SD_CARD_TYPE_SDHC;
+        }
+        // discard rest of ocr - contains allowed voltage range
     }
 
-    return 0;
+free_resp:
+    free(response);
+    return ret;
 }
 
-int spi_mmc_probe(struct mmc_dev *dev)
+static int spi_mmc_init(struct mmc_dev *dev)
 {
-    if (dev->initialized == true) {
-        return 0;
-    }
-
     struct spi_mmc_message spi_init_message = { 0 };
 
     int ret;
@@ -225,15 +352,26 @@ int spi_mmc_probe(struct mmc_dev *dev)
      * Otherwise, the host should select one of the cards and initialize.
      */
     send_reset(data);
-    ret = send_voltage_verify(data);
+    ret = spi_mmc_voltage_select(dev);
     if (ret != 0) {
-        printf("SPI init CMD8 failed.\n");
+        printf("SPI MMC version check failed.\n");
         goto error;
     }
-    dev->initialized = true;
 
 error:
-    dev->initialized = false;
+    return ret;
+}
+
+int spi_mmc_probe(struct mmc_dev *dev)
+{
+    if (dev->initialized == true) {
+        return 0;
+    }
+
+    int ret = spi_mmc_init(dev);
+    if (!ret) {
+        dev->initialized = true;
+    }
     return ret;
 }
 
