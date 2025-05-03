@@ -7,3 +7,4 @@
 #         )
 
 add_subdirectory(mmc)
+add_subdirectory(misc)

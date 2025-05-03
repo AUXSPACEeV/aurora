@@ -37,9 +37,13 @@
 #include "hardware/watchdog.h"
 
 /* Local includes */
-#include <aurora/drivers/mmc/spi_mmc.h>
+#include <aurora/app.h>
 #include <aurora/task/freertos_scheduling.h>
 #include <aurora/task/watchdog_service.h>
+
+/* main task defines */
+#define MAIN_TASK_PRI       (tskIDLE_PRIORITY + 1)
+#define MAIN_TASK_STACKSIZE (configMINIMAL_STACK_SIZE * 8)
 
 /**
  * Configure the hardware as necessary
@@ -53,52 +57,31 @@ static void prv_setup_early_tasks(void);
 
 /*----------------------------------------------------------------------------*/
 
+static void x_main_task(void* args);
+static TaskHandle_t main_task_handle = NULL;
+
+/*----------------------------------------------------------------------------*/
+
 int main(void)
 {
+    int ret;
+
     /* Configure the hardware ready to run the demo. */
-    prv_setup_hardware();
+    stdio_init_all();
+    init_wdt();
+
     prv_setup_early_tasks();
+
+    ret = xTaskCreate(x_main_task, "Aurora Main Task", MAIN_TASK_STACKSIZE,
+                      NULL, MAIN_TASK_PRI, &main_task_handle);
+    if (ret != pdPASS) {
+        printf("Main task could not be created.\n");
+        return ret;
+    }
 
     vTaskStartScheduler();
 
     return 0;
-}
-
-/*----------------------------------------------------------------------------*/
-
-static void prv_setup_hardware(void)
-{
-    int ret;
-
-    stdio_init_all();
-    init_wdt();
-    spi_init(spi_default, 1000 * 1000);
-
-    gpio_set_function(PICO_DEFAULT_SPI_RX_PIN, GPIO_FUNC_SPI);
-    gpio_set_function(PICO_DEFAULT_SPI_SCK_PIN, GPIO_FUNC_SPI);
-    gpio_set_function(PICO_DEFAULT_SPI_TX_PIN, GPIO_FUNC_SPI);
-    // Make the SPI pins available to picotool
-    bi_decl(bi_3pins_with_func(PICO_DEFAULT_SPI_RX_PIN, PICO_DEFAULT_SPI_TX_PIN, PICO_DEFAULT_SPI_SCK_PIN, GPIO_FUNC_SPI));
-
-    // Chip select is active-low, so we'll initialise it to a driven-high state
-    gpio_init(PICO_DEFAULT_SPI_CSN_PIN);
-    gpio_put(PICO_DEFAULT_SPI_CSN_PIN, 1);
-    gpio_set_dir(PICO_DEFAULT_SPI_CSN_PIN, GPIO_OUT);
-    // Make the CS pin available to picotool
-    bi_decl(bi_1pin_with_name(PICO_DEFAULT_SPI_CSN_PIN, "SPI CS"));
-
-    struct mmc_drv *mmc_drv = spi_mmc_drv_init(spi_default, PICO_DEFAULT_SPI_CSN_PIN, false);
-    if (mmc_drv == NULL) {
-        printf("SPI SD init failed: %d\n", -ENOMEM);
-        return;
-    }
-    ret = mmc_drv->ops->probe(mmc_drv->dev);
-    if (ret) {
-        printf("SPI SD init failed: %d\n", ret);
-        return;
-    }
-
-    printf("SPI initialised, let's goooooo\n");
 }
 
 /*----------------------------------------------------------------------------*/
@@ -109,4 +92,35 @@ static void prv_setup_early_tasks(void)
     int ret = start_wdt_task();
     if (ret != pdPASS)
         printf("WDT service task could not be created.\n");
+}
+
+/*----------------------------------------------------------------------------*/
+
+/**
+ * @brief Main Task
+ *
+ * @param args Unused task arguments
+ * @return void
+ */
+static void x_main_task(void* args)
+{
+    /* Wait 5 seconds */
+    int ret;
+    const TickType_t xDelay = (5000 / 2) / portTICK_PERIOD_MS;
+
+    vTaskDelay(xDelay);
+
+    printf("Welcome to AURORA!\n");
+
+    ret = aurora_hwinit();
+    if (ret != 0) {
+        printf("App specific hardware init failed: %d\n", ret);
+        return;
+    }
+
+    aurora_main();
+
+    /* Finally, after main ran through */
+
+    aurora_hwdeinit();
 }

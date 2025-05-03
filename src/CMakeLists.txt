@@ -11,6 +11,7 @@ set(AURORA_INCLUDES
 
 add_subdirectory(drivers)
 add_subdirectory(tasks)
+add_subdirectory(apps)
 
 # Add executable. Default name is the project name, version 0.1
 
@@ -27,6 +28,7 @@ target_link_libraries(aurora PRIVATE
         FreeRTOS-Kernel-Heap4
         pico_stdlib
         pico_binary_info
+        hardware_dma
         hardware_i2c
         hardware_spi
         hardware_watchdog
@@ -34,7 +36,9 @@ target_link_libraries(aurora PRIVATE
 
 target_link_libraries(aurora PUBLIC
         aurora_mmc
+        aurora_misc
         aurora_tasks
+        aurora_apps
         )
 
 pico_set_program_name(aurora "aurora")
