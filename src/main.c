@@ -42,8 +42,8 @@
 #include <aurora/task/watchdog_service.h>
 
 /* main task defines */
-#define MAIN_TASK_PRI       (tskIDLE_PRIORITY + 1)
-#define MAIN_TASK_STACKSIZE (configMINIMAL_STACK_SIZE * 8)
+#define MAIN_TASK_PRI       (configMAX_PRIORITIES / 2)
+#define MAIN_TASK_STACKSIZE (configMINIMAL_STACK_SIZE * 0x10)
 
 /**
  * Configure the hardware as necessary
