@@ -18,6 +18,7 @@
 #include "hardware/spi.h"
 #include "errno.h"
 
+#include <aurora/compiler.h>
 #include <aurora/list.h>
 #include <aurora/drivers/mmc/mmc.h>
 #include <aurora/drivers/mmc/spi_mmc.h>
@@ -179,7 +180,7 @@ static int spi_mmc_transfer_dma(struct spi_mmc_context *ctx, const uint8_t *tx,
                             uint8_t* rx, size_t length)
 {
     // assert(512 == length || 1 == length);
-    if (!tx && !rx) {
+    if (unlikely(!tx && !rx)) {
         return -EINVAL;
     }
     // assert(!(tx && rx));
@@ -404,9 +405,7 @@ static int send_reset(struct spi_mmc_context *ctx)
     if (resp & R1_SPI_ERROR) {
         printf("Sending reset command failed: %d\n", ret);
         ret = -EIO;
-    } else if (resp & R1_SPI_IDLE) {
-        printf("MMC SPI reset command succeeded.\n");
-    } else {
+    } else if (unlikely(!(resp & R1_SPI_IDLE))) {
         printf("MMC SPI reset command timed out.\n");
         ret = -ETIMEDOUT;
     }
