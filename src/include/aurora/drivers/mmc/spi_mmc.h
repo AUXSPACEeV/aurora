@@ -63,6 +63,13 @@ struct spi_mmc_message {
     uint8_t stop : 1;
 }__attribute__((packed));
 
+/**
+ * @brief SPI SDCard command macro
+ *
+ * @param _cmd: command number
+ * @param _arg: command argument
+ * @param _crc7: CRC7 checksum
+ */
 #define SPI_MMC_CMD_CRC(_cmd, _arg, _crc7) \
     ((struct spi_mmc_message){             \
         .start = 0b01,    /* 2 bits */     \
@@ -71,6 +78,15 @@ struct spi_mmc_message {
         .crc7  = (_crc7), /* 7 bits */     \
         .stop  = 1        /* 1 bit */      \
     })
+
+/**
+ * @brief SPI SDCard command macro without CRC7 checksum
+ *
+ * @param _cmd: command number
+ * @param _arg: command argument
+ *
+ * @note This macro sets the CRC7 checksum to 0b1111111.
+ */
 #define SPI_MMC_CMD(_cmd, _arg)  SPI_MMC_CMD_CRC(_cmd, _arg, 0b1111111)
 
 /**

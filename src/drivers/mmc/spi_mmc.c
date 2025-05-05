@@ -22,19 +22,19 @@
 #include <aurora/drivers/mmc/mmc.h>
 #include <aurora/drivers/mmc/spi_mmc.h>
 
-static bool irqChannel1 = false;
-static bool irqShared = false;
-
 struct spi_mmc_drv_list {
     mutex_t mutex;
     struct list_head list;
 };
 
+/*----------------------------------------------------------------------------*/
+
+static bool irqChannel1 = false;
+static bool irqShared = false;
+
 static struct spi_mmc_drv_list spi_mmc_drivers = {
     .list = LIST_HEAD_INIT(spi_mmc_drivers.list),
 };
-
-// static struct spi_config *spi_drivers[2];
 
 /*----------------------------------------------------------------------------*/
 
@@ -60,13 +60,6 @@ static void spi_mmc_drv_list_init(void) {
     mutex_init(&spi_mmc_drivers.mutex);
     mutex_enter_blocking(&spi_mmc_drivers.mutex);
     mutex_exit(&spi_mmc_drivers.mutex);
-}
-
-/*----------------------------------------------------------------------------*/
-
-void set_spi_dma_irq_channel(bool useChannel1, bool shared) {
-    irqChannel1 = useChannel1;
-    irqShared = shared;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -423,27 +416,6 @@ static int send_reset(struct spi_mmc_context *ctx)
 
 /*----------------------------------------------------------------------------*/
 
-static bool check_response(uint8_t *resp, mmc_response_t resp_type)
-{
-    if (resp == NULL) {
-        printf("No response available!\n");
-        return false;
-    }
-
-    switch(resp_type) {
-        case MMC_RESP_R1:
-            return (*resp & (R1_SPI_COM_CRC | R1_SPI_ERASE_SEQ |
-                                R1_SPI_ADDRESS | R1_SPI_ILLEGAL_COMMAND)) == 0;
-        default:
-            printf("No such response type: %s\n", resp_type);
-            return false;
-    }
-
-    return true;
-}
-
-/*----------------------------------------------------------------------------*/
-
 static int spi_mmc_voltage_select(struct mmc_dev *dev)
 {
     const uint max_num_retries = 10;
@@ -726,6 +698,13 @@ out:
 
     mutex_exit(&aurora_spi_init_mutex);
     return true;
+}
+
+/*----------------------------------------------------------------------------*/
+
+void set_spi_dma_irq_channel(bool useChannel1, bool shared) {
+    irqChannel1 = useChannel1;
+    irqShared = shared;
 }
 
 /*----------------------------------------------------------------------------*/

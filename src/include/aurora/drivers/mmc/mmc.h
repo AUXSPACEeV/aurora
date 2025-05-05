@@ -18,69 +18,6 @@
 #include <stdbool.h>
 #include "pico/stdlib.h"
 
-/* SD/MMC version bits; 8 flags, 8 major, 8 minor, 8 change */
-#define SD_VERSION_SD	(1U << 31)
-#define MMC_VERSION_MMC	(1U << 30)
-
-#define MAKE_SDMMC_VERSION(a, b, c)	\
-	((((u32)(a)) << 16) | ((u32)(b) << 8) | (u32)(c))
-#define MAKE_SD_VERSION(a, b, c)	\
-	(SD_VERSION_SD | MAKE_SDMMC_VERSION(a, b, c))
-#define MAKE_MMC_VERSION(a, b, c)	\
-	(MMC_VERSION_MMC | MAKE_SDMMC_VERSION(a, b, c))
-
-#define EXTRACT_SDMMC_MAJOR_VERSION(x)	\
-	(((u32)(x) >> 16) & 0xff)
-#define EXTRACT_SDMMC_MINOR_VERSION(x)	\
-	(((u32)(x) >> 8) & 0xff)
-#define EXTRACT_SDMMC_CHANGE_VERSION(x)	\
-	((u32)(x) & 0xff)
-
-#define SD_VERSION_3		MAKE_SD_VERSION(3, 0, 0)
-#define SD_VERSION_2		MAKE_SD_VERSION(2, 0, 0)
-#define SD_VERSION_1_0		MAKE_SD_VERSION(1, 0, 0)
-#define SD_VERSION_1_10		MAKE_SD_VERSION(1, 10, 0)
-
-#define MMC_VERSION_UNKNOWN	MAKE_MMC_VERSION(0, 0, 0)
-#define MMC_VERSION_1_2		MAKE_MMC_VERSION(1, 2, 0)
-#define MMC_VERSION_1_4		MAKE_MMC_VERSION(1, 4, 0)
-#define MMC_VERSION_2_2		MAKE_MMC_VERSION(2, 2, 0)
-#define MMC_VERSION_3		MAKE_MMC_VERSION(3, 0, 0)
-#define MMC_VERSION_4		MAKE_MMC_VERSION(4, 0, 0)
-#define MMC_VERSION_4_1		MAKE_MMC_VERSION(4, 1, 0)
-#define MMC_VERSION_4_2		MAKE_MMC_VERSION(4, 2, 0)
-#define MMC_VERSION_4_3		MAKE_MMC_VERSION(4, 3, 0)
-#define MMC_VERSION_4_4		MAKE_MMC_VERSION(4, 4, 0)
-#define MMC_VERSION_4_41	MAKE_MMC_VERSION(4, 4, 1)
-#define MMC_VERSION_4_5		MAKE_MMC_VERSION(4, 5, 0)
-#define MMC_VERSION_5_0		MAKE_MMC_VERSION(5, 0, 0)
-#define MMC_VERSION_5_1		MAKE_MMC_VERSION(5, 1, 0)
-
-#define MMC_CAP(mode)		(1 << mode)
-#define MMC_MODE_HS		(MMC_CAP(MMC_HS) | MMC_CAP(SD_HS))
-#define MMC_MODE_HS_52MHz	MMC_CAP(MMC_HS_52)
-#define MMC_MODE_DDR_52MHz	MMC_CAP(MMC_DDR_52)
-#define MMC_MODE_HS200		MMC_CAP(MMC_HS_200)
-#define MMC_MODE_HS400		MMC_CAP(MMC_HS_400)
-#define MMC_MODE_HS400_ES	MMC_CAP(MMC_HS_400_ES)
-
-#define MMC_CAP_NONREMOVABLE	BIT(14)
-#define MMC_CAP_NEEDS_POLL	BIT(15)
-#define MMC_CAP_CD_ACTIVE_HIGH  BIT(16)
-
-#define MMC_MODE_8BIT		BIT(30)
-#define MMC_MODE_4BIT		BIT(29)
-#define MMC_MODE_1BIT		BIT(28)
-#define MMC_MODE_SPI		BIT(27)
-
-#define SD_DATA_4BIT	0x00040000
-
-#define IS_SD(x)	((x)->version & SD_VERSION_SD)
-#define IS_MMC(x)	((x)->version & MMC_VERSION_MMC)
-
-#define MMC_DATA_READ		1
-#define MMC_DATA_WRITE		2
-
 #define MMC_CMD_GO_IDLE_STATE		0
 #define MMC_CMD_SEND_OP_COND		1
 #define MMC_CMD_ALL_SEND_CID		2
@@ -124,12 +61,26 @@
 #define SD_CMD_APP_SEND_OP_COND		41
 #define SD_CMD_APP_SEND_SCR		51
 
+/**
+ * @brief MMC card types / versions
+ *
+ * @note The types / versions are based on the SD/MMC specification.
+ *
+ * @ref https://users.ece.utexas.edu/~valvano/EE345M/SD_Physical_Layer_Spec.pdf
+ */
 typedef enum mmc_type {
     SD_CARD_TYPE_SD1,
     SD_CARD_TYPE_SD2,
     SD_CARD_TYPE_SDHC,
 } mmc_type_t;
 
+/**
+ * @brief MMC response types
+ *
+ * @note The response types are based on the SD/MMC specification.
+ *
+ * @ref https://users.ece.utexas.edu/~valvano/EE345M/SD_Physical_Layer_Spec.pdf
+ */
 typedef enum mmc_response {
     MMC_RESP_R1,
     MMC_RESP_R1b,
@@ -140,16 +91,35 @@ typedef enum mmc_response {
     MMC_RESP_NONE,
 } mmc_response_t;
 
+/**
+ * @brief MMC device structure
+ *
+ * @param name: Name of the device
+ * @param version: Version of the MMC device
+ * @param blksize: Block size of the device
+ * @param num_blocks: Number of blocks on the device
+ * @param initialized: Flag to check if the device is initialized
+ * @param priv: Pointer to private data
+ */
 struct mmc_dev {
     char *name;
     mmc_type_t version;
     uint32_t blksize;
     uint32_t num_blocks;
     bool initialized;
-
     void *priv;
 };
 
+/**
+ * @brief MMC driver functions
+ *
+ * @param probe: Probe function to initialize the device
+ * @param blk_read: Function to read a block of data
+ * @param blk_write: Function to write blocks of data
+ * @param blk_erase: Function to erase blocks of data
+ * @param generate_info: Function to generate device information
+ * @param n_sectors: Function to get the number of sectors on the mmc device
+ */
 struct mmc_ops {
     int (*probe)(struct mmc_dev *dev);
     int (*blk_read)(struct mmc_dev *dev, uint blk, uint8_t *buf, const size_t len);
@@ -160,13 +130,33 @@ struct mmc_ops {
     ssize_t (*n_sectors)(struct mmc_dev *dev);
 };
 
+/**
+ * @brief MMC driver structure
+ *
+ * @param dev: Pointer to the MMC device structure
+ * @param ops: Pointer to the MMC functions
+ */
 struct mmc_drv {
     struct mmc_dev *dev;
     struct mmc_ops *ops;
 };
 
+/**
+ * @brief Get the response size for a given MMC response type
+ *
+ * @param resp_type: The response type
+ *
+ * @return The size of the response in bytes
+ */
 size_t mmc_get_resp_size(mmc_response_t resp_type);
 
+/**
+ * @brief Get the response type for a given MMC command
+ *
+ * @param cmd: The command number
+ *
+ * @return The response type for the command
+ */
 mmc_response_t mmc_cmd_resp_type(uint8_t cmd);
 
 /* [] END OF FILE */

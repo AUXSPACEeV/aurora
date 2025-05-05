@@ -38,10 +38,33 @@ specific language governing permissions and limitations under the License.
 
 #include <stddef.h>
 
+/**
+ * @brief Calculate the CRC7 checksum for the specified data block
+ *
+ * @param data Pointer to the data block
+ * @param length Length of the data block
+ *
+ * @return The calculated CRC7 checksum
+ */
 char crc7(const char* data, int length);
 
+/**
+ * @brief Calculate the CRC16 checksum for the specified data block
+ *
+ * @param data Pointer to the data block
+ * @param length Length of the data block
+ *
+ * @return The calculated CRC16 checksum
+ */
 unsigned short crc16(const char* data, int length);
 
+/**
+ * @brief Update the CRC16 checksum with the specified data block
+ *
+ * @param pCrc16 Pointer to the current CRC16 checksum
+ * @param data Pointer to the data block
+ * @param length Length of the data block
+ */
 void update_crc16(unsigned short *pCrc16, const char data[], size_t length);
 
 /* [] END OF FILE */
