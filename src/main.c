@@ -38,17 +38,13 @@
 
 /* Local includes */
 #include <aurora/app.h>
+#include <aurora/compiler.h>
 #include <aurora/task/freertos_scheduling.h>
 #include <aurora/task/watchdog_service.h>
 
 /* main task defines */
 #define MAIN_TASK_PRI       (configMAX_PRIORITIES / 2)
 #define MAIN_TASK_STACKSIZE (configMINIMAL_STACK_SIZE * 0x10)
-
-/**
- * Configure the hardware as necessary
- */
-static void prv_setup_hardware(void);
 
 /**
  * Setup required early tasks
@@ -74,7 +70,7 @@ int main(void)
 
     ret = xTaskCreate(x_main_task, "Aurora Main Task", MAIN_TASK_STACKSIZE,
                       NULL, MAIN_TASK_PRI, &main_task_handle);
-    if (ret != pdPASS) {
+    if (unlikely(ret != pdPASS)) {
         printf("Main task could not be created.\n");
         return ret;
     }
@@ -90,7 +86,7 @@ static void prv_setup_early_tasks(void)
 {
     /* Create the watchdog service task */
     int ret = start_wdt_task();
-    if (ret != pdPASS)
+    if (unlikely(ret != pdPASS))
         printf("WDT service task could not be created.\n");
 }
 
