@@ -8,8 +8,7 @@
  * Copyright (C) 2025 Auxspace e.V.
  */
 
-#ifndef _WATCHDOG_SERVICE_H
-#define _WATCHDOG_SERVICE_H
+#pragma once
 
  /* WDT timeout in ms */
 #define WDT_CNTR_MS              (10000U)
@@ -28,4 +27,4 @@ int start_wdt_task(void);
  */
 void init_wdt(void);
 
-#endif /* _WATCHDOG_SERVICE_H */
+/* [] END OF FILE */

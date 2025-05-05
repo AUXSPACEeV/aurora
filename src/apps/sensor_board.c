@@ -16,14 +16,14 @@
 #include <aurora/app.h>
 #include <aurora/drivers/mmc/spi_mmc.h>
 
-static struct spi_drv *spi;
+static struct spi_config *spi;
 static struct mmc_drv *mmc;
 
 /*----------------------------------------------------------------------------*/
 
 static int setup_spi(void)
 {
-    spi = (struct spi_drv *)malloc(sizeof(struct spi_drv));
+    spi = (struct spi_config *)malloc(sizeof(struct spi_config));
     if (spi == NULL) {
         printf("Could not allocate SPI driver.\n");
         return -ENOMEM;
@@ -100,10 +100,15 @@ int aurora_hwinit(void) {
     return 0;
 }
 
+/*----------------------------------------------------------------------------*/
+
 void aurora_hwdeinit(void) {
     unsetup_spi();
 }
 
+/*----------------------------------------------------------------------------*/
+
 void aurora_main(void) {
     return;
 }
+/* EOF */

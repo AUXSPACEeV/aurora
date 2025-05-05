@@ -12,8 +12,7 @@
 * @note The original file is licensed under the GNU General Public License v2.0.
 */
 
-#ifndef _MMC_H
-#define _MMC_H
+#pragma once
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -157,6 +156,8 @@ struct mmc_ops {
     int (*blk_write)
         (struct mmc_dev *dev, uint blk, const uint8_t *buf, const size_t len);
     int (*blk_erase)(struct mmc_dev *dev, uint32_t addr);
+    int (*generate_info)(struct mmc_dev *dev);
+    ssize_t (*n_sectors)(struct mmc_dev *dev);
 };
 
 struct mmc_drv {
@@ -168,4 +169,4 @@ size_t mmc_get_resp_size(mmc_response_t resp_type);
 
 mmc_response_t mmc_cmd_resp_type(uint8_t cmd);
 
-#endif /* _MMC_H */
+/* [] END OF FILE */

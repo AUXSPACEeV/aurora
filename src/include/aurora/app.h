@@ -5,6 +5,12 @@
  * Aurora config has to implement.
  */
 
+#pragma once
+
 int aurora_hwinit(void);
+
 void aurora_hwdeinit(void);
+
 void aurora_main(void);
+
+/* [] END OF FILE */

@@ -23,7 +23,9 @@
 
 static bool irqChannel1 = false;
 static bool irqShared = false;
-static struct spi_drv *spi_drivers[2];
+static struct spi_config *spi_drivers[2];
+
+/*----------------------------------------------------------------------------*/
 
 static inline void cs_select(uint cs_pin)
 {
@@ -32,6 +34,8 @@ static inline void cs_select(uint cs_pin)
     asm volatile("nop \n nop \n nop"); // FIXME
 }
 
+/*----------------------------------------------------------------------------*/
+
 static inline void cs_deselect(uint cs_pin)
 {
     asm volatile("nop \n nop \n nop"); // FIXME
@@ -39,23 +43,31 @@ static inline void cs_deselect(uint cs_pin)
     asm volatile("nop \n nop \n nop"); // FIXME
 }
 
+/*----------------------------------------------------------------------------*/
+
 void set_spi_dma_irq_channel(bool useChannel1, bool shared) {
     irqChannel1 = useChannel1;
     irqShared = shared;
 }
 
+/*----------------------------------------------------------------------------*/
+
 static int spi_get_num() {
     return sizeof(spi_drivers) / sizeof(spi_drivers[0]);
 }
 
-static struct spi_drv *spi_get_by_num(size_t num) {
+/*----------------------------------------------------------------------------*/
+
+static struct spi_config *spi_get_by_num(size_t num) {
     assert(num < spi_get_num());
     return spi_drivers[num];
 }
 
+/*----------------------------------------------------------------------------*/
+
 static void in_spi_irq_handler(const uint DMA_IRQ_num, io_rw_32 *dma_hw_ints_p) {
     for (size_t i = 0; i < spi_get_num(); ++i) {
-        struct spi_drv *spi_p = spi_get_by_num(i);
+        struct spi_config *spi_p = spi_get_by_num(i);
         if (spi_p == NULL) {
             continue;
         }
@@ -72,13 +84,19 @@ static void in_spi_irq_handler(const uint DMA_IRQ_num, io_rw_32 *dma_hw_ints_p) 
     }
 }
 
+/*----------------------------------------------------------------------------*/
+
 static void __not_in_flash_func(spi_irq_handler_0)() {
     in_spi_irq_handler(DMA_IRQ_0, &dma_hw->ints0);
 }
 
+/*----------------------------------------------------------------------------*/
+
 static void __not_in_flash_func(spi_irq_handler_1)() {
     in_spi_irq_handler(DMA_IRQ_1, &dma_hw->ints1);
 }
+
+/*----------------------------------------------------------------------------*/
 
 static size_t spi_mmc_resp_size(mmc_response_t resp_type)
 {
@@ -97,22 +115,30 @@ static size_t spi_mmc_resp_size(mmc_response_t resp_type)
     }
 }
 
-static void spi_lock(struct spi_drv *spi) {
+/*----------------------------------------------------------------------------*/
+
+static void spi_lock(struct spi_config *spi) {
     assert(mutex_is_initialized(&spi->mutex));
     mutex_enter_blocking(&spi->mutex);
 }
 
-static void spi_unlock(struct spi_drv *spi) {
+/*----------------------------------------------------------------------------*/
+
+static void spi_unlock(struct spi_config *spi) {
     assert(mutex_is_initialized(&spi->mutex));
     mutex_exit(&spi->mutex);
 }
 
-static void spi_mmc_go_low_frequency(struct spi_mmc_dev_data *data) {
+/*----------------------------------------------------------------------------*/
+
+static void spi_mmc_go_low_frequency(struct spi_mmc_context *ctx) {
     // Actual frequency: 398089
-    spi_set_baudrate(data->spi->hw_spi, 400 * 1000);
+    spi_set_baudrate(ctx->spi->hw_spi, 400 * 1000);
 }
 
-static int spi_mmc_transfer_dma(struct spi_mmc_dev_data *data, const uint8_t *tx,
+/*----------------------------------------------------------------------------*/
+
+static int spi_mmc_transfer_dma(struct spi_mmc_context *ctx, const uint8_t *tx,
                             uint8_t* rx, size_t length)
 {
     // assert(512 == length || 1 == length);
@@ -123,91 +149,94 @@ static int spi_mmc_transfer_dma(struct spi_mmc_dev_data *data, const uint8_t *tx
 
     // tx write increment is already false
     if (tx) {
-        channel_config_set_read_increment(&data->spi->tx_dma_cfg, true);
+        channel_config_set_read_increment(&ctx->spi->tx_dma_cfg, true);
     } else {
         static const uint8_t dummy = 0xff;
         tx = &dummy;
-        channel_config_set_read_increment(&data->spi->tx_dma_cfg, false);
+        channel_config_set_read_increment(&ctx->spi->tx_dma_cfg, false);
     }
 
     // rx read increment is already false
     if (rx) {
-        channel_config_set_write_increment(&data->spi->rx_dma_cfg, true);
+        channel_config_set_write_increment(&ctx->spi->rx_dma_cfg, true);
     } else {
         static uint8_t dummy = 0xA5;
         rx = &dummy;
-        channel_config_set_write_increment(&data->spi->rx_dma_cfg, false);
+        channel_config_set_write_increment(&ctx->spi->rx_dma_cfg, false);
     }
 
-    dma_channel_configure(data->spi->tx_dma, &data->spi->tx_dma_cfg,
-                          &spi_get_hw(data->spi->hw_spi)->dr,  // write address
+    dma_channel_configure(ctx->spi->tx_dma, &ctx->spi->tx_dma_cfg,
+                          &spi_get_hw(ctx->spi->hw_spi)->dr,  // write address
                           tx,                              // read address
                           length,  // element count (each element is of
                                    // size transfer_data_size)
                           false);  // start
-    dma_channel_configure(data->spi->rx_dma, &data->spi->rx_dma_cfg,
+    dma_channel_configure(ctx->spi->rx_dma, &ctx->spi->rx_dma_cfg,
                           rx,                              // write address
-                          &spi_get_hw(data->spi->hw_spi)->dr,  // read address
+                          &spi_get_hw(ctx->spi->hw_spi)->dr,  // read address
                           length,  // element count (each element is of
                                    // size transfer_data_size)
                           false);  // start
 
-    switch (data->spi->DMA_IRQ_num) {
+    switch (ctx->spi->DMA_IRQ_num) {
         case DMA_IRQ_0:
-            assert(!dma_channel_get_irq0_status(data->spi->rx_dma));
+            assert(!dma_channel_get_irq0_status(ctx->spi->rx_dma));
             break;
         case DMA_IRQ_1:
-            assert(!dma_channel_get_irq1_status(data->spi->rx_dma));
+            assert(!dma_channel_get_irq1_status(ctx->spi->rx_dma));
             break;
         default:
             assert(false);
     }
-    sem_reset(&data->spi->sem, 0);
+    sem_reset(&ctx->spi->sem, 0);
 
     // start them exactly simultaneously to avoid races (in extreme cases
     // the FIFO could overflow)
-    dma_start_channel_mask((1u << data->spi->tx_dma) | (1u << data->spi->rx_dma));
+    dma_start_channel_mask((1u << ctx->spi->tx_dma) | (1u << ctx->spi->rx_dma));
 
     /* Wait until master completes transfer or time out has occured. */
     uint32_t timeOut = 1000; /* Timeout 1 sec */
     bool rc = sem_acquire_timeout_ms(
-        &data->spi->sem, timeOut);  // Wait for notification from ISR
+        &ctx->spi->sem, timeOut);  // Wait for notification from ISR
     if (!rc) {
         // If the timeout is reached the function will return false
         printf("Notification wait timed out in %s\n", __FUNCTION__);
         return -ETIMEDOUT;
     }
     // Shouldn't be necessary:
-    dma_channel_wait_for_finish_blocking(data->spi->tx_dma);
-    dma_channel_wait_for_finish_blocking(data->spi->rx_dma);
+    dma_channel_wait_for_finish_blocking(ctx->spi->tx_dma);
+    dma_channel_wait_for_finish_blocking(ctx->spi->rx_dma);
 
-    assert(!sem_available(&data->spi->sem));
-    assert(!dma_channel_is_busy(data->spi->tx_dma));
-    assert(!dma_channel_is_busy(data->spi->rx_dma));
+    assert(!sem_available(&ctx->spi->sem));
+    assert(!dma_channel_is_busy(ctx->spi->tx_dma));
+    assert(!dma_channel_is_busy(ctx->spi->rx_dma));
 
     return 0;
 }
 
-static int spi_mmc_transfer(struct spi_mmc_dev_data *data, const uint8_t *tx,
+/*----------------------------------------------------------------------------*/
+
+static int spi_mmc_transfer(struct spi_mmc_context *ctx, const uint8_t *tx,
     uint8_t* rx, size_t length)
 {
-    uint cs_pin = data->cs_pin;
+    uint cs_pin = ctx->cs_pin;
     int len;
 
     // assert(512 == length || 1 == length);
     assert(tx || rx);
     // assert(!(tx && rx));
 
-    if (data->spi->use_dma) {
-        printf("dma\n");
-        return spi_mmc_transfer_dma(data, tx, rx, length);
+    if (ctx->spi->use_dma) {
+        return spi_mmc_transfer_dma(ctx, tx, rx, length);
     } else {
-        len = spi_write_read_blocking(data->spi->hw_spi, tx, rx, length);
+        len = spi_write_read_blocking(ctx->spi->hw_spi, tx, rx, length);
         return len == length ? 0 : -EIO;
     }
 }
 
-static int spi_mmc_wait_ready(struct spi_mmc_dev_data *data) {
+/*----------------------------------------------------------------------------*/
+
+static int spi_mmc_wait_ready(struct spi_mmc_context *ctx) {
     const uint32_t max_r = 10;
 
     uint8_t ret;
@@ -217,7 +246,7 @@ static int spi_mmc_wait_ready(struct spi_mmc_dev_data *data) {
 
     for(i = 0; i < max_r; ++i) {
         // resp = sd_spi_write(spi, 0xFF);
-        ret = spi_mmc_transfer(data, &dummy, &resp, 1);
+        ret = spi_mmc_transfer(ctx, &dummy, &resp, 1);
         if (!(ret & R1_SPI_ERROR) && (resp != 0x00)) {
             break;
         }
@@ -234,7 +263,9 @@ static int spi_mmc_wait_ready(struct spi_mmc_dev_data *data) {
     return 0;
 }
 
-static uint8_t spi_send_cmd(struct spi_mmc_dev_data *data, struct spi_mmc_message msg, uint8_t *rx)
+/*----------------------------------------------------------------------------*/
+
+static uint8_t spi_send_cmd(struct spi_mmc_context *ctx, struct spi_mmc_message msg, uint8_t *rx)
 {
     const size_t packet_size = 6;
     const uint max_retries = 0x10;
@@ -261,20 +292,20 @@ static uint8_t spi_send_cmd(struct spi_mmc_dev_data *data, struct spi_mmc_messag
     }
     // send a command
     for (int i = 0; i < packet_size; i++) {
-        spi_mmc_transfer(data, &cmdPacket[i], &response, 1);
+        spi_mmc_transfer(ctx, &cmdPacket[i], &response, 1);
     }
 
     // The received byte immediataly following CMD12 is a stuff byte,
     // it should be discarded before receive the response of the CMD12.
     // if (MMC_CMD_STOP_TRANSMISSION == msg.cmd) {
-    //     spi_mmc_transfer(data, &tx, &response, 1);
+    //     spi_mmc_transfer(ctx, &tx, &response, 1);
     // }
 
     // Loop for response: Response is sent back within command response time
     // (NCR), 0 to 8 bytes for SDC
     memset(rx, 0xff, spi_mmc_resp_size(resp_size));
     for (int i = 0; i < max_retries; i++) {
-        spi_mmc_transfer(data, &tx, &response, 1);
+        spi_mmc_transfer(ctx, &tx, &response, 1);
         // Got the response
         if (!(response & R1_SPI_ERROR)) {
             // parse the rest of the response
@@ -283,7 +314,7 @@ static uint8_t spi_send_cmd(struct spi_mmc_dev_data *data, struct spi_mmc_messag
                 printf("Total response:\n\tr[0] = 0x%02x\n", rx[0]);
             }
             for(int j = 1; j < resp_size; j++) {
-                spi_mmc_transfer(data, &tx, &rx[j], 1);
+                spi_mmc_transfer(ctx, &tx, &rx[j], 1);
                 printf("\tr[%d] = 0x%02x\n", j, rx[j]);
             }
             break;
@@ -294,72 +325,9 @@ static uint8_t spi_send_cmd(struct spi_mmc_dev_data *data, struct spi_mmc_messag
     return response;
 }
 
-// static int send_msg(struct spi_mmc_dev_data *data,
-//                     const struct spi_mmc_message *msg, uint8_t* resp,
-//                     mmc_response_t resp_type)
-// {
-//     /**
-//      * @note: no nullptr error handling done here for better performance.
-//      * Make sure values are valid before calling send_msg!
-//      */
-//     int ret;
-//     uint8_t *dst;
-//     uint8_t tmp;
-//     uint i;
-//     uint cs_pin = data->cs_pin;
-//     spi_inst_t *spi = data->spi->hw_spi;
+/*----------------------------------------------------------------------------*/
 
-//     cs_select(cs_pin);
-//     dst = (uint8_t *)calloc(1, sizeof(uint8_t));
-//     if (!dst) {
-//         printf("Could not allocate response buffer: %d\n", -ENOMEM);
-//         return -ENOMEM;
-//     }
-
-//     // Write and read separately, since SDCard can take a while to respond
-//     ret = spi_write_blocking(spi, (uint8_t *)msg, sizeof(*msg));
-//     uint64_t val = 0;
-//     memcpy(&val, msg, sizeof(*msg)); // Safely copy struct bytes into uint64_t
-//     printf("\nMSG: 0x%016llx\n", val);
-//     for (i = 0; i < 0XFF; i++) {
-//         ret |= spi_read_blocking(spi, 0xFF, dst, sizeof(uint8_t));
-//         /**
-//          * The first response byte of every command is R1.
-//          * R1 always starts with 0.
-//          * Check if the first bit of R1 is 0 and stop waiting
-//          */
-//         if (!(*dst & R1_SPI_ERROR)) {
-//             break;
-//         }
-//     }
-//     // read the rest of the response
-//     if (spi_mmc_resp_size(resp_type) > 1) {
-//         tmp = *dst;
-//         free(dst);
-//         dst = (uint8_t *)calloc(1, spi_mmc_resp_size(resp_type));
-//         spi_read_blocking(spi, 0xFF, &dst[1],
-//                             spi_mmc_resp_size(resp_type) - 1);
-//         memcpy(dst, &tmp, 1);
-//     }
-
-//     printf("\n\n");
-
-//     if (resp && spi_mmc_parse_response(dst, resp, resp_type)) {
-//         printf("Error parsing SPI response: %d\n", ret);
-//         free(dst);
-//         return -EIO;
-//     }
-//     free(dst);
-//     cs_deselect(cs_pin);
-//     // if (ret != spi_mmc_resp_size(resp_type)) {
-//     //     printf("Error sending SPI message. Wanted bits: %d; got: %d\n",
-//     //             spi_mmc_resp_size(resp_type), ret);
-//     //     return -EIO;
-//     // }
-//     return 0;
-// }
-
-static int send_msg(struct spi_mmc_dev_data *data,
+static int send_msg(struct spi_mmc_context *ctx,
                     const struct spi_mmc_message msg, uint8_t* resp)
 {
     /**
@@ -368,14 +336,16 @@ static int send_msg(struct spi_mmc_dev_data *data,
      */
     uint8_t ret;
 
-    cs_select(data->cs_pin);
-    ret = spi_send_cmd(data, msg, resp);
-    cs_deselect(data->cs_pin);
+    cs_select(ctx->cs_pin);
+    ret = spi_send_cmd(ctx, msg, resp);
+    cs_deselect(ctx->cs_pin);
 
     return 0;
 }
 
-static int send_reset(struct spi_mmc_dev_data *data)
+/*----------------------------------------------------------------------------*/
+
+static int send_reset(struct spi_mmc_context *ctx)
 {
     int ret = 0;
     int i;
@@ -384,7 +354,7 @@ static int send_reset(struct spi_mmc_dev_data *data)
 
     uint8_t resp = 0xff;
     for (i = 0; i < 10; i++) {
-        ret = send_msg(data, reset_cmd, &resp);
+        ret = send_msg(ctx, reset_cmd, &resp);
         if (R1_SPI_IDLE == resp) {
             break;
         }
@@ -406,6 +376,8 @@ static int send_reset(struct spi_mmc_dev_data *data)
     return ret;
 }
 
+/*----------------------------------------------------------------------------*/
+
 static bool check_response(uint8_t *resp, mmc_response_t resp_type)
 {
     if (resp == NULL) {
@@ -425,6 +397,8 @@ static bool check_response(uint8_t *resp, mmc_response_t resp_type)
     return true;
 }
 
+/*----------------------------------------------------------------------------*/
+
 static int spi_mmc_voltage_select(struct mmc_dev *dev)
 {
     const uint max_num_retries = 10;
@@ -432,7 +406,7 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
     uint8_t response = 0xff;
     uint8_t *cmd8_resp;
     int ret;
-    struct spi_mmc_dev_data *data = (struct spi_mmc_dev_data *)dev->priv;
+    struct spi_mmc_context *ctx = (struct spi_mmc_context *)dev->priv;
     struct spi_mmc_message acmd41 = SPI_MMC_CMD(SD_CMD_APP_SEND_OP_COND, 0);
     const struct spi_mmc_message cmd8 = SPI_MMC_CMD_CRC(
                                             MMC_CMD_SEND_EXT_CSD, 0x1AA, 0x43);
@@ -440,7 +414,7 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
     const struct spi_mmc_message cmd58 = SPI_MMC_CMD(MMC_CMD_SPI_READ_OCR, 0);
 
     cmd8_resp = malloc(spi_mmc_resp_size(mmc_cmd_resp_type(cmd8.cmd)));
-    ret = send_msg(data, cmd8, cmd8_resp);
+    ret = send_msg(ctx, cmd8, cmd8_resp);
     if (cmd8_resp[0] & R1_SPI_ILLEGAL_COMMAND) {
         dev->version = SD_CARD_TYPE_SD1;
     // only need last byte of r7 response (echo-back)
@@ -457,20 +431,20 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
     response = 0xff;
     while(response == 0xff) {
         response = 0xff;
-        ret = send_msg(data, cmd55, &response);
+        ret = send_msg(ctx, cmd55, &response);
         if (ret) {
             printf("Sending CMD55 failed.\n");
             return -EIO;
         }
 
         response = 0xff;
-        ret = spi_mmc_wait_ready(data);
+        ret = spi_mmc_wait_ready(ctx);
         if (ret) {
             printf("Waiting for card to be ready failed.\n");
             continue;
         }
 
-        ret = send_msg(data, acmd41, &response);
+        ret = send_msg(ctx, acmd41, &response);
         if (ret) {
             printf("Sending ACMD41 failed.\n");
             return -EIO;
@@ -483,7 +457,7 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
     // if SD2 read OCR register to check for SDHC card
     if (dev->version == SD_CARD_TYPE_SD2) {
         response = 0xff;
-        if (send_msg(data, cmd58, &response)) {
+        if (send_msg(ctx, cmd58, &response)) {
             printf("Sending CMD58 failed.\n");
             return -EIO;
         }
@@ -496,6 +470,8 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
     return ret;
 }
 
+/*----------------------------------------------------------------------------*/
+
 static int spi_mmc_init(struct mmc_dev *dev)
 {
     struct spi_mmc_message spi_init_message = { 0 };
@@ -503,18 +479,18 @@ static int spi_mmc_init(struct mmc_dev *dev)
     int ret;
     uint i;
     uint8_t resp = 0xff;
-    struct spi_mmc_dev_data *data = (struct spi_mmc_dev_data *)dev->priv;
-    if (!data) {
-        printf("No SPI MMC data available!\n");
+    struct spi_mmc_context *ctx = (struct spi_mmc_context *)dev->priv;
+    if (!ctx) {
+        printf("No SPI MMC ctx available!\n");
         return -EINVAL;
     }
 
-    spi_mmc_go_low_frequency(data);
+    spi_mmc_go_low_frequency(ctx);
 
     // Wait for at least 74 cycles with MOSI and CS asserted
     memset(&spi_init_message, 0xff, sizeof(spi_init_message));
     for (i = 0; i < (74 / (sizeof(spi_init_message) * 8) + 1); i++) {
-        send_msg(data, spi_init_message, &resp);
+        send_msg(ctx, spi_init_message, &resp);
     }
 
     /**
@@ -531,7 +507,7 @@ static int spi_mmc_init(struct mmc_dev *dev)
      * that all cards satisfy the supplied voltage.
      * Otherwise, the host should select one of the cards and initialize.
      */
-    send_reset(data);
+    send_reset(ctx);
     ret = spi_mmc_voltage_select(dev);
     if (ret != 0) {
         printf("SPI MMC version check failed.\n");
@@ -565,18 +541,9 @@ out:
     return ret;
 }
 
-void spi_mmc_dbg_printbuf(struct mmc_dev *dev, uint8_t *buf)
-{
-    uint32_t i;
-    for (i = 0; i < dev->num_blocks; ++i) {
-        if (i % 16 == 15)
-            printf("%02x\n", buf[i]);
-        else
-            printf("%02x ", buf[i]);
-    }
-}
+/*----------------------------------------------------------------------------*/
 
-static int aurora_spi_init(struct spi_drv *spi) {
+static int aurora_spi_init(struct spi_config *spi) {
     auto_init_mutex(aurora_spi_init_mutex);
     mutex_enter_blocking(&aurora_spi_init_mutex);
 
@@ -694,7 +661,9 @@ out:
     return true;
 }
 
-struct mmc_drv *spi_mmc_drv_init(struct spi_drv *spi, uint cs_pin)
+/*----------------------------------------------------------------------------*/
+
+struct mmc_drv *spi_mmc_drv_init(struct spi_config *spi, uint cs_pin)
 {
     auto_init_mutex(spi_mmc_drv_init_mutex);
     mutex_enter_blocking(&spi_mmc_drv_init_mutex);
@@ -708,14 +677,14 @@ struct mmc_drv *spi_mmc_drv_init(struct spi_drv *spi, uint cs_pin)
         goto out;
     }
 
-    struct spi_mmc_dev_data *data = (struct spi_mmc_dev_data *)
-        calloc(1, sizeof(struct spi_mmc_dev_data));
-    if (!data) {
-        printf("Could not allocate SPI MMC data: %d\n", -ENOMEM);
+    struct spi_mmc_context *ctx = (struct spi_mmc_context *)
+        calloc(1, sizeof(struct spi_mmc_context));
+    if (!ctx) {
+        printf("Could not allocate SPI MMC ctx: %d\n", -ENOMEM);
         goto out;
     }
-    data->spi = spi;
-    data->cs_pin = cs_pin;
+    ctx->spi = spi;
+    ctx->cs_pin = cs_pin;
 
     // TODO: Figure this out
     // bi_decl(bi_1pin_with_name(cs_pin, "MMC SPI CS"));
@@ -723,10 +692,10 @@ struct mmc_drv *spi_mmc_drv_init(struct spi_drv *spi, uint cs_pin)
     struct mmc_dev *dev = (struct mmc_dev *)calloc(1, sizeof(struct mmc_dev));
     if (!dev) {
         printf("Could not allocate SPI MMC device: %d\n", -ENOMEM);
-        goto free_data;
+        goto free_ctx;
     }
     dev->name = "spi_mmc";
-    dev->priv = data;
+    dev->priv = ctx;
 
     struct mmc_ops *ops = (struct mmc_ops *)malloc(sizeof(struct mmc_ops));
     if (!ops) {
@@ -753,12 +722,14 @@ free_ops:
     free(ops);
 free_dev:
     free(dev);
-free_data:
-    free(data);
+free_ctx:
+    free(ctx);
 out:
     mutex_exit(&spi_mmc_drv_init_mutex);
     return NULL;
 }
+
+/*----------------------------------------------------------------------------*/
 
 void spi_mmc_drv_deinit(struct mmc_drv *drv)
 {
@@ -773,3 +744,5 @@ void spi_mmc_drv_deinit(struct mmc_drv *drv)
         free(drv->ops);
     free(drv);
 }
+
+/* [] END OF FILE */

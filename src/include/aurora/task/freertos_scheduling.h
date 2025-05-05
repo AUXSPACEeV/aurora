@@ -8,8 +8,7 @@
  * Copyright (C) 2025 Auxspace e.V.
  */
 
-#ifndef _FREERTOS_SCHEDULING_H
-#define _FREERTOS_SCHEDULING_H
+#pragma once
 
 #include "task.h"
 
@@ -36,4 +35,4 @@ void vApplicationStackOverflowHook(TaskHandle_t pxTask, char* pcTaskName);
  */
 void vApplicationTickHook(void);
 
-#endif /* _FREERTOS_SCHEDULING_H */
+/* [] END OF FILE */

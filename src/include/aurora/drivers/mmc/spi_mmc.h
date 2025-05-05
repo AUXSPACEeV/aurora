@@ -8,8 +8,7 @@
 * Copyright (C) 2025 Auxspace e.V.
 */
 
-#ifndef _SPI_MMC_H
-#define _SPI_MMC_H
+#pragma once
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -75,7 +74,7 @@ struct spi_mmc_message {
     })
 #define SPI_MMC_CMD(_cmd, _arg)  SPI_MMC_CMD_CRC(_cmd, _arg, 0b1111111)
 
-struct spi_drv {
+struct spi_config {
     spi_inst_t *hw_spi;
     uint miso_gpio;  // SPI MISO GPIO number (not pin number)
     uint mosi_gpio;
@@ -112,8 +111,8 @@ struct spi_drv {
  *
  * @param cs_pin: chip select pin number
  */
-struct spi_mmc_dev_data {
-    struct spi_drv *spi;
+struct spi_mmc_context {
+    struct spi_config *spi;
     uint cs_pin;
 };
 
@@ -128,7 +127,7 @@ struct spi_mmc_dev_data {
  *
  * @return pointer to the newly created SPI SDCard driver structure
  */
-struct mmc_drv *spi_mmc_drv_init(struct spi_drv *spi, uint cs_pin);
+struct mmc_drv *spi_mmc_drv_init(struct spi_config *spi, uint cs_pin);
 
 /**
  * @brief Uninitialize the SPI SDCard driver structure
@@ -139,4 +138,4 @@ void spi_mmc_drv_deinit(struct mmc_drv *drv);
 
 void set_spi_dma_irq_channel(bool useChannel1, bool shared);
 
-#endif /* _SPI_MMC_H */
+/* [] END OF FILE */

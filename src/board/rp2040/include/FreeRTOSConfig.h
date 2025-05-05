@@ -24,8 +24,7 @@
  *
  */
 
-#ifndef FREERTOS_CONFIG_H
-#define FREERTOS_CONFIG_H
+#pragma once
 
  /**
   * Application specific definitions.
@@ -135,4 +134,4 @@ to exclude the API function. */
 #define configUSE_PASSIVE_IDLE_HOOK             0
 #define portSUPPORT_SMP                         1
 
-#endif /* FREERTOS_CONFIG_H */
+/* [] END OF FILE */
