@@ -18,12 +18,23 @@
 #include "hardware/spi.h"
 #include "errno.h"
 
+#include <aurora/list.h>
 #include <aurora/drivers/mmc/mmc.h>
 #include <aurora/drivers/mmc/spi_mmc.h>
 
 static bool irqChannel1 = false;
 static bool irqShared = false;
-static struct spi_config *spi_drivers[2];
+
+struct spi_mmc_drv_list {
+    mutex_t mutex;
+    struct list_head list;
+};
+
+static struct spi_mmc_drv_list spi_mmc_drivers = {
+    .list = LIST_HEAD_INIT(spi_mmc_drivers.list),
+};
+
+// static struct spi_config *spi_drivers[2];
 
 /*----------------------------------------------------------------------------*/
 
@@ -45,6 +56,14 @@ static inline void cs_deselect(uint cs_pin)
 
 /*----------------------------------------------------------------------------*/
 
+static void spi_mmc_drv_list_init(void) {
+    mutex_init(&spi_mmc_drivers.mutex);
+    mutex_enter_blocking(&spi_mmc_drivers.mutex);
+    mutex_exit(&spi_mmc_drivers.mutex);
+}
+
+/*----------------------------------------------------------------------------*/
+
 void set_spi_dma_irq_channel(bool useChannel1, bool shared) {
     irqChannel1 = useChannel1;
     irqShared = shared;
@@ -52,15 +71,33 @@ void set_spi_dma_irq_channel(bool useChannel1, bool shared) {
 
 /*----------------------------------------------------------------------------*/
 
-static int spi_get_num() {
-    return sizeof(spi_drivers) / sizeof(spi_drivers[0]);
+static size_t spi_get_num() {
+    size_t ret;
+
+    mutex_enter_blocking(&spi_mmc_drivers.mutex);
+    ret = list_count_nodes(&spi_mmc_drivers.list);
+    mutex_exit(&spi_mmc_drivers.mutex);
+
+    return ret;
 }
 
 /*----------------------------------------------------------------------------*/
 
 static struct spi_config *spi_get_by_num(size_t num) {
+    struct spi_config* cfg = NULL;
+    int i;
+
     assert(num < spi_get_num());
-    return spi_drivers[num];
+
+    mutex_enter_blocking(&spi_mmc_drivers.mutex);
+    list_for_each_entry(cfg, &spi_mmc_drivers.list, node) {
+        if (i++ == num)
+            break;
+    }
+
+    mutex_exit(&spi_mmc_drivers.mutex);
+
+    return cfg;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -559,124 +596,134 @@ static int aurora_spi_init(struct spi_config *spi) {
         spi->state = malloc(sizeof(struct spi_config_state));
     }
 
-    if (!spi->state->initialized) {
-        //// The SPI may be shared (using multiple SSs); protect it
-        //spi->mutex = xSemaphoreCreateRecursiveMutex();
-        //xSemaphoreTakeRecursive(spi->mutex, portMAX_DELAY);
-        if (!mutex_is_initialized(&spi->state->mutex)) {
-            mutex_init(&spi->state->mutex);
-        }
-        spi_lock(spi);
-
-        // Default:
-        if (!spi->baud_rate)
-            spi->baud_rate = 10 * 1000 * 1000;
-        // For the IRQ notification:
-        sem_init(&spi->state->sem, 0, 1);
-
-        /* Configure component */
-        // Enable SPI at 100 kHz and connect to GPIOs
-        spi_init(spi->hw_spi, 100 * 1000);
-        spi_set_format(spi->hw_spi, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-
-        gpio_set_function(spi->miso_gpio, GPIO_FUNC_SPI);
-        gpio_set_function(spi->mosi_gpio, GPIO_FUNC_SPI);
-        gpio_set_function(spi->sck_gpio, GPIO_FUNC_SPI);
-
-        // TODO: Figure this out
-        // bi_decl(bi_3pins_with_func(spi->miso_gpio, spi->mosi_gpio, spi->sck_gpio, GPIO_FUNC_SPI));
-
-        // Slew rate limiting levels for GPIO outputs.
-        // enum gpio_slew_rate { GPIO_SLEW_RATE_SLOW = 0, GPIO_SLEW_RATE_FAST = 1 }
-        // void gpio_set_slew_rate (uint gpio,enum gpio_slew_rate slew)
-        // Default appears to be GPIO_SLEW_RATE_SLOW.
-
-        // Drive strength levels for GPIO outputs.
-        // enum gpio_drive_strength { GPIO_DRIVE_STRENGTH_2MA = 0, GPIO_DRIVE_STRENGTH_4MA = 1, GPIO_DRIVE_STRENGTH_8MA = 2,
-        // GPIO_DRIVE_STRENGTH_12MA = 3 }
-        // enum gpio_drive_strength gpio_get_drive_strength (uint gpio)
-        if (spi->set_drive_strength) {
-            gpio_set_drive_strength(spi->mosi_gpio, spi->mosi_gpio_drive_strength);
-            gpio_set_drive_strength(spi->sck_gpio, spi->sck_gpio_drive_strength);
-        }
-
-        // SD cards' DO MUST be pulled up.
-        gpio_pull_up(spi->miso_gpio);
-
-        if (!spi->use_dma) {
-            spi_unlock(spi);
-            goto out;
-        }
-
-        // Grab some unused dma channels
-        spi->state->tx_dma = dma_claim_unused_channel(true);
-        spi->state->rx_dma = dma_claim_unused_channel(true);
-
-        spi->state->tx_dma_cfg = dma_channel_get_default_config(
-                                    spi->state->tx_dma);
-        spi->state->rx_dma_cfg = dma_channel_get_default_config(
-                                    spi->state->rx_dma);
-        channel_config_set_transfer_data_size(&spi->state->tx_dma_cfg,
-                                                DMA_SIZE_8);
-        channel_config_set_transfer_data_size(&spi->state->rx_dma_cfg,
-                                                DMA_SIZE_8);
-
-        // We set the outbound DMA to transfer from a memory buffer to the SPI
-        // transmit FIFO paced by the SPI TX FIFO DREQ The default is for the
-        // read address to increment every element (in this case 1 byte -
-        // DMA_SIZE_8) and for the write address to remain unchanged.
-        channel_config_set_dreq(&spi->state->tx_dma_cfg,
-                                spi_get_index(spi->hw_spi)
-                                    ? DREQ_SPI1_TX
-                                    : DREQ_SPI0_TX);
-        channel_config_set_write_increment(&spi->state->tx_dma_cfg, false);
-
-        // We set the inbound DMA to transfer from the SPI receive FIFO to a
-        // memory buffer paced by the SPI RX FIFO DREQ We coinfigure the read
-        // address to remain unchanged for each element, but the write address
-        // to increment (so data is written throughout the buffer)
-        channel_config_set_dreq(&spi->state->rx_dma_cfg,
-                                spi_get_index(spi->hw_spi)
-                                    ? DREQ_SPI1_RX
-                                    : DREQ_SPI0_RX);
-        channel_config_set_read_increment(&spi->state->rx_dma_cfg, false);
-
-        /* Theory: we only need an interrupt on rx complete,
-        since if rx is complete, tx must also be complete. */
-
-        /* Configure the processor to run dma_handler() when DMA IRQ 0/1 is asserted */
-
-        spi->DMA_IRQ_num = irqChannel1 ? DMA_IRQ_1 : DMA_IRQ_0;
-
-        // Tell the DMA to raise IRQ line 0/1 when the channel finishes a block
-        static void (*spi_irq_handler_p)();
-        switch (spi->DMA_IRQ_num) {
-        case DMA_IRQ_0:
-            spi_irq_handler_p = spi_irq_handler_0;
-            dma_channel_set_irq0_enabled(spi->state->rx_dma, true);
-            dma_channel_set_irq0_enabled(spi->state->tx_dma, false);
-        break;
-        case DMA_IRQ_1:
-            spi_irq_handler_p = spi_irq_handler_1;
-            dma_channel_set_irq1_enabled(spi->state->rx_dma, true);
-            dma_channel_set_irq1_enabled(spi->state->tx_dma, false);
-        break;
-        default:
-            assert(false);
-        }
-        if (irqShared) {
-            irq_add_shared_handler(
-                spi->DMA_IRQ_num, *spi_irq_handler_p,
-                PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
-        } else {
-            irq_set_exclusive_handler(spi->DMA_IRQ_num, *spi_irq_handler_p);
-        }
-        irq_set_enabled(spi->DMA_IRQ_num, true);
-        spi_unlock(spi);
+    if (spi->state->initialized) {
+        mutex_exit(&aurora_spi_init_mutex);
+        return true;
     }
 
+    //// The SPI may be shared (using multiple SSs); protect it
+    //spi->mutex = xSemaphoreCreateRecursiveMutex();
+    //xSemaphoreTakeRecursive(spi->mutex, portMAX_DELAY);
+    if (!mutex_is_initialized(&spi->state->mutex)) {
+        mutex_init(&spi->state->mutex);
+    }
+    spi_lock(spi);
+
+    // Default:
+    if (!spi->baud_rate)
+        spi->baud_rate = 10 * 1000 * 1000;
+    // For the IRQ notification:
+    sem_init(&spi->state->sem, 0, 1);
+
+    /* Configure component */
+    // Enable SPI at 100 kHz and connect to GPIOs
+    spi_init(spi->hw_spi, 100 * 1000);
+    spi_set_format(spi->hw_spi, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+
+    gpio_set_function(spi->miso_gpio, GPIO_FUNC_SPI);
+    gpio_set_function(spi->mosi_gpio, GPIO_FUNC_SPI);
+    gpio_set_function(spi->sck_gpio, GPIO_FUNC_SPI);
+
+    // TODO: Figure this out
+    // bi_decl(bi_3pins_with_func(spi->miso_gpio, spi->mosi_gpio, spi->sck_gpio, GPIO_FUNC_SPI));
+
+    // Slew rate limiting levels for GPIO outputs.
+    // enum gpio_slew_rate { GPIO_SLEW_RATE_SLOW = 0, GPIO_SLEW_RATE_FAST = 1 }
+    // void gpio_set_slew_rate (uint gpio,enum gpio_slew_rate slew)
+    // Default appears to be GPIO_SLEW_RATE_SLOW.
+
+    // Drive strength levels for GPIO outputs.
+    // enum gpio_drive_strength { GPIO_DRIVE_STRENGTH_2MA = 0, GPIO_DRIVE_STRENGTH_4MA = 1, GPIO_DRIVE_STRENGTH_8MA = 2,
+    // GPIO_DRIVE_STRENGTH_12MA = 3 }
+    // enum gpio_drive_strength gpio_get_drive_strength (uint gpio)
+    if (spi->set_drive_strength) {
+        gpio_set_drive_strength(spi->mosi_gpio, spi->mosi_gpio_drive_strength);
+        gpio_set_drive_strength(spi->sck_gpio, spi->sck_gpio_drive_strength);
+    }
+
+    // SD cards' DO MUST be pulled up.
+    gpio_pull_up(spi->miso_gpio);
+
+    if (!spi->use_dma) {
+        spi_unlock(spi);
+        goto out;
+    }
+
+    // Grab some unused dma channels
+    spi->state->tx_dma = dma_claim_unused_channel(true);
+    spi->state->rx_dma = dma_claim_unused_channel(true);
+
+    spi->state->tx_dma_cfg = dma_channel_get_default_config(
+                                spi->state->tx_dma);
+    spi->state->rx_dma_cfg = dma_channel_get_default_config(
+                                spi->state->rx_dma);
+    channel_config_set_transfer_data_size(&spi->state->tx_dma_cfg,
+                                            DMA_SIZE_8);
+    channel_config_set_transfer_data_size(&spi->state->rx_dma_cfg,
+                                            DMA_SIZE_8);
+
+    // We set the outbound DMA to transfer from a memory buffer to the SPI
+    // transmit FIFO paced by the SPI TX FIFO DREQ The default is for the
+    // read address to increment every element (in this case 1 byte -
+    // DMA_SIZE_8) and for the write address to remain unchanged.
+    channel_config_set_dreq(&spi->state->tx_dma_cfg,
+                            spi_get_index(spi->hw_spi)
+                                ? DREQ_SPI1_TX
+                                : DREQ_SPI0_TX);
+    channel_config_set_write_increment(&spi->state->tx_dma_cfg, false);
+
+    // We set the inbound DMA to transfer from the SPI receive FIFO to a
+    // memory buffer paced by the SPI RX FIFO DREQ We coinfigure the read
+    // address to remain unchanged for each element, but the write address
+    // to increment (so data is written throughout the buffer)
+    channel_config_set_dreq(&spi->state->rx_dma_cfg,
+                            spi_get_index(spi->hw_spi)
+                                ? DREQ_SPI1_RX
+                                : DREQ_SPI0_RX);
+    channel_config_set_read_increment(&spi->state->rx_dma_cfg, false);
+
+    /* Theory: we only need an interrupt on rx complete,
+    since if rx is complete, tx must also be complete. */
+
+    /* Configure the processor to run dma_handler() when DMA IRQ 0/1 is asserted */
+
+    spi->DMA_IRQ_num = irqChannel1 ? DMA_IRQ_1 : DMA_IRQ_0;
+
+    // Tell the DMA to raise IRQ line 0/1 when the channel finishes a block
+    static void (*spi_irq_handler_p)();
+    switch (spi->DMA_IRQ_num) {
+    case DMA_IRQ_0:
+        spi_irq_handler_p = spi_irq_handler_0;
+        dma_channel_set_irq0_enabled(spi->state->rx_dma, true);
+        dma_channel_set_irq0_enabled(spi->state->tx_dma, false);
+    break;
+    case DMA_IRQ_1:
+        spi_irq_handler_p = spi_irq_handler_1;
+        dma_channel_set_irq1_enabled(spi->state->rx_dma, true);
+        dma_channel_set_irq1_enabled(spi->state->tx_dma, false);
+    break;
+    default:
+        assert(false);
+    }
+    if (irqShared) {
+        irq_add_shared_handler(
+            spi->DMA_IRQ_num, *spi_irq_handler_p,
+            PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
+    } else {
+        irq_set_exclusive_handler(spi->DMA_IRQ_num, *spi_irq_handler_p);
+    }
+    irq_set_enabled(spi->DMA_IRQ_num, true);
+
+    spi_unlock(spi);
+
 out:
+    mutex_enter_blocking(&spi_mmc_drivers.mutex);
+    spi->node = LIST_HEAD_INIT(spi->node);
+    list_add_tail(&spi_mmc_drivers.list, &spi->node);
+    mutex_exit(&spi_mmc_drivers.mutex);
+
     spi->state->initialized = true;
+
     mutex_exit(&aurora_spi_init_mutex);
     return true;
 }
@@ -687,6 +734,10 @@ struct mmc_drv *spi_mmc_drv_init(struct spi_config *spi, uint cs_pin)
 {
     auto_init_mutex(spi_mmc_drv_init_mutex);
     mutex_enter_blocking(&spi_mmc_drv_init_mutex);
+
+    if (mutex_is_initialized(&spi_mmc_drivers.mutex) == false) {
+        spi_mmc_drv_list_init();
+    }
 
     gpio_put(cs_pin, 1);  // Avoid any glitches when enabling output
     gpio_init(cs_pin);
