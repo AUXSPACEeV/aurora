@@ -2,6 +2,12 @@
  * @file spi_mmc.c
  * @brief Sources for MMC/SD I/O via SPI
  * @note This file contains the source code for MMC/SD I/O via SPI.
+ * The source code is derived from various open source projects:
+ * 
+ * @ref https://github.com/torvalds/linux
+ * @ref https://github.com/u-boot/u-boot
+ * @ref https://github.com/arduino-libraries/SD
+ * @ref https://github.com/carlk3/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico
  *
  * Author: Maximilian Stephan @ Auxspace e.V.
  * Copyright (C) 2025 Auxspace e.V.

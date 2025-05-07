@@ -47,17 +47,27 @@
 #define MAIN_TASK_STACKSIZE (configMINIMAL_STACK_SIZE * 0x10)
 
 /**
- * Setup required early tasks
+ * @brief Early setup of system critical tasks
  */
 static void prv_setup_early_tasks(void);
 
 /*----------------------------------------------------------------------------*/
 
+/**
+ * @brief Main Task
+ *
+ * @param args Unused task arguments
+ */
 static void x_main_task(void* args);
 static TaskHandle_t main_task_handle = NULL;
 
 /*----------------------------------------------------------------------------*/
 
+/**
+ * @brief Aurora main entrypoint
+ * 
+ * @return Aurora return / error code
+ */
 int main(void)
 {
     int ret;
@@ -92,12 +102,6 @@ static void prv_setup_early_tasks(void)
 
 /*----------------------------------------------------------------------------*/
 
-/**
- * @brief Main Task
- *
- * @param args Unused task arguments
- * @return void
- */
 static void x_main_task(void* args)
 {
     /* Wait 5 seconds */

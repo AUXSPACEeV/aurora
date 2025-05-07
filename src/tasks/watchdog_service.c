@@ -23,7 +23,9 @@
 #define WDT_RESET_TASK_STACKSIZE (configMINIMAL_STACK_SIZE * 4)
 
 /**
- * Watchdog reset
+ * @brief Watchdog reset
+ * 
+ * @param args: Free
  */
 static void x_watchdog_service_task(void* args);
 static TaskHandle_t wdt_task_handle = NULL;
