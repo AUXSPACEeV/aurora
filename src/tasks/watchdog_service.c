@@ -57,7 +57,8 @@ int start_wdt_task(void)
 
 /*----------------------------------------------------------------------------*/
 
-void init_wdt(void) {
+void init_wdt(void)
+{
     watchdog_enable(WDT_CNTR_MS, 1);
 
     if (watchdog_caused_reboot()) {

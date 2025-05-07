@@ -10,7 +10,8 @@
 
 #include <aurora/drivers/mmc/mmc.h>
 
-size_t mmc_get_resp_size(mmc_response_t resp_type) {
+size_t mmc_get_resp_size(mmc_response_t resp_type)
+{
     switch (resp_type) {
         case MMC_RESP_R1:
         case MMC_RESP_R1b:

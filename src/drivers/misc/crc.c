@@ -119,7 +119,8 @@ unsigned short crc16(const char* data, int length)
 
 /*----------------------------------------------------------------------------*/
 
-void update_crc16(unsigned short *pCrc16, const char data[], size_t length) {
+void update_crc16(unsigned short *pCrc16, const char data[], size_t length)
+{
     for (size_t i = 0; i < length; i++) {
         *pCrc16 = (*pCrc16 << 8) ^ m_Crc16Table[((*pCrc16 >> 8) ^ data[i]) & 0x00FF];
     }

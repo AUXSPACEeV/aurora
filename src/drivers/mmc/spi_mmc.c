@@ -57,7 +57,8 @@ static inline void cs_deselect(uint cs_pin)
 
 /*----------------------------------------------------------------------------*/
 
-static void spi_mmc_drv_list_init(void) {
+static void spi_mmc_drv_list_init(void)
+{
     mutex_init(&spi_mmc_drivers.mutex);
     mutex_enter_blocking(&spi_mmc_drivers.mutex);
     mutex_exit(&spi_mmc_drivers.mutex);
@@ -65,7 +66,8 @@ static void spi_mmc_drv_list_init(void) {
 
 /*----------------------------------------------------------------------------*/
 
-static size_t spi_get_num() {
+static size_t spi_get_num()
+{
     size_t ret;
 
     mutex_enter_blocking(&spi_mmc_drivers.mutex);
@@ -77,7 +79,8 @@ static size_t spi_get_num() {
 
 /*----------------------------------------------------------------------------*/
 
-static struct spi_config *spi_get_by_num(size_t num) {
+static struct spi_config *spi_get_by_num(size_t num)
+{
     struct spi_config* cfg = NULL;
     int i;
 
@@ -96,7 +99,8 @@ static struct spi_config *spi_get_by_num(size_t num) {
 
 /*----------------------------------------------------------------------------*/
 
-static void in_spi_irq_handler(const uint DMA_IRQ_num, io_rw_32 *dma_hw_ints_p) {
+static void in_spi_irq_handler(const uint DMA_IRQ_num, io_rw_32 *dma_hw_ints_p)
+{
     for (size_t i = 0; i < spi_get_num(); ++i) {
         struct spi_config *config = spi_get_by_num(i);
         if (config == NULL) {
@@ -122,13 +126,15 @@ static void in_spi_irq_handler(const uint DMA_IRQ_num, io_rw_32 *dma_hw_ints_p) 
 
 /*----------------------------------------------------------------------------*/
 
-static void __not_in_flash_func(spi_irq_handler_0)() {
+static void __not_in_flash_func(spi_irq_handler_0)()
+{
     in_spi_irq_handler(DMA_IRQ_0, &dma_hw->ints0);
 }
 
 /*----------------------------------------------------------------------------*/
 
-static void __not_in_flash_func(spi_irq_handler_1)() {
+static void __not_in_flash_func(spi_irq_handler_1)()
+{
     in_spi_irq_handler(DMA_IRQ_1, &dma_hw->ints1);
 }
 
@@ -153,7 +159,8 @@ static size_t spi_mmc_resp_size(mmc_response_t resp_type)
 
 /*----------------------------------------------------------------------------*/
 
-static void spi_lock(struct spi_config *spi) {
+static void spi_lock(struct spi_config *spi)
+{
     struct spi_config_state *state = spi->state;
     assert(mutex_is_initialized(&state->mutex));
     mutex_enter_blocking(&state->mutex);
@@ -161,7 +168,8 @@ static void spi_lock(struct spi_config *spi) {
 
 /*----------------------------------------------------------------------------*/
 
-static void spi_unlock(struct spi_config *spi) {
+static void spi_unlock(struct spi_config *spi)
+{
     struct spi_config_state *state = spi->state;
     assert(mutex_is_initialized(&state->mutex));
     mutex_exit(&state->mutex);
@@ -169,7 +177,8 @@ static void spi_unlock(struct spi_config *spi) {
 
 /*----------------------------------------------------------------------------*/
 
-static void spi_mmc_go_low_frequency(struct spi_mmc_context *ctx) {
+static void spi_mmc_go_low_frequency(struct spi_mmc_context *ctx)
+{
     // Actual frequency: 398089
     spi_set_baudrate(ctx->spi->hw_spi, 400 * 1000);
 }
@@ -275,7 +284,8 @@ static int spi_mmc_transfer(struct spi_mmc_context *ctx, const uint8_t *tx,
 
 /*----------------------------------------------------------------------------*/
 
-static int spi_mmc_wait_ready(struct spi_mmc_context *ctx) {
+static int spi_mmc_wait_ready(struct spi_mmc_context *ctx)
+{
     const uint32_t max_r = 10;
 
     uint8_t ret;
@@ -304,7 +314,8 @@ static int spi_mmc_wait_ready(struct spi_mmc_context *ctx) {
 
 /*----------------------------------------------------------------------------*/
 
-static uint8_t spi_send_cmd(struct spi_mmc_context *ctx, struct spi_mmc_message msg, uint8_t *rx)
+static uint8_t spi_send_cmd(struct spi_mmc_context *ctx,
+    struct spi_mmc_message msg, uint8_t *rx)
 {
     const size_t packet_size = 6;
     const uint max_retries = 0x10;
@@ -359,7 +370,6 @@ static uint8_t spi_send_cmd(struct spi_mmc_context *ctx, struct spi_mmc_message 
             break;
         }
     }
-    printf("CMD: 0x%02x; ARG: 0x%08x; R1: 0x%02x\n", msg.cmd, msg.arg, response);
     // R1 part of response
     return response;
 }
@@ -559,7 +569,8 @@ out:
 
 /*----------------------------------------------------------------------------*/
 
-static int aurora_spi_init(struct spi_config *spi) {
+static int aurora_spi_init(struct spi_config *spi)
+{
     auto_init_mutex(aurora_spi_init_mutex);
     mutex_enter_blocking(&aurora_spi_init_mutex);
 
@@ -596,7 +607,8 @@ static int aurora_spi_init(struct spi_config *spi) {
     gpio_set_function(spi->sck_gpio, GPIO_FUNC_SPI);
 
     // TODO: Figure this out
-    // bi_decl(bi_3pins_with_func(spi->miso_gpio, spi->mosi_gpio, spi->sck_gpio, GPIO_FUNC_SPI));
+    // bi_decl(bi_3pins_with_func(spi->miso_gpio, spi->mosi_gpio,
+    //    spi->sck_gpio, GPIO_FUNC_SPI));
 
     // Slew rate limiting levels for GPIO outputs.
     // enum gpio_slew_rate { GPIO_SLEW_RATE_SLOW = 0, GPIO_SLEW_RATE_FAST = 1 }
@@ -604,9 +616,6 @@ static int aurora_spi_init(struct spi_config *spi) {
     // Default appears to be GPIO_SLEW_RATE_SLOW.
 
     // Drive strength levels for GPIO outputs.
-    // enum gpio_drive_strength { GPIO_DRIVE_STRENGTH_2MA = 0, GPIO_DRIVE_STRENGTH_4MA = 1, GPIO_DRIVE_STRENGTH_8MA = 2,
-    // GPIO_DRIVE_STRENGTH_12MA = 3 }
-    // enum gpio_drive_strength gpio_get_drive_strength (uint gpio)
     if (spi->set_drive_strength) {
         gpio_set_drive_strength(spi->mosi_gpio, spi->mosi_gpio_drive_strength);
         gpio_set_drive_strength(spi->sck_gpio, spi->sck_gpio_drive_strength);
@@ -656,7 +665,7 @@ static int aurora_spi_init(struct spi_config *spi) {
     /* Theory: we only need an interrupt on rx complete,
     since if rx is complete, tx must also be complete. */
 
-    /* Configure the processor to run dma_handler() when DMA IRQ 0/1 is asserted */
+    /* Configure the cpu to run dma_handler() when DMA IRQ 0/1 is asserted */
 
     spi->DMA_IRQ_num = irqChannel1 ? DMA_IRQ_1 : DMA_IRQ_0;
 
@@ -701,7 +710,8 @@ out:
 
 /*----------------------------------------------------------------------------*/
 
-void set_spi_dma_irq_channel(bool useChannel1, bool shared) {
+void set_spi_dma_irq_channel(bool useChannel1, bool shared)
+{
     irqChannel1 = useChannel1;
     irqShared = shared;
 }

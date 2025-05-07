@@ -82,7 +82,8 @@ static void unsetup_sdcard(void)
 
 /*----------------------------------------------------------------------------*/
 
-int aurora_hwinit(void) {
+int aurora_hwinit(void)
+{
     int ret;
 
     ret = setup_spi();
@@ -102,13 +103,15 @@ int aurora_hwinit(void) {
 
 /*----------------------------------------------------------------------------*/
 
-void aurora_hwdeinit(void) {
+void aurora_hwdeinit(void)
+{
     unsetup_spi();
 }
 
 /*----------------------------------------------------------------------------*/
 
-void aurora_main(void) {
+void aurora_main(void)
+{
     return;
 }
 /* EOF */
