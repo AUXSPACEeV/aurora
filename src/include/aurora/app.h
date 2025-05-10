@@ -3,6 +3,9 @@
  * @brief Aurora Application Interface
  * @note This file contains the function prototypes and definitions every
  * Aurora config has to implement.
+ * 
+ * Author: Maximilian Stephan @ Auxspace e.V.
+ * Copyright (C) 2025 Auxspace e.V.
  */
 
 #pragma once

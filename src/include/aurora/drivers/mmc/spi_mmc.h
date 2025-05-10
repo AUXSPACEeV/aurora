@@ -18,12 +18,8 @@
 #include "pico/sem.h"
 #include "pico/types.h"
 
-#include "hardware/dma.h"
-#include "hardware/gpio.h"
-#include "hardware/irq.h"
-#include "hardware/spi.h"
-
 #include <aurora/list.h>
+#include <aurora/spi.h>
 #include <aurora/drivers/mmc/mmc.h>
 
 #ifndef BIT
@@ -90,64 +86,6 @@ struct spi_mmc_message {
 #define SPI_MMC_CMD(_cmd, _arg)  SPI_MMC_CMD_CRC(_cmd, _arg, 0b1111111)
 
 /**
- * @brief SPI SDCard driver configuration state structure
- *
- * @param tx_dma: DMA channel for TX
- * @param rx_dma: DMA channel for RX
- * @param tx_dma_cfg: DMA channel configuration for TX
- * @param rx_dma_cfg: DMA channel configuration for RX
- * @param initialized: true if the state is initialized, false otherwise
- * @param sem: semaphore for synchronization
- * @param mutex: mutex for synchronization
- *
- * @note This structure is used to hold the state of the SPI SDCard driver and
- * is set by the driver.
- */
-struct spi_config_state {
-    // State variables:
-    uint tx_dma;
-    uint rx_dma;
-    dma_channel_config tx_dma_cfg;
-    dma_channel_config rx_dma_cfg;
-    bool initialized;
-    semaphore_t sem;
-    mutex_t mutex;
-};
-
-/**
- * @brief SPI SDCard driver configuration structure
- *
- * @param hw_spi: pointer to the SPI instance from the pico-sdk
- * @param miso_gpio: SPI MISO GPIO number (not pin number)
- * @param mosi_gpio: SPI MOSI GPIO number (not pin number)
- * @param sck_gpio: SPI SCK GPIO number (not pin number)
- * @param baud_rate: SPI baud rate in Hz
- * @param DMA_IRQ_num: DMA IRQ number (DMA_IRQ_0 or DMA_IRQ_1)
- * @param use_dma: true if DMA should be used, false otherwise
- * @param set_drive_strength: true if drive strength should be set, false otherwise
- * @param mosi_gpio_drive_strength: drive strength for MOSI GPIO
- * @param sck_gpio_drive_strength: drive strength for SCK GPIO
- * @param state: Pointer to the SPI configuration state. Set by the driver.
- * @param node: list node for the SPI configuration
- *
- * @note This structure is used to configure the SPI SDCard driver.
- */
-struct spi_config {
-    spi_inst_t *hw_spi;
-    uint miso_gpio;
-    uint mosi_gpio;
-    uint sck_gpio;
-    uint baud_rate;
-    uint DMA_IRQ_num;
-    bool use_dma;
-    bool set_drive_strength;
-    enum gpio_drive_strength mosi_gpio_drive_strength;
-    enum gpio_drive_strength sck_gpio_drive_strength;
-    struct spi_config_state *state;
-    struct list_head node;
-};
-
-/**
  * @brief SPI SDCard driver specific context
  *
  * @param spi: pointer to the SPI configuration data structure
@@ -177,13 +115,5 @@ struct mmc_drv *spi_mmc_drv_init(struct spi_config *spi, uint cs_pin);
  * @param drv: pointer to the SPI SDCard driver structure to uninitialize
  */
 void spi_mmc_drv_deinit(struct mmc_drv *drv);
-
-/**
- * @brief Set the SPI DMA IRQ channel
- *
- * @param useChannel1: true if channel 1 should be used, false otherwise
- * @param shared: true if the IRQ should be shared, false otherwise
- */
-void set_spi_dma_irq_channel(bool useChannel1, bool shared);
 
 /* [] END OF FILE */

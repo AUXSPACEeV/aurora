@@ -35,8 +35,7 @@ target_link_libraries(aurora PRIVATE
         )
 
 target_link_libraries(aurora PUBLIC
-        aurora_mmc
-        aurora_misc
+        aurora_drivers
         aurora_tasks
         aurora_apps
         )

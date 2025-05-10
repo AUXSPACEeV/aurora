@@ -14,6 +14,7 @@ target_link_libraries(aurora_mmc
         hardware_irq
         hardware_gpio
         hardware_spi
+        aurora_drivers
         )
 
 target_include_directories(aurora_mmc PRIVATE

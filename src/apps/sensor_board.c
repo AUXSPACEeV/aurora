@@ -14,6 +14,7 @@
 #include "pico/malloc.h"
 
 #include <aurora/app.h>
+#include <aurora/spi.h>
 #include <aurora/drivers/mmc/spi_mmc.h>
 
 static struct spi_config *spi;
@@ -21,7 +22,7 @@ static struct mmc_drv *mmc;
 
 /*----------------------------------------------------------------------------*/
 
-static int setup_spi(void)
+static int setup_spi_config(void)
 {
     spi = (struct spi_config *)malloc(sizeof(struct spi_config));
     if (spi == NULL) {
@@ -41,7 +42,7 @@ static int setup_spi(void)
 
 /*----------------------------------------------------------------------------*/
 
-static void unsetup_spi(void)
+static void unsetup_spi_config(void)
 {
     free(spi);
     spi = NULL;
@@ -86,7 +87,7 @@ int aurora_hwinit(void)
 {
     int ret;
 
-    ret = setup_spi();
+    ret = setup_spi_config();
     if (ret) {
         printf("SPI init failed: %d\n", ret);
         return ret;
@@ -105,7 +106,7 @@ int aurora_hwinit(void)
 
 void aurora_hwdeinit(void)
 {
-    unsetup_spi();
+    unsetup_spi_config();
 }
 
 /*----------------------------------------------------------------------------*/
