@@ -14,21 +14,43 @@
 #include <aurora/compiler.h>
 #include <aurora/spi.h>
 
-static bool irqChannel1 = false;
-static bool irqShared = false;
+/* Fileprivate structs and typedefs */
 
 struct spi_drv_list {
     mutex_t mutex;
     struct list_head list;
 };
 
-/*----------------------------------------------------------------------------*/
+/* Prototypes */
+
+/**
+ * @brief SPI DMA IRQ handler function
+ * 
+ * @param DMA_IRQ_num: number of DMA_IRQ
+ * @param dma_hw_ints_p: pointer to HW interrupts
+ */
+static void in_spi_irq_handler(const uint DMA_IRQ_num, io_rw_32 *dma_hw_ints_p);
+
+/**
+ * @brief SPI DMA IRQ handler for DMA_IRQ_0
+ */
+static void __not_in_flash_func(spi_irq_handler_0)();
+
+/**
+ * @brief SPI DMA IRQ handler for DMA_IRQ_1
+ */
+static void __not_in_flash_func(spi_irq_handler_1)();
+
+/* Fileprivate global variables */
+
+static bool irqChannel1 = false;
+static bool irqShared = false;
 
 static struct spi_drv_list spi_drivers = {
     .list = LIST_HEAD_INIT(spi_drivers.list),
 };
 
-/*----------------------------------------------------------------------------*/
+/* Driver function implementation */
 
 void spi_drv_list_init(void)
 {

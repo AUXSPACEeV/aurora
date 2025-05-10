@@ -32,7 +32,94 @@
 #include <aurora/drivers/mmc/mmc.h>
 #include <aurora/drivers/mmc/spi_mmc.h>
 
-/*----------------------------------------------------------------------------*/
+/* Prototypes */
+
+/**
+ * @brief Enable low frequency SPI mode for SDCard
+ * 
+ * @param ctx: pointer to spi mmc driver context
+ */
+static void spi_mmc_go_low_frequency(struct spi_mmc_context *ctx);
+
+/**
+ * @brief Initialize the mmc driver data and context
+ * 
+ * @param ctx: pointer to spi mmc driver context
+ * @return: Error code
+ */
+static int spi_mmc_init(struct mmc_dev *dev);
+
+/**
+ * @brief Send an SPI MMC command to the SDCard, while asserting CS
+ * 
+ * @param ctx: pointer to spi mmc driver context
+ * @param msg: message to send
+ * @param rx: SPI transfer receive buffer. Has to be sized so that the SPI
+ * response fits
+ * @return: R1 part of response
+ */
+static uint8_t spi_mmc_send_cmd(struct spi_mmc_context *ctx,
+                                struct spi_mmc_message msg, uint8_t *rx);
+
+/**
+ * @brief get the sizie in bytes for an MMC response type
+ * 
+ * @param resp_type: mmc response type
+ * @return: size of the response in bytes
+ */
+static size_t spi_mmc_resp_size(mmc_response_t resp_type);
+
+/**
+ * @brief Send a message via spi, assuming CS has been asserted already
+ * 
+ * @param ctx: pointer to spi mmc driver context
+ * @param msg: message to send
+ * @param resp: SPI transfer receive buffer. Has to be sized so that the SPI
+ * response fits
+ * @return: Error code
+ */
+static int spi_mmc_send_msg(struct spi_mmc_context *ctx,
+                            const struct spi_mmc_message msg, uint8_t* resp);
+
+/**
+ * @brief send card reset command
+ * 
+ * @param ctx: pointer to spi mmc driver context
+ * @return: Error code
+ */
+static int spi_mmc_send_reset(struct spi_mmc_context *ctx);
+
+/**
+ * @brief Do an SPI transfer
+ * 
+ * @param ctx: pointer to spi mmc driver context
+ * @param tx: SPI write buffer
+ * @param rx: SPI receive buffer
+ * @param length: total length of SPI transfer in words (here: bytes)
+ * @return: Error code
+ */
+static int spi_mmc_transfer(struct spi_mmc_context *ctx, const uint8_t *tx,
+                            uint8_t* rx, size_t length);
+
+/**
+ * @brief Send the voltage select command to the card
+ * 
+ * @param dev: pointer to spi mmc device driver
+ * @return: Error code
+ */
+static int spi_mmc_voltage_select(struct mmc_dev *dev);
+
+/**
+ * @brief Wait for the card to be ready
+ * 
+ * @param dev: pointer to spi mmc device driver
+ * @return: Error code
+ *
+ * TODO: add timeout via timer/rtc instead of fixed retries
+ */
+static int spi_mmc_wait_ready(struct spi_mmc_context *ctx);
+
+/* Driver function implementation */
 
 static size_t spi_mmc_resp_size(mmc_response_t resp_type)
 {
@@ -91,7 +178,6 @@ static int spi_mmc_wait_ready(struct spi_mmc_context *ctx)
     int i;
 
     for(i = 0; i < max_r; ++i) {
-        // resp = sd_spi_write(spi, 0xFF);
         ret = spi_mmc_transfer(ctx, &dummy, &resp, 1);
         if (!(ret & R1_SPI_ERROR) && (resp != 0x00)) {
             break;
@@ -111,8 +197,8 @@ static int spi_mmc_wait_ready(struct spi_mmc_context *ctx)
 
 /*----------------------------------------------------------------------------*/
 
-static uint8_t spi_send_cmd(struct spi_mmc_context *ctx,
-                            struct spi_mmc_message msg, uint8_t *rx)
+static uint8_t spi_mmc_send_cmd(struct spi_mmc_context *ctx,
+                                struct spi_mmc_message msg, uint8_t *rx)
 {
     const size_t packet_size = 6;
     const uint max_retries = 0x10;
@@ -173,8 +259,8 @@ static uint8_t spi_send_cmd(struct spi_mmc_context *ctx,
 
 /*----------------------------------------------------------------------------*/
 
-static int send_msg(struct spi_mmc_context *ctx,
-                    const struct spi_mmc_message msg, uint8_t* resp)
+static int spi_mmc_send_msg(struct spi_mmc_context *ctx,
+                            const struct spi_mmc_message msg, uint8_t* resp)
 {
     /**
      * @note: no nullptr error handling done here for better performance.
@@ -183,7 +269,7 @@ static int send_msg(struct spi_mmc_context *ctx,
     uint8_t ret;
 
     cs_select(ctx->cs_pin);
-    ret = spi_send_cmd(ctx, msg, resp);
+    ret = spi_mmc_send_cmd(ctx, msg, resp);
     cs_deselect(ctx->cs_pin);
 
     return 0;
@@ -191,7 +277,7 @@ static int send_msg(struct spi_mmc_context *ctx,
 
 /*----------------------------------------------------------------------------*/
 
-static int send_reset(struct spi_mmc_context *ctx)
+static int spi_mmc_send_reset(struct spi_mmc_context *ctx)
 {
     int ret = 0;
     int i;
@@ -200,7 +286,7 @@ static int send_reset(struct spi_mmc_context *ctx)
 
     uint8_t resp = 0xff;
     for (i = 0; i < 10; i++) {
-        ret = send_msg(ctx, reset_cmd, &resp);
+        ret = spi_mmc_send_msg(ctx, reset_cmd, &resp);
         if (R1_SPI_IDLE == resp) {
             break;
         }
@@ -237,7 +323,7 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
     const struct spi_mmc_message cmd58 = SPI_MMC_CMD(MMC_CMD_SPI_READ_OCR, 0);
 
     cmd8_resp = malloc(spi_mmc_resp_size(mmc_cmd_resp_type(cmd8.cmd)));
-    ret = send_msg(ctx, cmd8, cmd8_resp);
+    ret = spi_mmc_send_msg(ctx, cmd8, cmd8_resp);
     if (cmd8_resp[0] & R1_SPI_ILLEGAL_COMMAND) {
         dev->version = SD_CARD_TYPE_SD1;
     // only need last byte of r7 response (echo-back)
@@ -254,7 +340,7 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
     response = 0xff;
     while(response == 0xff) {
         response = 0xff;
-        ret = send_msg(ctx, cmd55, &response);
+        ret = spi_mmc_send_msg(ctx, cmd55, &response);
         if (ret) {
             printf("Sending CMD55 failed.\n");
             return -EIO;
@@ -267,7 +353,7 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
             continue;
         }
 
-        ret = send_msg(ctx, acmd41, &response);
+        ret = spi_mmc_send_msg(ctx, acmd41, &response);
         if (ret) {
             printf("Sending ACMD41 failed.\n");
             return -EIO;
@@ -280,7 +366,7 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
     // if SD2 read OCR register to check for SDHC card
     if (dev->version == SD_CARD_TYPE_SD2) {
         response = 0xff;
-        if (send_msg(ctx, cmd58, &response)) {
+        if (spi_mmc_send_msg(ctx, cmd58, &response)) {
             printf("Sending CMD58 failed.\n");
             return -EIO;
         }
@@ -313,7 +399,7 @@ static int spi_mmc_init(struct mmc_dev *dev)
     // Wait for at least 74 cycles with MOSI and CS asserted
     memset(&spi_init_message, 0xff, sizeof(spi_init_message));
     for (i = 0; i < (74 / (sizeof(spi_init_message) * 8) + 1); i++) {
-        send_msg(ctx, spi_init_message, &resp);
+        spi_mmc_send_msg(ctx, spi_init_message, &resp);
     }
 
     /**
@@ -330,7 +416,7 @@ static int spi_mmc_init(struct mmc_dev *dev)
      * that all cards satisfy the supplied voltage.
      * Otherwise, the host should select one of the cards and initialize.
      */
-    send_reset(ctx);
+    spi_mmc_send_reset(ctx);
     ret = spi_mmc_voltage_select(dev);
     if (ret != 0) {
         printf("SPI MMC version check failed.\n");
