@@ -7,7 +7,7 @@
  * @ref https://github.com/torvalds/linux
  * @ref https://github.com/u-boot/u-boot
  * @ref https://github.com/arduino-libraries/SD
- * @ref https://github.com/carlk3/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico
+ * @ref https://github.com/carlk3/no-OS-FatFS-SD-SPI-RPi-Pico
  *
  * Author: Maximilian Stephan @ Auxspace e.V.
  * Copyright (C) 2025 Auxspace e.V.
@@ -50,7 +50,8 @@ static void spi_mmc_go_low_frequency(struct spi_mmc_context *ctx);
 static int spi_mmc_init(struct mmc_dev *dev);
 
 /**
- * @brief Send an SPI MMC command to the SDCard, while asserting CS
+ * @brief Send an SPI MMC command to the SDCard, while assuming that CS is
+ * already asserted
  * 
  * @param ctx: pointer to spi mmc driver context
  * @param msg: message to send
@@ -70,7 +71,18 @@ static uint8_t spi_mmc_send_cmd(struct spi_mmc_context *ctx,
 static size_t spi_mmc_resp_size(mmc_response_t resp_type);
 
 /**
- * @brief Send a message via spi, assuming CS has been asserted already
+ * @brief Get the number of sectors on an SD card.
+ *
+ * @param dev: pointer to spi mmc device driver
+ * @return: number of sectors on the card, or 0 if an error occurred.
+ *
+ * @details This function sends a CMD9 command to the card to get the Card
+ * Specific Data (CSD) and then extracts the number of sectors from the CSD.
+ */
+static int spi_mmc_sectors(struct mmc_dev *dev);
+
+/**
+ * @brief Send a message via spi, asserting CS
  * 
  * @param ctx: pointer to spi mmc driver context
  * @param msg: message to send
@@ -120,6 +132,21 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev);
 static int spi_mmc_wait_ready(struct spi_mmc_context *ctx);
 
 /* Driver function implementation */
+
+static uint32_t ext_bits(unsigned char *data, int msb, int lsb) {
+    uint32_t bits = 0;
+    uint32_t size = 1 + msb - lsb;
+    for (uint32_t i = 0; i < size; i++) {
+        uint32_t position = lsb + i;
+        uint32_t byte = 15 - (position >> 3);
+        uint32_t bit = position & 0x7;
+        uint32_t value = (data[byte] >> bit) & 1;
+        bits |= value << i;
+    }
+    return bits;
+}
+
+/*----------------------------------------------------------------------------*/
 
 static size_t spi_mmc_resp_size(mmc_response_t resp_type)
 {
@@ -204,7 +231,7 @@ static uint8_t spi_mmc_send_cmd(struct spi_mmc_context *ctx,
     const uint max_retries = 0x10;
 
     uint8_t response = 0xff;
-    const size_t resp_size = spi_mmc_resp_size(mmc_cmd_resp_type(msg.cmd));
+    const size_t resp_size = spi_mmc_resp_size(mmc_cmd_get_resp_type(msg.cmd));
     uint8_t tx = 0xff;
     char cmdPacket[packet_size];
 
@@ -277,6 +304,79 @@ static int spi_mmc_send_msg(struct spi_mmc_context *ctx,
 
 /*----------------------------------------------------------------------------*/
 
+static int spi_mmc_sectors(struct mmc_dev *dev) {
+    // CMD9, Response R2 (R1 byte + 16-byte block read)
+    const struct spi_mmc_message cmd9 = SPI_MMC_CMD(MMC_CMD_SEND_CSD, 0);
+    const size_t resp_size = mmc_get_resp_size(
+                                mmc_cmd_get_resp_type(cmd9.cmd));
+    const uint8_t tx_dummy = 0xff;
+
+    struct spi_mmc_context *ctx = (struct spi_mmc_context *)dev->priv;
+    int ret = 0;
+    uint32_t csd_structure;
+    uint32_t c_size, c_size_mult, read_bl_len;
+    uint32_t block_len, mult, blocknr;
+    uint32_t hc_c_size;
+    uint64_t blocks = 0, capacity = 0;
+    uint8_t csd[16] = {0};
+    uint8_t *resp = malloc(resp_size);
+
+    memset(resp, 0xff, resp_size);
+
+    ret = spi_mmc_send_msg(ctx, cmd9, resp);
+    if (ret || resp[0] != 0x0) {
+        printf("CMD9 failed: %d\n", ret);
+        goto free_response;
+    }
+
+    ret = spi_mmc_transfer(ctx, &tx_dummy, csd, sizeof(csd));
+    if (ret) {
+        printf("Couldn't read CSD response from disk\n");
+        goto free_response;
+    }
+
+    csd_structure = ext_bits(csd, 126, 127);
+    switch (csd_structure) {
+        case 0:
+            c_size = ext_bits(csd, 73, 62);       // c_size        : csd[73:62]
+            c_size_mult = ext_bits(csd, 49, 47);  // c_size_mult   : csd[49:47]
+            read_bl_len =
+                ext_bits(csd, 83, 80);     // read_bl_len   : csd[83:80] - the
+                                           // *maximum* read block length
+            block_len = 1 << read_bl_len;  // BLOCK_LEN = 2^READ_BL_LEN
+            mult = 1 << (c_size_mult +
+                         2);                // MULT = 2^C_SIZE_MULT+2 (C_SIZE_MULT < 8)
+            blocknr = (c_size + 1) * mult;  // BLOCKNR = (C_SIZE+1) * MULT
+            capacity = (uint64_t)blocknr *
+                       block_len;  // memory capacity = BLOCKNR * BLOCK_LEN
+            blocks = capacity / dev->blksize;
+            printf("Standard Capacity: c_size: %lu\r\n", c_size);
+            printf("Sectors: 0x%llx : %llu\r\n", blocks, blocks);
+            printf("Capacity: 0x%llx : %llu MB\r\n", capacity,
+                       (capacity / (1024U * 1024U)));
+            break;
+        case 1:
+            hc_c_size =
+                ext_bits(csd, 69, 48);       // device size : C_SIZE : [69:48]
+            blocks = (hc_c_size + 1) << 10;  // block count = C_SIZE+1) * 1K
+                                             // byte (512B is block size)
+            printf("SDHC/SDXC Card: hc_c_size: %lu\r\n", hc_c_size);
+            printf("Sectors: %8llu\r\n", blocks);
+            printf("Capacity: %8llu MB\r\n", (blocks / (2048U)));
+            break;
+
+        default:
+            printf("CSD struct unsupported\r\n");
+    };
+
+free_response:
+    free(resp);
+    dev->num_blocks = blocks;
+    return blocks;
+}
+
+/*----------------------------------------------------------------------------*/
+
 static int spi_mmc_send_reset(struct spi_mmc_context *ctx)
 {
     int ret = 0;
@@ -322,7 +422,7 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
     const struct spi_mmc_message cmd55 = SPI_MMC_CMD(MMC_CMD_APP_CMD, 0);
     const struct spi_mmc_message cmd58 = SPI_MMC_CMD(MMC_CMD_SPI_READ_OCR, 0);
 
-    cmd8_resp = malloc(spi_mmc_resp_size(mmc_cmd_resp_type(cmd8.cmd)));
+    cmd8_resp = malloc(spi_mmc_resp_size(mmc_cmd_get_resp_type(cmd8.cmd)));
     ret = spi_mmc_send_msg(ctx, cmd8, cmd8_resp);
     if (cmd8_resp[0] & R1_SPI_ILLEGAL_COMMAND) {
         dev->version = SD_CARD_TYPE_SD1;
@@ -484,6 +584,7 @@ struct mmc_drv *spi_mmc_drv_init(struct spi_config *spi, uint cs_pin)
         goto free_ctx;
     }
     dev->name = "spi_mmc";
+    dev->blksize = BLOCK_SIZE_SD;
     dev->priv = ctx;
 
     struct mmc_ops *ops = (struct mmc_ops *)malloc(sizeof(struct mmc_ops));
@@ -495,6 +596,8 @@ struct mmc_drv *spi_mmc_drv_init(struct spi_config *spi, uint cs_pin)
     ops->blk_read = NULL; // TODO
     ops->blk_write = NULL; // TODO
     ops->blk_erase = NULL; // TODO
+    ops->generate_info = NULL; // TODO;
+    ops->n_sectors = &spi_mmc_sectors;
 
     struct mmc_drv *drv = calloc(1, sizeof(struct mmc_drv));
     if (!drv) {

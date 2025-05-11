@@ -29,7 +29,7 @@ size_t mmc_get_resp_size(mmc_response_t resp_type)
 
 /*----------------------------------------------------------------------------*/
 
-mmc_response_t mmc_cmd_resp_type(uint8_t cmd)
+mmc_response_t mmc_cmd_get_resp_type(uint8_t cmd)
 {
     // TODO: Check all commands
     switch (cmd) {

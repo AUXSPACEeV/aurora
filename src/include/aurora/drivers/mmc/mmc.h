@@ -61,6 +61,8 @@
 #define SD_CMD_APP_SEND_OP_COND		41
 #define SD_CMD_APP_SEND_SCR		51
 
+#define BLOCK_SIZE_SD 512  /*!< Block size supported for SD card is 512 bytes */
+
 /**
  * @brief MMC card types / versions
  *
@@ -157,6 +159,6 @@ size_t mmc_get_resp_size(mmc_response_t resp_type);
  *
  * @return The response type for the command
  */
-mmc_response_t mmc_cmd_resp_type(uint8_t cmd);
+mmc_response_t mmc_cmd_get_resp_type(uint8_t cmd);
 
 /* [] END OF FILE */
