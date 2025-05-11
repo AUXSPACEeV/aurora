@@ -34,6 +34,19 @@
 
 /* Prototypes */
 
+/** 
+ * @brief extract bits from abyte array
+ * 
+ * @param data: byte array pointer
+ * @param msb: Most significant bit to extract in data array
+ * @param lsb: Least significant bit to extract in data array
+ * @return: Bits between lsb and msb, shifted and masked accordingly
+ * 
+ * @note Use if the bitfield to extract may span multiple bytes, possibly even
+ * non-aligned.
+ */
+static uint32_t ext_bits(uint8_t *data, int msb, int lsb);
+
 /**
  * @brief Enable low frequency SPI mode for SDCard
  * 
@@ -133,7 +146,7 @@ static int spi_mmc_wait_ready(struct spi_mmc_context *ctx);
 
 /* Driver function implementation */
 
-static uint32_t ext_bits(unsigned char *data, int msb, int lsb) {
+static uint32_t ext_bits(uint8_t *data, int msb, int lsb) {
     uint32_t bits = 0;
     uint32_t size = 1 + msb - lsb;
     for (uint32_t i = 0; i < size; i++) {
@@ -335,6 +348,11 @@ static int spi_mmc_sectors(struct mmc_dev *dev) {
         goto free_response;
     }
 
+    /**
+     * Using ext_bits instead of simple shifting and masking because data
+     * array is too big to fit inside a single type.
+     * This implies big-endian bit layout, but reversed at the byte level.
+     */
     csd_structure = ext_bits(csd, 126, 127);
     switch (csd_structure) {
         case 0:
