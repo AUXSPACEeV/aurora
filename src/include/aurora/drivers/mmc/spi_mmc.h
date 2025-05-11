@@ -37,6 +37,8 @@
 /* R1 bit 7 is always zero, reuse this bit for error */
 #define R1_SPI_ERROR			BIT(7)
 
+#define SPI_MMC_START_BLOCK     (0xFE)
+
 /**
  * @brief SPI SDCard command structure (48 bits)
  *

@@ -63,6 +63,8 @@
 
 #define BLOCK_SIZE_SD 512  /*!< Block size supported for SD card is 512 bytes */
 
+#define SD_COMMAND_TIMEOUT  2000
+
 /**
  * @brief MMC card types / versions
  *
@@ -124,12 +126,12 @@ struct mmc_dev {
  */
 struct mmc_ops {
     int (*probe)(struct mmc_dev *dev);
-    int (*blk_read)(struct mmc_dev *dev, uint blk, uint8_t *buf, const size_t len);
+    int (*blk_read)(struct mmc_dev *dev, uint64_t blk, uint8_t *buf, const uint64_t len);
     int (*blk_write)
-        (struct mmc_dev *dev, uint blk, const uint8_t *buf, const size_t len);
+        (struct mmc_dev *dev, uint64_t blk, const uint8_t *buf, const uint64_t len);
     int (*blk_erase)(struct mmc_dev *dev, uint32_t addr);
     int (*generate_info)(struct mmc_dev *dev);
-    ssize_t (*n_sectors)(struct mmc_dev *dev);
+    uint64_t (*n_sectors)(struct mmc_dev *dev);
 };
 
 /**

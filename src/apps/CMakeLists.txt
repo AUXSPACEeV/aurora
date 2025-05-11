@@ -6,6 +6,7 @@ add_library(aurora_apps
         )
 
 target_link_libraries(aurora_apps
+        FreeRTOS-Kernel
         pico_stdlib
         pico_binary_info
         pico_malloc
@@ -20,5 +21,6 @@ target_link_libraries(aurora_apps
 
 target_include_directories(aurora_apps PRIVATE
         ${AURORA_SRC_PATH}/include
+        ${FREERTOS_KERNEL_PATH}/Common/include
         ${BOARD_SRC_PATH}/include
         )
