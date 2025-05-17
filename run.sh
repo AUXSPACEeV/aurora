@@ -116,7 +116,7 @@ FREERTOS_KERNEL_PATH=${FREERTOS_KERNEL_PATH:-"${BUILDER_APP_SRC}/kernel"}
 
 # SDK
 _PICO_SDK_REL_PATH=${_PICO_SDK_REL_PATH:-"src/sdk"}
-PICO_SDK_PATH=${PICO_SDK_PATH:-"${BUILDER_APP_SRC}/$_PICO_SDK_REL_PATH"}
+PICO_SDK_PATH=${PICO_SDK_PATH:-"${BUILDER_APPLICATION}/$_PICO_SDK_REL_PATH"}
 PICO_BOARD=${PICO_BOARD:-"pico"}
 
 ################################################################################
