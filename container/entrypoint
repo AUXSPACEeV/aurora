@@ -109,8 +109,10 @@ while [ $# -gt 0 ]; do
     shell)
       COMMAND="/bin/bash"
       # Required for podman build, since in podman container you are root
-      cp "${BUILDER_HOME}/.bashrc" ~/.bashrc
-      cp "${BUILDER_HOME}/.bash_aliases" ~/.bash_aliases
+      if [ ! "${BUILDER_HOME}" = "$HOME" ]; then
+        cp "${BUILDER_HOME}/.bashrc" ~/.bashrc
+        cp "${BUILDER_HOME}/.bash_aliases" ~/.bash_aliases
+      fi
       shift
       ;;
     --*)
