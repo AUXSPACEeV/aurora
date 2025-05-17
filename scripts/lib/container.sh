@@ -7,7 +7,6 @@
 # Author: Maximilian Stephan @ Auxspace e.V.
 # Copyright (c) 2025 Auxspace e.V.
 #
-set -x
 
 if [ -z "$THISDIR" ]; then
     declare -x THISDIR="$(pwd)"
