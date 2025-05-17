@@ -7,12 +7,11 @@ on:
     branches: [ "main", "next" ]
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
     - name: Build the Docker image
       run: ./run.sh --container-tag $(date +%s) --engine docker --container-dir ./container container build
+    - name: Build the Podman image
+      run: ./run.sh --container-tag $(date +%s) --engine podman --container-dir ./container container build

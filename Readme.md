@@ -1,6 +1,6 @@
 # `AURORA`
 
-> **AU**xspace **RO**cket ope**RA**ting System
+> **AU**xspace **RO**cket ope**RA**ting System
 
 ## Introduction
 
@@ -37,16 +37,49 @@ progress.
 
 ## Building AURORA
 
+### Setup
+
 <details> <summary> <b>Build Dependencies</b> (<i>click</i> to open) </summary>
 The only build dependency of <b>AURORA</b> is
 <a href="https://docs.docker.com/engine/install/"><b>Docker</b></a>.
+We use Docker for dependency management and build-flow automation.
+The `run.sh` script uses docker to build and test the project and the
+documentation.
 </details>
+
+When build dependencies are installed, the `run.sh` script can be used to
+setup the project:
+
+```bash
+./run.sh [OPTIONS] setup
+```
+
+<details> <summary> <b>Setup without run.sh</b> (<i>click</i> to open) </summary>
+Alternatively, setting up is just pulling in the submodules and setting up a python
+virtualenv for building the docs:
+
+```bash
+# Aurora submodules
+git submodule update --init
+
+# Pico SDK submodules
+cd src/sdk && git submodule update --init && cd ..
+
+# Documentation requirements
+python3 -m venv "docs/.venv"
+source docs/.venv/bin/activate
+pip install -r "docs/requirements.txt"
+deactivate
+```
+</details>
+
+### Build
 
 Building AURORA works with the `run.sh` script in this git repositories
 root directory:
 
 ```bash
-./run.sh build
+./run.sh [OPTIONS] build
 ```
 
 <details> <summary> <b>Build AURORA without the wrapper</b> (<i>click</i> to open) </summary>
@@ -59,17 +92,16 @@ Once the environment is set up, you will need to add the following
 environment variables and make sure they are visible to <b>CMake</b>:
 
 ```bash
-# env
+# env (optional)
 export PICO_SDK_PATH="${PATH_TO_PICO_SDK}"
-export FREERTOS_KERNEL_PATH="$PATH_TO_SRC_KERNEL"  # optional
+export FREERTOS_KERNEL_PATH="$PATH_TO_SRC_KERNEL"
+export PICO_BOARD="pico2_w"
 
 # prepare build
-mkdir build
-cd build
-cmake -G "Unix Makefiles" ../src
+cmake -S . -B build
 
 # build
-make
+cmake --build build
 ```
 
 </details>

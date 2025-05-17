@@ -79,8 +79,8 @@ function docs_setup() {
 function sphinx_cmd() {
     set -e
     if [ ! -f "$DOCS_SRC_DIR/.venv/bin/activate" ]; then
-        log_warning "No python venv found."
-        log_warning "Make sure to setup the environment first!"
+        log_warn "No python venv found."
+        log_warn "Make sure to setup the environment first!"
     else
         source "$DOCS_SRC_DIR/.venv/bin/activate"
     fi

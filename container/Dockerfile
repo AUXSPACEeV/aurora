@@ -1,14 +1,14 @@
 #syntax=docker/dockerfile:1.0.0-experimental
 #escape=\
 #
-# Auxspace development container for RP2040 and RP2340 projects.
+# Auxspace development container for AURORA.
 #
 # Author: Maximilian Stephan @ Auxspace e.V.
 # Copyright (c) 2025 Auxspace e.V.
 #
 
-# digests to FROM debian:bookworm-slim
-FROM debian@sha256:12c396bd585df7ec21d5679bb6a83d4878bc4415ce926c9e5ea6426d23c60bdc
+# digests to FROM debian:trixie-slim
+FROM debian@sha256:1f87f0180766b28b7834a0b5f134948f9c2fea18ffa09bd62a7c93cc66ef5d99
 
 ARG PUID=10001
 ARG PGID=10001
@@ -74,16 +74,15 @@ RUN git clone https://github.com/raspberrypi/picotool.git ${PICOTOOL_PATH}
 # pico project generator installation
 RUN git clone https://github.com/raspberrypi/pico-project-generator.git ${PICO_PROJECT_GENERATOR_PATH}
 
-# Change permissions for the builder user
-RUN chown -R ${PUID}:${PGID} ${BUILDER_HOME}
-
 # Configure user
-USER builder
 RUN mkdir -p -m 0700 ${BUILDER_HOME}/.ssh && ssh-keyscan github.com \
     >> ${BUILDER_HOME}/.ssh/known_hosts
 
 # Bash aliases
 COPY bash_aliases ${BUILDER_HOME}/.bash_aliases
+
+# Change permissions for the builder user
+RUN chown -R ${PUID}:${PGID} ${BUILDER_HOME}
 
 # Docker entrypoint
 COPY entrypoint /sbin/entrypoint

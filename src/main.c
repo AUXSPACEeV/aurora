@@ -31,128 +31,97 @@
 
 /* Library includes. */
 #include <stdio.h>
+#include <errno.h>
 #include "pico/stdlib.h"
+#include "pico/binary_info.h"
 #include "hardware/watchdog.h"
 
-/* WDT task defines */
-#define WDT_RESET_TASK_PRI       (tskIDLE_PRIORITY + 1)
-#define WDT_RESET_TASK_STACKSIZE (configMINIMAL_STACK_SIZE * 4)
-#define WDT_CNTR_MS              (10000U)
+/* Local includes */
+#include <aurora/app.h>
+#include <aurora/compiler.h>
+#include <aurora/log.h>
+#include <aurora/task/freertos_scheduling.h>
+#include <aurora/task/watchdog_service.h>
+
+/* main task defines */
+#define MAIN_TASK_PRI       (configMAX_PRIORITIES / 2)
+#define MAIN_TASK_STACKSIZE (configMINIMAL_STACK_SIZE * 0x10)
 
 /**
- * Configure the hardware as necessary
+ * @brief Early setup of system critical tasks
  */
-static void prvSetupHardware(void);
+static void prv_setup_early_tasks(void);
+
+/*----------------------------------------------------------------------------*/
 
 /**
- * Prototypes for the standard FreeRTOS callback/hook functions implemented
- * within this file.
+ * @brief Main Task
+ *
+ * @param args Unused task arguments
  */
-void vApplicationMallocFailedHook(void);
-void vApplicationIdleHook(void);
-void vApplicationStackOverflowHook(TaskHandle_t pxTask, char* pcTaskName);
-void vApplicationTickHook(void);
+static void x_main_task(void* args);
+static TaskHandle_t main_task_handle = NULL;
+
+/*----------------------------------------------------------------------------*/
 
 /**
- * Watchdog reset
+ * @brief Aurora main entrypoint
+ * 
+ * @return Aurora return / error code
  */
-static void xWatchdogServiceTask(void* args);
-static TaskHandle_t wdtTaskHandle = NULL; // globally accessible
-
-/*-----------------------------------------------------------*/
-
 int main(void)
 {
     int ret;
 
     /* Configure the hardware ready to run the demo. */
-    prvSetupHardware();
+    stdio_init_all();
+    init_wdt();
 
-    if (watchdog_caused_reboot()) {
-        printf("Rebooted by Watchdog!\n");
-        // TODO: Determine what action we take if a watchdog caused a reboot
+    prv_setup_early_tasks();
+
+    ret = xTaskCreate(x_main_task, "Aurora Main Task", MAIN_TASK_STACKSIZE,
+                      NULL, MAIN_TASK_PRI, &main_task_handle);
+    if (unlikely(ret != pdPASS)) {
+        log_error("Main task could not be created.\n");
+        return ret;
     }
-
-    watchdog_enable(WDT_CNTR_MS, 1);
-
-    ret = xTaskCreate(xWatchdogServiceTask, "Watchdog Service", WDT_RESET_TASK_STACKSIZE, NULL, WDT_RESET_TASK_PRI, &wdtTaskHandle);
-    if (ret != pdPASS)
-        printf("WDT service task could not be created.\n");
 
     vTaskStartScheduler();
 
     return 0;
 }
 
-/*-----------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
 
-static void prvSetupHardware(void)
+static void prv_setup_early_tasks(void)
 {
-    stdio_init_all();
+    /* Create the watchdog service task */
+    int ret = start_wdt_task();
+    if (unlikely(ret != pdPASS))
+        log_error("WDT service task could not be created.\n");
 }
 
-/*-----------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
 
-void vApplicationMallocFailedHook(void)
+static void x_main_task(void* args)
 {
-    /* Called if a call to pvPortMalloc() fails because there is insufficient
-    free memory available in the FreeRTOS heap.  pvPortMalloc() is called
-    internally by FreeRTOS API functions that create tasks, queues, software
-    timers, and semaphores.  The size of the FreeRTOS heap is set by the
-    configTOTAL_HEAP_SIZE configuration constant in FreeRTOSConfig.h. */
+    /* Wait 5 seconds */
+    int ret;
+    const TickType_t xDelay = (5000 / 2) / portTICK_PERIOD_MS;
 
-    /* Force an assert. */
-    configASSERT((volatile void*)NULL);
-}
+    vTaskDelay(xDelay);
 
-/*-----------------------------------------------------------*/
+    log_info("Welcome to AURORA!\n");
 
-void vApplicationStackOverflowHook(TaskHandle_t pxTask, char* pcTaskName)
-{
-    (void)pcTaskName;
-    (void)pxTask;
-
-    /* Run time stack overflow checking is performed if
-    configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2.  This hook
-    function is called if a stack overflow is detected. */
-
-    /* Force an assert. */
-    configASSERT((volatile void*)NULL);
-}
-
-/*-----------------------------------------------------------*/
-
-void vApplicationIdleHook(void)
-{
-    volatile size_t xFreeHeapSpace;
-
-    /* This is just a trivial example of an idle hook.  It is called on each
-    cycle of the idle task.  It must *NOT* attempt to block.  In this case the
-    idle task just queries the amount of FreeRTOS heap that remains.  See the
-    memory management section on the http://www.FreeRTOS.org web site for memory
-    management options.  If there is a lot of heap memory free then the
-    configTOTAL_HEAP_SIZE value in FreeRTOSConfig.h can be reduced to free up
-    RAM. */
-    xFreeHeapSpace = xPortGetFreeHeapSize();
-
-    /* Remove compiler warning about xFreeHeapSpace being set but never used. */
-    (void)xFreeHeapSpace;
-}
-
-/*-----------------------------------------------------------*/
-
-void vApplicationTickHook(void)
-{
-    /* Do nothing ATM */
-}
-
-/*-----------------------------------------------------------*/
-
-static void xWatchdogServiceTask(void* args) {
-    /* Service the WDT every 5 seconds */
-    const TickType_t xDelay = (WDT_CNTR_MS / 2) / portTICK_PERIOD_MS;
-    for (;; ) {
-        watchdog_update();
-        vTaskDelay(xDelay);
+    ret = aurora_hwinit();
+    if (ret != 0) {
+        log_error("App specific hardware init failed: %d\n", ret);
+        return;
     }
+
+    aurora_main();
+
+    /* Finally, after main ran through */
+
+    aurora_hwdeinit();
 }

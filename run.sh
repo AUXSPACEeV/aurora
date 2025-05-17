@@ -19,7 +19,13 @@ function print_help() {
     echo "Positional arguments:"
     echo "  build                          Build the platform image."
     echo "  clean                          Clean the build directory."
-    echo "  container { build | rm }       Build or remove the dev container."
+    echo "  container CMD                  Manage the dev container."
+    echo "                                 Commands are:"
+    echo "                                   - build"
+    echo "                                   - rm"
+    echo "                                   - run"
+    echo "                                   - start"
+    echo "                                   - stop"
     echo "  docs      ARGS                 Call the docs script with ARGS."
     echo "  setup                          Setup submodules, docker, etc."
     echo "  shell                          Open a shell in the container."
@@ -98,13 +104,20 @@ source $THISDIR/scripts/lib/container.sh
 # Variables and constants                                                      #
 ################################################################################
 
+# Environment from file
+if [ -f "$THISDIR/aurora.env" ]; then
+    source "$THISDIR/aurora.env"
+fi
+
 # Container
-BUILDER_WORKSPACE="/builder/workspace"
-BUILDER_APPLICATION="${BUILDER_WORKSPACE}/aurora"
-FREERTOS_KERNEL_PATH="${BUILDER_APPLICATION}/src/kernel"
-_PICO_SDK_REL_PATH="src/sdk"
-PICO_SDK_PATH="${BUILDER_APPLICATION}/$_PICO_SDK_REL_PATH"
-PICO_BOARD="pico"
+BUILDER_APPLICATION=${BUILDER_APPLICATION:-"${THISDIR}"}
+BUILDER_APP_SRC=${BUILDER_APP_SRC:-"${BUILDER_APPLICATION}/src"}
+FREERTOS_KERNEL_PATH=${FREERTOS_KERNEL_PATH:-"${BUILDER_APP_SRC}/kernel"}
+
+# SDK
+_PICO_SDK_REL_PATH=${_PICO_SDK_REL_PATH:-"src/sdk"}
+PICO_SDK_PATH=${PICO_SDK_PATH:-"${BUILDER_APPLICATION}/$_PICO_SDK_REL_PATH"}
+PICO_BOARD=${PICO_BOARD:-"pico"}
 
 ################################################################################
 # Commandline arg parser                                                       #
@@ -158,6 +171,9 @@ while [ $# -gt 0 ]; do
                     shift
                     ;;
                 setup)
+                    if [ -z "$AURORA_CI_BUILD" ]; then
+                        COMMAND="/bin/bash"
+                    fi
                     run_setup
                     exit 0
                     ;;
@@ -187,10 +203,18 @@ CONTAINER_RUNTIME_ARGS+=" \
     -e BUILDER_APPLICATION="${BUILDER_APPLICATION}" \
     -e FREERTOS_KERNEL_PATH="${FREERTOS_KERNEL_PATH}" \
     -e PICO_SDK_PATH="${PICO_SDK_PATH}" \
-    -e AURORA_CI_BUILDER="$AURORA_CI_BUILDER" \
+    -e AURORA_CI_BUILD="$AURORA_CI_BUILD" \
     -v "${THISDIR}:${BUILDER_APPLICATION}:rw" \
     --workdir ${BUILDER_APPLICATION} \
 "
+
+if [ "$CONTAINER_ENGINE" = "docker" ]; then
+    CONTAINER_RUNTIME_ARGS+=" \
+        -e PUID=`id -u` \
+        -e PGID=`id -g` \
+        --user $(id -u):$(id -g) \
+    "
+fi
 
 ################################################################################
 # Error checking                                                               #
@@ -212,7 +236,7 @@ if [ -x /sbin/entrypoint ]; then
 fi
 
 # build, start and run container with given command
-if [ "$AURORA_CI_BUILDER" = "1" ]; then
+if [ "$AURORA_CI_BUILD" = "1" ]; then
     run_setup
 fi
 

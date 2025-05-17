@@ -24,21 +24,24 @@ declare -x CONTAINER_BIN="docker"
 declare -x CONTAINER_BUILD_BIN="${CONTAINER_BIN} buildx"
 declare -x -i REBUILD_CONTAINER_IMAGE=0
 
-# this should only be appended and not overwritten
-declare -x CONTAINER_RUNTIME_ARGS=" \
-    --name ${_CONTAINER_NAME} \
-    -e PUID=`id -u` \
-    -e PGID=`id -g` \
-    --user $(id -u):$(id -g) \
-"
-if [ -z "AURORA_CI_BUILDER" ]; then
-    declare -x CONTIANER_EXEC_FLAGS="-it"
+# Default to interactive flags unless running in CI
+if [ -z "$AURORA_CI_BUILD" ] || ! [[ "$AURORA_CI_BUILD" =~ ^[1-9][0-9]*$ ]]; then
+    # Not in CI or invalid/non-numeric → enable interactive flags
+    declare -x CONTAINER_EXEC_FLAGS="-it"
+elif [ "$AURORA_CI_BUILD" -eq 0 ]; then
+    declare -x CONTAINER_EXEC_FLAGS="-it"
 else
-    declare -x CONTIANER_EXEC_FLAGS=""
+    # CI is enabled and properly set
+    declare -x CONTAINER_EXEC_FLAGS=""
 fi
 
-function check_and_build_container() {
-    log_info "Checking container engine ..."
+# this should only be appended and not overwritten
+CONTAINER_RUNTIME_ARGS=" \
+    ${CONTAINER_EXEC_FLAGS} \
+    --name ${_CONTAINER_NAME} \
+"
+
+function set_container_bins() {
     if [ "${CONTAINER_ENGINE}" = "podman" ]; then
         CONTAINER_BIN="podman"
         CONTAINER_BUILD_BIN="buildah"
@@ -49,6 +52,10 @@ function check_and_build_container() {
         log_err "Unknown container engine: $CONTAINER_ENGINE"
         exit 1
     fi
+}
+
+function check_and_build_container() {
+    set_container_bins
 
     # Check if a container with the specified name exists
     log_info "Checking for existing $CONTAINER_BIN images ..."
@@ -80,29 +87,43 @@ function build_container() {
         "$CONTAINER_DIR"
 }
 
-function remove_container() {
-    log_info "Removing aurora build container '$_CONTAINER_NAME'."
-
-    # Stop running container
+function stop_container() {
+    # Stop the container if its running
     if [ -n "$($CONTAINER_BIN ps -a | grep ${_CONTAINER_NAME})" ]; then
         log_info "Stopping running container ..."
         $CONTAINER_BIN stop ${_CONTAINER_NAME}
+        log_info "Container has been stopped."
+    else
+        log_debug "Container \"${_CONTAINER_NAME}\" is not running."
     fi
+}
 
-    # remove container
+function remove_container() {
+    # Stop a container first
+    stop_container
+
     if [ -n "$($CONTAINER_BIN container ls -a \
         | grep ${_CONTAINER_NAME})" ]; then
         log_info "Removing container ..."
         $CONTAINER_BIN container rm ${_CONTAINER_NAME}
+        log_info "Container has been removed."
+    else
+        log_debug "Container \"${_CONTAINER_NAME}\" does not exist."
     fi
+}
+
+function remove_container_image() {
+    # stop and remove the container before removing the image
+    remove_container
 
     # remove image
     if [ -n "$($CONTAINER_BIN images -a | grep ${_CONTAINER_NAME})" ]; then
         log_info "Removing container image ..."
         $CONTAINER_BIN image rm "${_CONTAINER_NAME}:${CONTAINER_TAG}"
+        log_info "Container image has been removed."
+    else
+        log_debug "No container image to remove."
     fi
-
-    log_info "Container has been removed."
 }
 
 function start_container() {
@@ -112,13 +133,22 @@ function start_container() {
 
 function run_container_cmd() {
     local use_run_cmd="${1:-0}"
+    local run_cmd="shell"
+    local run_cmd_args="-d"
+
+    if [ "$AURORA_CI_BUILD" = "1" ]; then
+        run_cmd="$COMMAND"
+        unset run_cmd_args
+    fi
+
     if [ "$use_run_cmd" = "1" ]; then
         log_info "Running '${_CONTAINER_NAME}:$CONTAINER_TAG' ..."
         $CONTAINER_BIN run \
+            $run_cmd_args \
             $CONTAINER_RUNTIME_ARGS \
             ${_CONTAINER_NAME}:$CONTAINER_TAG \
-            ${AURORA_CI_BUILDER:+$COMMAND}
-        if [ "$AURORA_CI_BUILDER" = "1" ]; then
+            ${run_cmd}
+        if [ "$AURORA_CI_BUILD" = "1" ]; then
             exit 0
         fi
     fi
@@ -131,9 +161,9 @@ function run_container_cmd() {
 
     log_info "Attaching to running container '$_CONTAINER_NAME' ..."
     $CONTAINER_BIN exec \
-        $CONTIANER_EXEC_FLAGS \
+        $CONTAINER_EXEC_FLAGS \
         $_CONTAINER_NAME \
-        $COMMAND
+        /sbin/entrypoint $COMMAND
 }
 
 function run_container() {
@@ -152,13 +182,34 @@ function run_container() {
 }
 
 function do_container() {
-    local do_container_cmd="${1:-build}"
-    if [ "$do_container_cmd" = "build" ]; then
-        check_and_build_container
-    elif [ "$do_container_cmd" = "rm" ]; then
-        remove_container
-    else
-        log_err "Container command \"$do_container_cmd\" is invalid."
-        return 1
+    local do_container_cmd="${1}"
+
+    if [ -z "${do_container_cmd}" ]; then
+        log_err "No container command has been given."
+        exit 1
     fi
+
+    set_container_bins
+
+    case $do_container_cmd in
+        build)
+            check_and_build_container
+            ;;
+        rm)
+            remove_container_image
+            ;;
+        run)
+            run_container
+            ;;
+        start)
+            start_container
+            ;;
+        stop)
+            stop_container
+            ;;
+        *)
+            log_err "Container command \"$do_container_cmd\" is invalid."
+            exit 1
+            ;;
+    esac
 }

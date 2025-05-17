@@ -5,6 +5,7 @@
     "files.associations": {
         "*.h": "c",
         "*.c": "c",
+        "cstdlib": "c",
         "*.md": "markdown",
         "*.sh": "shellscript",
         "*.cpp": "cpp",
@@ -12,12 +13,13 @@
         "*.txt": "plaintext",
         "*.json": "jsonc",
         "*.cmake": "cmake",
+        "CMakeLists.txt": "cmake",
         "*.py": "python",
         "*.yaml": "yaml",
         "*.yml": "yaml",
         "*.xml": "xml",
-        "*.toml": "toml"
+        "*.toml": "toml",
+        "cstdint": "c"
     },
     "editor.formatOnSave": false,
-    "cmake.sourceDirectory": "/home/maxist/auxspace/aurora/src"
 }

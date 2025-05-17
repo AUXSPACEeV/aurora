@@ -17,21 +17,14 @@ function first_boot_actions() {
   # Signal first boot success
   sudo mkdir -p "$(dirname $FIRST_BOOT_TMP_FLAG)"
   sudo touch "$FIRST_BOOT_TMP_FLAG"
-
-  # Usually its smart to exit after setup, but in CI builds we want to
-  # continue to build the project, since docker containers do not run deattached
-  # in CI builds.
-  if [ "$is_ci_build" = "0" ]; then
-    exit 0
-  fi
 }
 
 function build_picotool() {
-  if [ ! -d ${PICOTOOL_PATH}/build ]; then
-    mkdir -p ${PICOTOOL_PATH}/build
+  if [ ! -d "${PICOTOOL_PATH}/build" ]; then
+    mkdir -p "${PICOTOOL_PATH}/build"
   fi
 
-  cd ${PICOTOOL_PATH}/build
+  cd "${PICOTOOL_PATH}/build"
   cmake -DCMAKE_INSTALL_PREFIX=~/.local ..
   make
   make install
@@ -39,20 +32,28 @@ function build_picotool() {
 
 function build_app() {
   set -e
+  local AURORA_BUILD_OUT="${BUILDER_APPLICATION}/build/src"
+
+  echo "[debug]: Building AURORA for platform \"$PICO_BOARD\""
 
   # compile picotool
   test -x ~/.local/bin/picotool || build_picotool
 
   # prepare build env
-  echo "Preparing buildenv ..."
-  mkdir -p "${BUILDER_APPLICATION}/build"
-  cd "${BUILDER_APPLICATION}/build"
-  PICO_BOARD=$PICO_BOARD cmake -G "Unix Makefiles" ../src
+  echo "Running cmake ..."
+  cd "${BUILDER_APPLICATION}"
+  cmake -S . -B build
 
   # compile and link project
   echo "Compiling sources ..."
-  make
+  cmake --build build
   echo "Project compiled. Output is at \"${BUILDER_APPLICATION}/build\"."
+
+  if [ -n "$(find ${AURORA_BUILD_OUT} -maxdepth 1 -name 'aurora.*')" ]; then
+    cp -v "${AURORA_BUILD_OUT}"/aurora.* "${BUILDER_APPLICATION}/build/"
+  else
+    echo "[warning]: No build output found at \"${AURORA_BUILD_OUT}\"!"
+  fi
 }
 
 function clean_app() {
@@ -71,14 +72,14 @@ COMMAND=""
 declare -a ARGS=()
 
 # Flag that shows if everything has already been initialized.
-FIRST_BOOT_TMP_FLAG="/var/auxspace/first_boot"
+FIRST_BOOT_TMP_FLAG=${FIRST_BOOT_TMP_FLAG:-"/var/auxspace/first_boot"}
 
 ################################################################################
 # Run first boot code to setup the environment correctly                       #
 ################################################################################
 
 if [ ! -f "$FIRST_BOOT_TMP_FLAG" ]; then
-  first_boot_actions ${AURORA_CI_BUILDER:+$AURORA_CI_BUILDER}
+  first_boot_actions ${AURORA_CI_BUILD:+$AURORA_CI_BUILD}
 fi
 
 ################################################################################
@@ -107,6 +108,11 @@ while [ $# -gt 0 ]; do
       ;;
     shell)
       COMMAND="/bin/bash"
+      # Required for podman build, since in podman container you are root
+      if [ ! "${BUILDER_HOME}" = "$HOME" ]; then
+        cp "${BUILDER_HOME}/.bashrc" ~/.bashrc
+        cp "${BUILDER_HOME}/.bash_aliases" ~/.bash_aliases
+      fi
       shift
       ;;
     --*)

@@ -25,8 +25,7 @@
  * 1 tab == 4 spaces!
  */
 
-#ifndef FREERTOS_CONFIG_H
-#define FREERTOS_CONFIG_H
+#pragma once
 
  /**
   * Application specific definitions.
@@ -165,4 +164,4 @@ extern "C"
 #define portSUPPORT_SMP                         1
 #define portUSING_MPU_WRAPPERS                  0
 
-#endif /* FREERTOS_CONFIG_H */
+/* [] END OF FILE */
