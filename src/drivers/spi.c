@@ -75,6 +75,8 @@ size_t spi_get_num()
 
 struct spi_config *spi_get_by_num(size_t num)
 {
+    log_trace("%s(0x%016llx)\r\n", __FUNCTION__, num);
+
     struct spi_config* cfg = NULL;
     int i;
 
@@ -136,6 +138,8 @@ static void __not_in_flash_func(spi_irq_handler_1)()
 
 void set_spi_dma_irq_channel(bool useChannel1, bool shared)
 {
+    log_trace("%s(%s, %s)\r\n", __FUNCTION__, useChannel1 ? "true" : "false",
+              shared ? "true" : "false");
     irqChannel1 = useChannel1;
     irqShared = shared;
 }
@@ -222,6 +226,8 @@ int spi_transfer_dma(struct spi_config *spi, const uint8_t *tx, uint8_t* rx,
 
 int aurora_spi_init(struct spi_config *spi)
 {
+    log_trace("%s()\r\n", __FUNCTION__);
+
     auto_init_mutex(aurora_spi_init_mutex);
     mutex_enter_blocking(&aurora_spi_init_mutex);
 
@@ -365,6 +371,7 @@ out:
 
 void aurora_spi_deinit(struct spi_config *spi)
 {
+    log_trace("%s()\r\n", __FUNCTION__);
     auto_init_mutex(aurora_spi_deinit_mutex);
     mutex_enter_blocking(&aurora_spi_deinit_mutex);
 
