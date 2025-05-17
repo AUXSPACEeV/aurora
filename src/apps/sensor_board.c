@@ -6,6 +6,9 @@
  * Copyright (C) 2025 Auxspace e.V.
  */
 
+#include "FreeRTOS.h"
+#include "task.h"
+
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -14,6 +17,7 @@
 #include "pico/malloc.h"
 
 #include <aurora/app.h>
+#include <aurora/log.h>
 #include <aurora/spi.h>
 #include <aurora/drivers/mmc/spi_mmc.h>
 
@@ -26,7 +30,7 @@ static int setup_spi_config(void)
 {
     spi = (struct spi_config *)malloc(sizeof(struct spi_config));
     if (spi == NULL) {
-        printf("Could not allocate SPI driver.\n");
+        log_error("Could not allocate SPI driver.\n");
         return -ENOMEM;
     }
 
@@ -55,23 +59,24 @@ static int setup_sdcard(void)
     int ret;
 
     if (spi == NULL) {
-        printf("SPI driver not initialized.\n");
+        log_error("SPI driver not initialized.\n");
         return -EINVAL;
     }
 
     mmc = spi_mmc_drv_init(spi, PICO_DEFAULT_SPI_CSN_PIN);
-    printf("PICO_DEFAULT_SPI_CSN_PIN %d\n", PICO_DEFAULT_SPI_CSN_PIN);
+    /* TODO: replace CS pin with configurable options and test them */
+    log_debug("PICO_DEFAULT_SPI_CSN_PIN %d\n", PICO_DEFAULT_SPI_CSN_PIN);
     if (mmc == NULL) {
-        printf("SPI SD init failed.\n");
+        log_error("SPI SD init failed.\n");
         return -ENODEV;
     }
     ret = mmc->ops->probe(mmc->dev);
     if (ret) {
-        printf("SPI SD init failed: %d\n", ret);
+        log_error("SPI SD init failed: %d\n", ret);
         return ret;
     }
 
-    printf("SPI initialised, let's goooooo\n");
+    log_debug("Sensor board hardware initialised!\n");
 }
 
 /*----------------------------------------------------------------------------*/
@@ -89,13 +94,13 @@ int aurora_hwinit(void)
 
     ret = setup_spi_config();
     if (ret) {
-        printf("SPI init failed: %d\n", ret);
+        log_error("SPI init failed: %d\n", ret);
         return ret;
     }
 
     ret = setup_sdcard();
     if (ret) {
-        printf("SD Card init failed: %d\n", ret);
+        log_error("SD Card init failed: %d\n", ret);
         return ret;
     }
 
@@ -113,6 +118,21 @@ void aurora_hwdeinit(void)
 
 void aurora_main(void)
 {
-    return;
+    const TickType_t xDelay = 3000 / portTICK_PERIOD_MS;
+
+    for(;;) {
+        vTaskDelay(xDelay);
+        if (mmc->ops->n_sectors)
+            log_debug("Sectors on card: %lld\n", mmc->ops->n_sectors(mmc->dev));
+        if (mmc->ops->blk_read) {
+            uint8_t *data = calloc(1, mmc->dev->blksize);
+            int ret = mmc->ops->blk_read(mmc->dev, 0x0, data, 1);
+            if (ret) {
+                log_error("ERROR reading blocks: %d\n", ret);
+            }
+            hexdump(data, mmc->dev->blksize);
+            free(data);
+        }
+    }
 }
 /* EOF */

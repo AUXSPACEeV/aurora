@@ -27,10 +27,11 @@
 #include "hardware/spi.h"
 
 #include <aurora/compiler.h>
-#include <aurora/list.h>
-#include <aurora/spi.h>
 #include <aurora/drivers/mmc/mmc.h>
 #include <aurora/drivers/mmc/spi_mmc.h>
+#include <aurora/list.h>
+#include <aurora/log.h>
+#include <aurora/spi.h>
 
 /* Prototypes */
 
@@ -230,7 +231,7 @@ static int spi_mmc_wait_ready(struct spi_mmc_context *ctx)
     }
 
     if (resp == 0x00)
-        printf("%s failed\r\n", __FUNCTION__);
+    log_error("%s failed\r\n", __FUNCTION__);
 
     // Return success/failure
     if ((resp > 0x00) && (resp != 0xFF)) {
@@ -288,12 +289,8 @@ static uint8_t spi_mmc_send_cmd(struct spi_mmc_context *ctx,
         if (!(response & R1_SPI_ERROR)) {
             // parse the rest of the response
             rx[0] = response;
-            if (resp_size > 1) {
-                printf("Total response:\n\tr[0] = 0x%02x\n", rx[0]);
-            }
             for(int j = 1; j < resp_size; j++) {
                 spi_mmc_transfer(ctx, &tx, &rx[j], 1);
-                printf("\tr[%d] = 0x%02x\n", j, rx[j]);
             }
             break;
         }
@@ -315,7 +312,7 @@ static int spi_mmc_send_msg(struct spi_mmc_context *ctx,
 
     response = spi_mmc_send_cmd(ctx, msg, resp);
 
-    return !(response & R1_SPI_ERROR);
+    return response & R1_SPI_ERROR;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -337,21 +334,25 @@ static uint64_t spi_mmc_sectors(struct mmc_dev *dev)
     uint64_t blocks = 0, capacity = 0;
     uint8_t csd[16] = {0};
     uint8_t *resp = malloc(resp_size);
+    size_t i;
 
     memset(resp, 0xff, resp_size);
 
     /* Send CMD 9 to request 16-byte block of CSD register data */
     ret = spi_mmc_send_msg(ctx, cmd9, resp);
     /* resp (R2) has to be valid before reading 16-byte block */
-    if (ret || resp[0] != 0x0) {
-        printf("CMD9 failed: %d\n", ret);
+    if (ret) {
+        log_error("CMD9 failed: %d\n", ret);
+        log_debug("Full CMD9 response:\n", resp[0]);
+        for (i = 0; i < resp_size; i++)
+        log_debug("%d: %02x\n", i, resp[i]);
         goto free_response;
     }
 
     /* Read 16-byte block of CSD register data after R2 from CMD9 */
     ret = spi_mmc_transfer(ctx, &tx_dummy, csd, sizeof(csd));
     if (ret) {
-        printf("Couldn't read CSD response from disk\n");
+        log_error("Couldn't read CSD response from disk\n");
         goto free_response;
     }
 
@@ -375,9 +376,9 @@ static uint64_t spi_mmc_sectors(struct mmc_dev *dev)
             capacity = (uint64_t)blocknr *
                        block_len;  // memory capacity = BLOCKNR * BLOCK_LEN
             blocks = capacity / dev->blksize;
-            printf("Standard Capacity: c_size: %lu\r\n", c_size);
-            printf("Sectors: 0x%llx : %llu\r\n", blocks, blocks);
-            printf("Capacity: 0x%llx : %llu MB\r\n", capacity,
+            log_debug("Standard Capacity: c_size: %lu\r\n", c_size);
+            log_debug("Sectors: 0x%llx : %llu\r\n", blocks, blocks);
+            log_debug("Capacity: 0x%llx : %llu MB\r\n", capacity,
                        (capacity / (1024U * 1024U)));
             break;
         case 1:
@@ -385,13 +386,13 @@ static uint64_t spi_mmc_sectors(struct mmc_dev *dev)
                 ext_bits(csd, 69, 48);       // device size : C_SIZE : [69:48]
             blocks = (hc_c_size + 1) << 10;  // block count = C_SIZE+1) * 1K
                                              // byte (512B is block size)
-            printf("SDHC/SDXC Card: hc_c_size: %lu\r\n", hc_c_size);
-            printf("Sectors: %8llu\r\n", blocks);
-            printf("Capacity: %8llu MB\r\n", (blocks / (2048U)));
+            log_debug("SDHC/SDXC Card: hc_c_size: %lu\r\n", hc_c_size);
+            log_debug("Sectors: %8llu\r\n", blocks);
+            log_debug("Capacity: %8llu MB\r\n", (blocks / (2048U)));
             break;
 
         default:
-            printf("CSD struct unsupported\r\n");
+            log_error("CSD struct unsupported\r\n");
     };
 
 free_response:
@@ -403,7 +404,7 @@ free_response:
 /*----------------------------------------------------------------------------*/
 
 static int spi_mmc_wait_token(struct spi_mmc_context *ctx, uint8_t token) {
-    printf("%s(0x%02hhx)\r\n", __FUNCTION__, token);
+    log_trace("%s(0x%02hhx)\r\n", __FUNCTION__, token);
 
     const uint32_t timeout = SD_COMMAND_TIMEOUT;  // Wait for start token
     const uint8_t dummy = 0xff;
@@ -417,7 +418,7 @@ static int spi_mmc_wait_token(struct spi_mmc_context *ctx, uint8_t token) {
             return 0;
         }
     } while (0 < absolute_time_diff_us(get_absolute_time(), timeout_time));
-    printf("sd_wait_token: timeout\r\n");
+    log_error("sd_wait_token: timeout\r\n");
     return -ETIMEDOUT;
 }
 
@@ -435,13 +436,13 @@ static int __spi_mmc_read_block(struct mmc_dev *dev, uint8_t *buf,
     // read until start byte (0xFE)
     ret = spi_mmc_wait_token(ctx, SPI_MMC_START_BLOCK);
     if (ret) {
-        printf("%s:%d Read timeout\r\n", __FILE__, __LINE__);
+        log_error("%s:%d Read timeout\r\n", __FILE__, __LINE__);
         return ret;
     }
     // read data
     ret = spi_mmc_transfer(ctx, &dummy, buf, (size_t)len);
     if (ret) {
-        printf("Reading %ld blocks failed: %d\n", len, ret);
+        log_error("Reading %ld blocks failed: %d\n", len, ret);
         return ret;
     }
     // Read the CRC16 checksum for the data block
@@ -456,7 +457,7 @@ static int __spi_mmc_read_block(struct mmc_dev *dev, uint8_t *buf,
         // Compute and verify checksum
         crc_result = crc16((void *)buf, len);
         if ((uint16_t)crc_result != crc) {
-            printf("%s: Invalid CRC received 0x%04x"
+            log_error("%s: Invalid CRC received 0x%04x"
                        " result of computation 0x%04x\r\n",
                        __FUNCTION__, crc, (uint16_t)crc_result);
             return -EBADMSG;
@@ -481,12 +482,12 @@ static int spi_mmc_read_blocks(struct mmc_dev *dev, uint64_t blk, uint8_t *buf,
     uint8_t __attribute__((unused)) ret;
 
     if (blk + blockCnt > dev->num_blocks) {
-        printf("Cannot read %ld blocks from %ld: out of bounds (%ld)\n",
+        log_error("Cannot read %ld blocks from %ld: out of bounds (%ld)\n",
                blockCnt, blk, dev->num_blocks);
         return -EINVAL;
     }
     if (!ctx->spi->state->initialized || !dev->initialized) {
-        printf("Cannot read SPI MMC blocks: Driver not initialized.");
+        log_error("Cannot read SPI MMC blocks: Driver not initialized.");
         return -EHOSTDOWN;
     }
 
@@ -501,7 +502,7 @@ static int spi_mmc_read_blocks(struct mmc_dev *dev, uint64_t blk, uint8_t *buf,
     ret = spi_mmc_send_cmd(ctx, read_cmd, &response);
 
     if (response & R1_SPI_ERROR) {
-        printf("Got error while reading blocks from SD Card.\n");
+        log_error("Got error while reading blocks from SD Card: %02x\n", response);
         return -EIO;
     }
     // receive the data : one block at a time
@@ -542,10 +543,10 @@ static int spi_mmc_send_reset(struct spi_mmc_context *ctx)
     }
 
     if (resp & R1_SPI_ERROR) {
-        printf("Sending reset command failed: %d\n", ret);
+        log_error("Sending reset command failed: %d\n", ret);
         ret = -EIO;
     } else if (unlikely(!(resp & R1_SPI_IDLE))) {
-        printf("MMC SPI reset command timed out.\n");
+        log_error("MMC SPI reset command timed out.\n");
         ret = -ETIMEDOUT;
     }
 
@@ -576,7 +577,7 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
     } else if(cmd8_resp[4] & 0xAA) {
         dev->version = SD_CARD_TYPE_SD2;
     } else {
-        printf("Card did not respond to voltage select.\n");
+        log_error("Card did not respond to voltage select.\n");
         return -EIO;
     }
 
@@ -588,23 +589,23 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
         response = 0xff;
         ret = spi_mmc_send_msg(ctx, cmd55, &response);
         if (ret) {
-            printf("Sending CMD55 failed.\n");
+            log_error("Sending CMD55 failed.\n");
             return -EIO;
         }
 
         response = 0xff;
         ret = spi_mmc_wait_ready(ctx);
         if (ret) {
-            printf("Waiting for card to be ready failed.\n");
+            log_error("Waiting for card to be ready failed.\n");
             continue;
         }
 
         ret = spi_mmc_send_msg(ctx, acmd41, &response);
         if (ret) {
-            printf("Sending ACMD41 failed.\n");
+            log_error("Sending ACMD41 failed.\n");
             return -EIO;
         } else if(num_retries++ >= max_num_retries) {
-            printf("Sending ACMD41 timed out.\n");
+            log_error("Sending ACMD41 timed out.\n");
             return -ETIMEDOUT;
         }
     }
@@ -613,7 +614,7 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
     if (dev->version == SD_CARD_TYPE_SD2) {
         response = 0xff;
         if (spi_mmc_send_msg(ctx, cmd58, &response)) {
-            printf("Sending CMD58 failed.\n");
+            log_error("Sending CMD58 failed.\n");
             return -EIO;
         }
         if (!(response & R1_SPI_ERROR) && response & 0XC0) {
@@ -636,7 +637,7 @@ static int spi_mmc_init(struct mmc_dev *dev)
     uint8_t resp = 0xff;
     struct spi_mmc_context *ctx = (struct spi_mmc_context *)dev->priv;
     if (!ctx) {
-        printf("No SPI MMC ctx available!\n");
+        log_error("No SPI MMC ctx available!\n");
         return -EINVAL;
     }
 
@@ -665,7 +666,7 @@ static int spi_mmc_init(struct mmc_dev *dev)
     spi_mmc_send_reset(ctx);
     ret = spi_mmc_voltage_select(dev);
     if (ret != 0) {
-        printf("SPI MMC version check failed.\n");
+        log_error("SPI MMC version check failed.\n");
         goto error;
     }
 
@@ -715,7 +716,7 @@ struct mmc_drv *spi_mmc_drv_init(struct spi_config *spi, uint cs_pin)
     struct spi_mmc_context *ctx = (struct spi_mmc_context *)
         calloc(1, sizeof(struct spi_mmc_context));
     if (!ctx) {
-        printf("Could not allocate SPI MMC ctx: %d\n", -ENOMEM);
+        log_error("Could not allocate SPI MMC ctx: %d\n", -ENOMEM);
         goto out;
     }
     ctx->spi = spi;
@@ -726,7 +727,7 @@ struct mmc_drv *spi_mmc_drv_init(struct spi_config *spi, uint cs_pin)
 
     struct mmc_dev *dev = (struct mmc_dev *)calloc(1, sizeof(struct mmc_dev));
     if (!dev) {
-        printf("Could not allocate SPI MMC device: %d\n", -ENOMEM);
+        log_error("Could not allocate SPI MMC device: %d\n", -ENOMEM);
         goto free_ctx;
     }
     dev->name = "spi_mmc";
@@ -735,7 +736,7 @@ struct mmc_drv *spi_mmc_drv_init(struct spi_config *spi, uint cs_pin)
 
     struct mmc_ops *ops = (struct mmc_ops *)malloc(sizeof(struct mmc_ops));
     if (!ops) {
-        printf("Could not allocate SPI MMC ops: %d\n", -ENOMEM);
+        log_error("Could not allocate SPI MMC ops: %d\n", -ENOMEM);
         goto free_dev;
     }
     ops->probe = &spi_mmc_probe;
@@ -747,7 +748,7 @@ struct mmc_drv *spi_mmc_drv_init(struct spi_config *spi, uint cs_pin)
 
     struct mmc_drv *drv = calloc(1, sizeof(struct mmc_drv));
     if (!drv) {
-        printf("Could not allocate SPI MMC driver: %d\n", -ENOMEM);
+        log_error("Could not allocate SPI MMC driver: %d\n", -ENOMEM);
         goto free_ops;
     }
     drv->dev = dev;

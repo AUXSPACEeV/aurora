@@ -118,19 +118,67 @@ struct mmc_dev {
  * @brief MMC driver functions
  *
  * @param probe: Probe function to initialize the device
- * @param blk_read: Function to read a block of data
+ * @param blk_read: Function to read blocks of data
  * @param blk_write: Function to write blocks of data
  * @param blk_erase: Function to erase blocks of data
  * @param generate_info: Function to generate device information
  * @param n_sectors: Function to get the number of sectors on the mmc device
  */
 struct mmc_ops {
+    /**
+     * @brief Probe function to initialize the device
+     * 
+     * @param dev: mmc device to probe
+     * @return: Error code on failure
+     */
     int (*probe)(struct mmc_dev *dev);
+
+    /**
+     * @brief Function to read a block of data
+     * 
+     * @param dev: mmc device to read from
+     * @param blk: start block
+     * @param buf: readback buffer
+     * @param len: block count
+     * @return: Error code on failure
+     */
     int (*blk_read)(struct mmc_dev *dev, uint64_t blk, uint8_t *buf, const uint64_t len);
+    
+    /**
+     * @brief Function to write blocks of data
+     * 
+     * @param dev: mmc device to write to
+     * @param blk: start block
+     * @param buf: write buffer
+     * @param len: block count
+     * @return: Error code on failure
+     */
     int (*blk_write)
         (struct mmc_dev *dev, uint64_t blk, const uint8_t *buf, const uint64_t len);
-    int (*blk_erase)(struct mmc_dev *dev, uint32_t addr);
+    
+    /**
+     * @brief Function to erase a block of data
+     * 
+     * @param dev: mmc device to erase the block from
+     * @param blk: block to erase
+     * @return: Error code on failure
+     */
+    int (*blk_erase)(struct mmc_dev *dev, uint64_t blk);
+
+    /**
+     * @brief Function to generate device information
+     * 
+     * @param dev: mmc device to generate info for
+     * @return: Error code on failure
+     */
     int (*generate_info)(struct mmc_dev *dev);
+
+    /**
+     * @brief Function to get the number of sectors on the mmc device
+     * 
+     * @param dev: mmc device to read from
+     * @return: Error code on failure
+     */
     uint64_t (*n_sectors)(struct mmc_dev *dev);
 };
 

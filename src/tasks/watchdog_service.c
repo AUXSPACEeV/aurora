@@ -16,6 +16,7 @@
 #include "pico/stdlib.h"
 #include "hardware/watchdog.h"
 
+#include <aurora/log.h>
 #include <aurora/task/watchdog_service.h>
 
  /* WDT task defines */
@@ -64,7 +65,7 @@ void init_wdt(void)
     watchdog_enable(WDT_CNTR_MS, 1);
 
     if (watchdog_caused_reboot()) {
-        printf("Rebooted by Watchdog!\n");
+        log_warning("Rebooted by Watchdog!\n");
         // TODO: Determine what action we take if a watchdog caused a reboot
     }
 }

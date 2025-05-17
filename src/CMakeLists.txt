@@ -9,6 +9,7 @@ set(AURORA_INCLUDES
         ${AURORA_SRC_PATH}/include
         )
 
+add_subdirectory(common)
 add_subdirectory(drivers)
 add_subdirectory(tasks)
 add_subdirectory(apps)
@@ -27,6 +28,7 @@ target_link_libraries(aurora PRIVATE
         FreeRTOS-Kernel
         FreeRTOS-Kernel-Heap4
         pico_stdlib
+        pico_time
         pico_binary_info
         hardware_dma
         hardware_i2c
@@ -35,6 +37,7 @@ target_link_libraries(aurora PRIVATE
         )
 
 target_link_libraries(aurora PUBLIC
+        aurora_common
         aurora_drivers
         aurora_tasks
         aurora_apps

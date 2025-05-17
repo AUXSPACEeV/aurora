@@ -12,6 +12,7 @@
 #include <errno.h>
 
 #include <aurora/compiler.h>
+#include <aurora/log.h>
 #include <aurora/spi.h>
 
 /* Fileprivate structs and typedefs */
@@ -203,7 +204,7 @@ int spi_transfer_dma(struct spi_config *spi, const uint8_t *tx, uint8_t* rx,
     &spi->state->sem, timeOut);  // Wait for notification from ISR
     if (!rc) {
         // If the timeout is reached the function will return false
-        printf("Notification wait timed out in %s\n", __FUNCTION__);
+        log_error("Notification wait timed out in %s\n", __FUNCTION__);
         return -ETIMEDOUT;
     }
     // Shouldn't be necessary:
