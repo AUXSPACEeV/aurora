@@ -203,7 +203,7 @@ CONTAINER_RUNTIME_ARGS+=" \
     -e BUILDER_APPLICATION="${BUILDER_APPLICATION}" \
     -e FREERTOS_KERNEL_PATH="${FREERTOS_KERNEL_PATH}" \
     -e PICO_SDK_PATH="${PICO_SDK_PATH}" \
-    -e AURORA_CI_BUILDER="$AURORA_CI_BUILDER" \
+    -e AURORA_CI_BUILD="$AURORA_CI_BUILD" \
     -v "${THISDIR}:${BUILDER_APPLICATION}:rw" \
     --workdir ${BUILDER_APPLICATION} \
 "
@@ -236,7 +236,7 @@ if [ -x /sbin/entrypoint ]; then
 fi
 
 # build, start and run container with given command
-if [ "$AURORA_CI_BUILDER" = "1" ]; then
+if [ "$AURORA_CI_BUILD" = "1" ]; then
     run_setup
 fi
 

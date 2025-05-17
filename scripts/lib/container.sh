@@ -7,6 +7,7 @@
 # Author: Maximilian Stephan @ Auxspace e.V.
 # Copyright (c) 2025 Auxspace e.V.
 #
+set -x
 
 if [ -z "$THISDIR" ]; then
     declare -x THISDIR="$(pwd)"
@@ -24,15 +25,20 @@ declare -x CONTAINER_BIN="docker"
 declare -x CONTAINER_BUILD_BIN="${CONTAINER_BIN} buildx"
 declare -x -i REBUILD_CONTAINER_IMAGE=0
 
-if [ -z "$AURORA_CI_BUILD" ] || [ "$AURORA_CI_BUILD" -eq 0 ]; then
-    declare -x CONTIANER_EXEC_FLAGS="-it"
+# Default to interactive flags unless running in CI
+if [ -z "$AURORA_CI_BUILD" ] || ! [[ "$AURORA_CI_BUILD" =~ ^[1-9][0-9]*$ ]]; then
+    # Not in CI or invalid/non-numeric → enable interactive flags
+    declare -x CONTAINER_EXEC_FLAGS="-it"
+elif [ "$AURORA_CI_BUILD" -eq 0 ]; then
+    declare -x CONTAINER_EXEC_FLAGS="-it"
 else
-    declare -x CONTIANER_EXEC_FLAGS=""
+    # CI is enabled and properly set
+    declare -x CONTAINER_EXEC_FLAGS=""
 fi
 
 # this should only be appended and not overwritten
 CONTAINER_RUNTIME_ARGS=" \
-    ${CONTIANER_EXEC_FLAGS} \
+    ${CONTAINER_EXEC_FLAGS} \
     --name ${_CONTAINER_NAME} \
 "
 
@@ -133,7 +139,7 @@ function run_container_cmd() {
 
     if [ "$AURORA_CI_BUILD" = "1" ]; then
         run_cmd="$COMMAND"
-        run_cmd_args=""
+        unset run_cmd_args
     fi
 
     if [ "$use_run_cmd" = "1" ]; then
@@ -143,7 +149,7 @@ function run_container_cmd() {
             $CONTAINER_RUNTIME_ARGS \
             ${_CONTAINER_NAME}:$CONTAINER_TAG \
             ${run_cmd}
-        if [ "$AURORA_CI_BUILDER" = "1" ]; then
+        if [ "$AURORA_CI_BUILD" = "1" ]; then
             exit 0
         fi
     fi
@@ -156,7 +162,7 @@ function run_container_cmd() {
 
     log_info "Attaching to running container '$_CONTAINER_NAME' ..."
     $CONTAINER_BIN exec \
-        $CONTIANER_EXEC_FLAGS \
+        $CONTAINER_EXEC_FLAGS \
         $_CONTAINER_NAME \
         /sbin/entrypoint $COMMAND
 }

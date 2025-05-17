@@ -79,7 +79,7 @@ FIRST_BOOT_TMP_FLAG=${FIRST_BOOT_TMP_FLAG:-"/var/auxspace/first_boot"}
 ################################################################################
 
 if [ ! -f "$FIRST_BOOT_TMP_FLAG" ]; then
-  first_boot_actions ${AURORA_CI_BUILDER:+$AURORA_CI_BUILDER}
+  first_boot_actions ${AURORA_CI_BUILD:+$AURORA_CI_BUILD}
 fi
 
 ################################################################################

@@ -32,4 +32,4 @@ jobs:
 
     - name: Build
       # Build AURORA with the given configuration..
-      run: AURORA_CI_BUILDER=1 ./run.sh --pico-board ${{ matrix.pico_board }} build
+      run: AURORA_CI_BUILD=1 ./run.sh --pico-board ${{ matrix.pico_board }} build
