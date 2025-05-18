@@ -25,7 +25,7 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         build_type: [Release]
-        board: [pico, pico_w, pico2, pico2_w]
+        board: [sensor_board, test]
 
     steps:
     - uses: actions/checkout@v4
