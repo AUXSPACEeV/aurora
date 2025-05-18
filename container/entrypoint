@@ -63,6 +63,23 @@ function build_app() {
   fi
 }
 
+function aurora_clean() {
+  set -e
+
+  if [ ! -d "${BUILDER_APPLICATION}/build" ]; then
+    return
+  fi
+
+  echo "Running aurora clean ..."
+
+  cd "${BUILDER_APPLICATION}/build"
+
+  # remove all build artifacts that are not removed by make clean
+  rm -v -rf "${BUILDER_APPLICATION}"/build/aurora.*
+  rm -v -rf "${BUILDER_APPLICATION}/build/.config"
+  rm -v -rf "${BUILDER_APPLICATION}/build/kconfig"
+}
+
 function clean_app() {
   set -e
 
@@ -72,6 +89,8 @@ function clean_app() {
 
   cd "${BUILDER_APPLICATION}/build"
   make clean
+  aurora_clean
+
   echo "Build dir cleaned."
 }
 
