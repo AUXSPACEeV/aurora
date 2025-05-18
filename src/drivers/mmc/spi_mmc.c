@@ -266,14 +266,11 @@ static uint8_t spi_mmc_send_cmd(struct spi_mmc_context *ctx,
     cmdPacket[3] = (msg.arg >> 8);
     cmdPacket[4] = (msg.arg >> 0);
 
-#if SD_CRC_ENABLED
-    if (crc_on) {
-        cmdPacket[5] = (crc7(cmdPacket, 5) << 1) | msg.stop;
-    } else
+#if CONFIG_MMC_CRC_ENABLED
+    cmdPacket[5] = (crc7(cmdPacket, 5) << 1) | msg.stop;
+#else
+    cmdPacket[5] = (msg.crc7 << 1) | msg.stop;
 #endif
-    {
-        cmdPacket[5] = (msg.crc7 << 1) | msg.stop;
-    }
     // send a command
     for (int i = 0; i < packet_size; i++) {
         spi_mmc_transfer(ctx, &cmdPacket[i], &response, 1);
@@ -459,17 +456,15 @@ static int __spi_mmc_read_block(struct mmc_dev *dev, uint8_t *buf,
     ret = spi_mmc_transfer(ctx, &dummy, &resp, 1);
     crc |= resp;
 
-#if SD_CRC_ENABLED
-    if (crc_on) {
-        uint32_t crc_result;
-        // Compute and verify checksum
-        crc_result = crc16((void *)buf, len);
-        if ((uint16_t)crc_result != crc) {
-            log_error("%s: Invalid CRC received 0x%04x"
-                       " result of computation 0x%04x\r\n",
-                       __FUNCTION__, crc, (uint16_t)crc_result);
-            return -EBADMSG;
-        }
+#if CONFIG_MMC_CRC_ENABLED
+    uint32_t crc_result;
+    // Compute and verify checksum
+    crc_result = crc16((void *)buf, len);
+    if ((uint16_t)crc_result != crc) {
+        log_error("%s: Invalid CRC received 0x%04x"
+                    " result of computation 0x%04x\r\n",
+                    __FUNCTION__, crc, (uint16_t)crc_result);
+        return -EBADMSG;
     }
 #endif
 

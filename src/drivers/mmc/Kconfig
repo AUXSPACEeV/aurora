@@ -11,4 +11,10 @@ config SPI_MMC
     help
         Enable the Aurora SPI driver for MMC devices
 
+config MMC_CRC_ENABLED
+    bool "MMC CRC"
+    depends on MMC
+    help
+        Enable CRC checks for MMC devices
+
 endmenu
