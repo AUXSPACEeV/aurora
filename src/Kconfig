@@ -8,6 +8,8 @@ config PICO_BOARD
     help
         Board to select from the pico SDK and FreeRTOS
 
+source "src/common/Kconfig"
+
 source "src/apps/Kconfig"
 source "src/drivers/Kconfig"
 source "src/tasks/Kconfig"

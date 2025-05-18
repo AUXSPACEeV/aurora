@@ -54,7 +54,7 @@ void hexdump(const void *data, size_t size);
  */
 #define CURRENT_TIME()   ({ uint64_t t = to_us_since_boot(get_absolute_time()); char buffer[26]; snprintf(buffer, sizeof(buffer), "%lld", t); buffer; })
 
-#ifdef CONFIG_AURORA_TRACING
+#ifdef CONFIG_LOG_TRACING
 /**
  * @brief Log a message with level "trace"
  * 
@@ -64,10 +64,10 @@ void hexdump(const void *data, size_t size);
 #define log_trace(fmt, ...)    log_message(LOG_TRACE, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #else
 #define log_trace(fmt, ...)    {}
-#endif /* CONFIG_AURORA_TRACING */
+#endif /* CONFIG_LOG_TRACING */
 
 
-#ifdef CONFIG_AURORA_DEBUG_BUILD
+#ifdef CONFIG_LOG_LEVEL_DEBUG
 /**
  * @brief Log a message with level "debug"
  * 
@@ -77,7 +77,7 @@ void hexdump(const void *data, size_t size);
 #define log_debug(fmt, ...)    log_message(LOG_DEBUG, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #else
 #define log_debug(fmt, ...)    {}
-#endif /* CONFIG_AURORA_DEBUG_BUILD */
+#endif /* CONFIG_LOG_LEVEL_DEBUG */
 
 /**
  * @brief Log a message with level "info"
