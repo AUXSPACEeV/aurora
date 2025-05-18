@@ -25,11 +25,11 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         build_type: [Release]
-        pico_board: [pico, pico_w, pico2, pico2_w]
+        board: [sensor_board, test]
 
     steps:
     - uses: actions/checkout@v4
 
     - name: Build
       # Build AURORA with the given configuration..
-      run: AURORA_CI_BUILD=1 ./run.sh --pico-board ${{ matrix.pico_board }} build
+      run: AURORA_CI_BUILD=1 ./run.sh --board ${{ matrix.board }} build

@@ -1,0 +1,20 @@
+# MMC configuration options
+
+# Copyright (C) 2025 2025 Auxspace e.V.
+# SPDX-License-Identifier: MIT
+
+menu "mmc"
+
+config SPI_MMC
+    bool "Aurora SPI driver for MMC"
+    depends on MMC
+    help
+        Enable the Aurora SPI driver for MMC devices
+
+config MMC_CRC_ENABLED
+    bool "MMC CRC"
+    depends on MMC
+    help
+        Enable CRC checks for MMC devices
+
+endmenu

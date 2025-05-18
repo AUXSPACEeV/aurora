@@ -27,16 +27,14 @@ function print_help() {
     echo "                                   - start"
     echo "                                   - stop"
     echo "  docs      ARGS                 Call the docs script with ARGS."
+    echo "  menuconfig                     Open the menuconfig for BOARD."
     echo "  setup                          Setup submodules, docker, etc."
     echo "  shell                          Open a shell in the container."
     echo
     echo "Options":
-    echo "-b|--pico-board BOARD            Choose a pico board from"
-    echo "                                   - pico (RPI Pico)"
-    echo "                                   - pico_w (RPI Pico + Wireless)"
-    echo "                                   - pico2 (RPI Pico 2)"
-    echo "                                   - pico2_w (RPI Pico + Wireless)"
-    echo "                                 Defaults to ${PICO_BOARD}."
+    echo "-b|--board BOARD                 Choose a board config from"
+    echo "                                 \"configs/\"."
+    echo "                                 Defaults to ${BOARD}."
     echo "   --container-dir DIR           Use custom container directory."
     echo "                                 Defaults to ${CONTAINER_DIR}."
     echo "   --container-tag TAG           Tag of the container."
@@ -117,7 +115,7 @@ FREERTOS_KERNEL_PATH=${FREERTOS_KERNEL_PATH:-"${BUILDER_APP_SRC}/kernel"}
 # SDK
 _PICO_SDK_REL_PATH=${_PICO_SDK_REL_PATH:-"src/sdk"}
 PICO_SDK_PATH=${PICO_SDK_PATH:-"${BUILDER_APPLICATION}/$_PICO_SDK_REL_PATH"}
-PICO_BOARD=${PICO_BOARD:-"pico"}
+BOARD=${BOARD:-"pico"}
 
 ################################################################################
 # Commandline arg parser                                                       #
@@ -137,8 +135,8 @@ while [ $# -gt 0 ]; do
             CONTAINER_ENGINE="$2"
             shift 2
             ;;
-        -b|--pico-board)
-            PICO_BOARD="$2"
+        -b|--board)
+            BOARD="$2"
             shift 2
             ;;
         -h|--help)
@@ -166,8 +164,8 @@ while [ $# -gt 0 ]; do
             ;;
         *)
             case $1 in
-                build|shell|clean)
-                    COMMAND="${PICO_BOARD:+ --pico-board $PICO_BOARD} $1"
+                build|shell|clean|menuconfig)
+                    COMMAND="${BOARD:+ --board $BOARD} $1"
                     shift
                     ;;
                 setup)

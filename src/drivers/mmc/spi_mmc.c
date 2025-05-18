@@ -191,6 +191,9 @@ static void spi_mmc_go_low_frequency(struct spi_mmc_context *ctx)
 static int spi_mmc_transfer(struct spi_mmc_context *ctx, const uint8_t *tx,
                             uint8_t* rx, size_t length)
 {
+    log_trace("%s(0x%016llx, 0x%016llx, 0x%016llx)\r\n", __FUNCTION__,
+              (uintptr_t)tx, (uintptr_t)rx, length);
+
     int len;
     int ret;
 
@@ -216,6 +219,7 @@ static int spi_mmc_transfer(struct spi_mmc_context *ctx, const uint8_t *tx,
 
 static int spi_mmc_wait_ready(struct spi_mmc_context *ctx)
 {
+    log_trace("%s()\r\n", __FUNCTION__);
     const uint32_t max_r = 10;
 
     uint8_t ret;
@@ -230,8 +234,9 @@ static int spi_mmc_wait_ready(struct spi_mmc_context *ctx)
         }
     }
 
-    if (resp == 0x00)
-    log_error("%s failed\r\n", __FUNCTION__);
+    if (resp == 0x00) {
+        log_error("%s failed\r\n", __FUNCTION__);
+    }
 
     // Return success/failure
     if ((resp > 0x00) && (resp != 0xFF)) {
@@ -261,14 +266,11 @@ static uint8_t spi_mmc_send_cmd(struct spi_mmc_context *ctx,
     cmdPacket[3] = (msg.arg >> 8);
     cmdPacket[4] = (msg.arg >> 0);
 
-#if SD_CRC_ENABLED
-    if (crc_on) {
-        cmdPacket[5] = (crc7(cmdPacket, 5) << 1) | msg.stop;
-    } else
+#if CONFIG_MMC_CRC_ENABLED
+    cmdPacket[5] = (crc7(cmdPacket, 5) << 1) | msg.stop;
+#else
+    cmdPacket[5] = (msg.crc7 << 1) | msg.stop;
 #endif
-    {
-        cmdPacket[5] = (msg.crc7 << 1) | msg.stop;
-    }
     // send a command
     for (int i = 0; i < packet_size; i++) {
         spi_mmc_transfer(ctx, &cmdPacket[i], &response, 1);
@@ -319,6 +321,7 @@ static int spi_mmc_send_msg(struct spi_mmc_context *ctx,
 
 static uint64_t spi_mmc_sectors(struct mmc_dev *dev)
 {
+    log_trace("%s()\r\n", __FUNCTION__);
     // CMD9, Response R2 (R1 byte + 16-byte block read)
     const struct spi_mmc_message cmd9 = SPI_MMC_CMD(MMC_CMD_SEND_CSD, 0);
     const size_t resp_size = mmc_get_resp_size(
@@ -371,7 +374,7 @@ static uint64_t spi_mmc_sectors(struct mmc_dev *dev)
                                            // *maximum* read block length
             block_len = 1 << read_bl_len;  // BLOCK_LEN = 2^READ_BL_LEN
             mult = 1 << (c_size_mult +
-                         2);                // MULT = 2^C_SIZE_MULT+2 (C_SIZE_MULT < 8)
+                         2);         // MULT = 2^C_SIZE_MULT+2 (C_SIZE_MULT < 8)
             blocknr = (c_size + 1) * mult;  // BLOCKNR = (C_SIZE+1) * MULT
             capacity = (uint64_t)blocknr *
                        block_len;  // memory capacity = BLOCKNR * BLOCK_LEN
@@ -427,6 +430,8 @@ static int spi_mmc_wait_token(struct spi_mmc_context *ctx, uint8_t token) {
 static int __spi_mmc_read_block(struct mmc_dev *dev, uint8_t *buf,
                                 const uint64_t len)
 {
+    log_trace("%s(0x%016llx, 0x%016llx)\r\n", __FUNCTION__, (uintptr_t)buf,
+              len);
     const uint8_t dummy = 0xff;
     uint8_t resp = 0xff;
     uint16_t crc;
@@ -451,17 +456,15 @@ static int __spi_mmc_read_block(struct mmc_dev *dev, uint8_t *buf,
     ret = spi_mmc_transfer(ctx, &dummy, &resp, 1);
     crc |= resp;
 
-#if SD_CRC_ENABLED
-    if (crc_on) {
-        uint32_t crc_result;
-        // Compute and verify checksum
-        crc_result = crc16((void *)buf, len);
-        if ((uint16_t)crc_result != crc) {
-            log_error("%s: Invalid CRC received 0x%04x"
-                       " result of computation 0x%04x\r\n",
-                       __FUNCTION__, crc, (uint16_t)crc_result);
-            return -EBADMSG;
-        }
+#if CONFIG_MMC_CRC_ENABLED
+    uint32_t crc_result;
+    // Compute and verify checksum
+    crc_result = crc16((void *)buf, len);
+    if ((uint16_t)crc_result != crc) {
+        log_error("%s: Invalid CRC received 0x%04x"
+                    " result of computation 0x%04x\r\n",
+                    __FUNCTION__, crc, (uint16_t)crc_result);
+        return -EBADMSG;
     }
 #endif
 
@@ -473,6 +476,8 @@ static int __spi_mmc_read_block(struct mmc_dev *dev, uint8_t *buf,
 static int spi_mmc_read_blocks(struct mmc_dev *dev, uint64_t blk, uint8_t *buf,
                                const uint64_t len)
 {
+    log_trace("%s(0x%016llx, 0x%016llx, 0x%016llx)\r\n", __FUNCTION__, blk,
+              (uintptr_t)buf, len);
     uint32_t blockCnt = len;
     struct spi_mmc_context *ctx = (struct spi_mmc_context *)dev->priv;
     struct spi_mmc_message read_cmd = SPI_MMC_CMD(
@@ -526,6 +531,7 @@ static int spi_mmc_read_blocks(struct mmc_dev *dev, uint64_t blk, uint8_t *buf,
 
 static int spi_mmc_send_reset(struct spi_mmc_context *ctx)
 {
+    log_trace("%s()\r\n", __FUNCTION__);
     int ret = 0;
     int i;
     const struct spi_mmc_message reset_cmd = SPI_MMC_CMD_CRC(
@@ -557,6 +563,7 @@ static int spi_mmc_send_reset(struct spi_mmc_context *ctx)
 
 static int spi_mmc_voltage_select(struct mmc_dev *dev)
 {
+    log_trace("%s()\r\n", __FUNCTION__);
     const uint max_num_retries = 10;
     uint num_retries = 0;
     uint8_t response = 0xff;
@@ -630,6 +637,7 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
 
 static int spi_mmc_init(struct mmc_dev *dev)
 {
+    log_trace("%s()\r\n", __FUNCTION__);
     struct spi_mmc_message spi_init_message = { 0 };
 
     int ret;
@@ -676,6 +684,7 @@ error:
 
 int spi_mmc_probe(struct mmc_dev *dev)
 {
+    log_trace("%s()\r\n", __FUNCTION__);
     int ret;
 
     /* Make sure init is only run once */
@@ -701,6 +710,7 @@ out:
 
 struct mmc_drv *spi_mmc_drv_init(struct spi_config *spi, uint cs_pin)
 {
+    log_trace("%s(%u)\r\n", __FUNCTION__, cs_pin);
     auto_init_mutex(spi_mmc_drv_init_mutex);
     mutex_enter_blocking(&spi_mmc_drv_init_mutex);
 
@@ -772,6 +782,7 @@ out:
 
 void spi_mmc_drv_deinit(struct mmc_drv *drv)
 {
+    log_trace("%s()\r\n", __FUNCTION__);
     if (!drv) {
         return;
     }

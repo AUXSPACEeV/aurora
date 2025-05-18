@@ -12,7 +12,5 @@ target_link_libraries(aurora_tasks
         )
 
 target_include_directories(aurora_tasks PRIVATE
-        ${AURORA_SRC_PATH}/include
-        ${FREERTOS_KERNEL_PATH}/Common/include
-        ${BOARD_SRC_PATH}/include
+        ${AURORA_INCLUDES}
 )

@@ -13,6 +13,8 @@
 #include "queue.h"
 
 #include <stdio.h>
+#include <generated/autoconf.h>
+
 #include "pico/stdlib.h"
 #include "hardware/watchdog.h"
 
@@ -42,7 +44,7 @@ static TaskHandle_t wdt_task_handle = NULL;
 static void x_watchdog_service_task(void* args)
 {
     /* Service the WDT every 5 seconds */
-    const TickType_t xDelay = (WDT_CNTR_MS / 2) / portTICK_PERIOD_MS;
+    const TickType_t xDelay = (CONFIG_WDT_CNTR_MS / 2) / portTICK_PERIOD_MS;
 
     for (;; ) {
         watchdog_update();
@@ -62,7 +64,7 @@ int start_wdt_task(void)
 
 void init_wdt(void)
 {
-    watchdog_enable(WDT_CNTR_MS, 1);
+    watchdog_enable(CONFIG_WDT_CNTR_MS, 1);
 
     if (watchdog_caused_reboot()) {
         log_warning("Rebooted by Watchdog!\n");

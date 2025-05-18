@@ -1,26 +1,38 @@
-# Aurora SDCard Drivers
+# Aurora Application Sources
 
-# TODO: Choose which config to use
-add_library(aurora_apps
-        sensor_board.c
-        )
+set (AURORA_APP_SOURCES none_app.c)
 
-target_link_libraries(aurora_apps
+set (AURORA_APP_LIBS
         FreeRTOS-Kernel
         pico_stdlib
         pico_binary_info
         pico_malloc
         pico_mem_ops
-        hardware_dma
-        hardware_irq
-        hardware_gpio
-        hardware_spi
-        aurora_mmc
-        aurora_misc
+)
+
+if (CONFIG_SENSOR_BOARD)
+        list(APPEND AURORA_APP_SOURCES
+                sensor_board.c
+                )
+
+        list(APPEND AURORA_APP_LIBS
+                hardware_dma
+                hardware_irq
+                hardware_gpio
+                hardware_spi
+                aurora_mmc
+                aurora_misc
+                )
+endif()
+
+add_library(aurora_apps
+        ${AURORA_APP_SOURCES}
+        )
+
+target_link_libraries(aurora_apps
+        ${AURORA_APP_LIBS}
         )
 
 target_include_directories(aurora_apps PRIVATE
-        ${AURORA_SRC_PATH}/include
-        ${FREERTOS_KERNEL_PATH}/Common/include
-        ${BOARD_SRC_PATH}/include
+        ${AURORA_INCLUDES}
         )

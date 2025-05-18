@@ -17,14 +17,22 @@ if (NOT DEFINED AURORA_SRC_PATH)
     message("Using default AURORA_SRC_PATH ('${AURORA_SRC_PATH}')")
 endif ()
 
-if (NOT DEFINED PICO_BOARD)
-    if (DEFINED ENV{PICO_BOARD})
-        set(PICO_BOARD $ENV{PICO_BOARD})
-        message("Using PICO_BOARD from environment ('${PICO_BOARD}')")
+if (NOT DEFINED BOARD)
+    if (DEFINED ENV{BOARD})
+        set(BOARD $ENV{BOARD})
+        message("Using BOARD from environment ('${BOARD}')")
     else ()
-        set(PICO_BOARD "pico")
-        message("Using default PICO_BOARD ('${PICO_BOARD}')")
+        message(FATAL_ERROR "BOARD is not defined.")
     endif ()
+endif ()
+
+# Cmake kconfig
+include(${CMAKE_MODULE_PATH}/cmake_kconfig.cmake)
+
+if (NOT DEFINED CONFIG_PICO_BOARD)
+    message (FATAL_ERROR "PICO_BOARD is not defined.")
+else()
+    set (PICO_BOARD ${CONFIG_PICO_BOARD})
 endif ()
 
 # Pull in FreeRTOS (must be before project)

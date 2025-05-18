@@ -1,0 +1,15 @@
+# Driver configuration options
+
+# Copyright (C) 2025 2025 Auxspace e.V.
+# SPDX-License-Identifier: MIT
+
+menu "drivers"
+
+config MMC
+    bool "Aurora MMC"
+    help
+        Enable the Aurora MMC driver
+
+source "src/drivers/mmc/Kconfig"
+
+endmenu

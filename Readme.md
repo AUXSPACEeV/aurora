@@ -79,7 +79,10 @@ Building AURORA works with the `run.sh` script in this git repositories
 root directory:
 
 ```bash
-./run.sh [OPTIONS] build
+./run.sh {--board BOARD} [OPTIONS] build
+
+# E.g. for the sensor board (pico2_w based)
+./run.sh --board sensor_board build
 ```
 
 <details> <summary> <b>Build AURORA without the wrapper</b> (<i>click</i> to open) </summary>
@@ -95,7 +98,7 @@ environment variables and make sure they are visible to <b>CMake</b>:
 # env (optional)
 export PICO_SDK_PATH="${PATH_TO_PICO_SDK}"
 export FREERTOS_KERNEL_PATH="$PATH_TO_SRC_KERNEL"
-export PICO_BOARD="pico2_w"
+export BOARD="pico2_w"
 
 # prepare build
 cmake -S . -B build
@@ -130,6 +133,8 @@ task scheduling.
 providing essential APIs and hardware support.
 * **pico-project-generator**: A project generator for setting up new
 Raspberry Pi Pico projects with ease.
+* **cmake-kconfig**: A minimal Kconfig cmake integration
+(Adapted from Zephyr RTOS).
 
 Thank you to all the contributors and maintainers of these projects!
 

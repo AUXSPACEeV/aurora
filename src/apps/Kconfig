@@ -1,0 +1,19 @@
+# App configuration options
+
+# Copyright (C) 2025 2025 Auxspace e.V.
+# SPDX-License-Identifier: MIT
+
+choice APPLICATION
+    bool "Aurora Application"
+    default SENSOR_BOARD
+
+config SENSOR_BOARD
+    bool "Sensor Board"
+    help
+        Aurora sensor board application, featuring telemetry and other
+        sensor-board-specific features.
+
+config APP_NONE
+    bool "NONE"
+
+endchoice

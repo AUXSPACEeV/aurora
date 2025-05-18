@@ -1,0 +1,18 @@
+# Common configuration options
+
+# Copyright (C) 2025 2025 Auxspace e.V.
+# SPDX-License-Identifier: MIT
+
+menu "logging"
+
+config LOG_LEVEL_DEBUG
+    bool "enable debug logging"
+    help
+        Enable debug logging
+
+config LOG_TRACING
+    bool "enable debug tracing"
+    help
+        Enable trace logs
+
+endmenu
