@@ -13,11 +13,11 @@
 #include "queue.h"
 
 #include <stdio.h>
-#include <generated/autoconf.h>
 
 #include "pico/stdlib.h"
 #include "hardware/watchdog.h"
 
+#include <aurora/config.h>
 #include <aurora/log.h>
 #include <aurora/task/watchdog_service.h>
 
@@ -43,10 +43,12 @@ static TaskHandle_t wdt_task_handle = NULL;
  */
 static void x_watchdog_service_task(void* args)
 {
+    log_trace("%s()\n", __FUNCTION__);
     /* Service the WDT every 5 seconds */
     const TickType_t xDelay = (CONFIG_WDT_CNTR_MS / 2) / portTICK_PERIOD_MS;
 
     for (;; ) {
+        log_trace("watchdog_update()\n");
         watchdog_update();
         vTaskDelay(xDelay);
     }

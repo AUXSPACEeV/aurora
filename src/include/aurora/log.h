@@ -7,13 +7,14 @@
  */
 #pragma once
 
-#include <generated/autoconf.h>
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include "pico/stdlib.h"
 #include "pico/time.h"
 
+#include <aurora/config.h>
 
 typedef enum log_level {
     LOG_TRACE,
@@ -54,7 +55,7 @@ void hexdump(const void *data, size_t size);
  */
 #define CURRENT_TIME()   ({ uint64_t t = to_us_since_boot(get_absolute_time()); char buffer[26]; snprintf(buffer, sizeof(buffer), "%lld", t); buffer; })
 
-#ifdef CONFIG_LOG_TRACING
+#if IS_ENABLED(CONFIG_LOG_TRACING)
 /**
  * @brief Log a message with level "trace"
  * 
@@ -67,7 +68,7 @@ void hexdump(const void *data, size_t size);
 #endif /* CONFIG_LOG_TRACING */
 
 
-#ifdef CONFIG_LOG_LEVEL_DEBUG
+#if IS_ENABLED(CONFIG_LOG_LEVEL_DEBUG)
 /**
  * @brief Log a message with level "debug"
  * 

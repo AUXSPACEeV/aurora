@@ -111,11 +111,13 @@ static void x_main_task(void* args)
 
     vTaskDelay(xDelay);
 
-    log_info("Welcome to AURORA!\n");
+    printf("\r\n\r\n");
+    log_info("Welcome to AURORA!");
+    log_info("==================");
 
     ret = aurora_hwinit();
     if (ret != 0) {
-        log_error("App specific hardware init failed: %d\n", ret);
+        log_error("App specific hardware init failed: %d", ret);
         return;
     }
 

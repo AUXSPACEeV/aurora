@@ -115,6 +115,15 @@ struct mmc_dev {
 };
 
 /**
+ * @brief Get the string representation of the MMC type
+ *
+ * @param type: The MMC type
+ *
+ * @return The string representation of the MMC type
+ */
+const char *mmc_type_to_str(mmc_type_t type);
+
+/**
  * @brief MMC driver functions
  *
  * @param probe: Probe function to initialize the device
@@ -142,7 +151,7 @@ struct mmc_ops {
      * @param len: block count
      * @return: Error code on failure
      */
-    int (*blk_read)(struct mmc_dev *dev, uint64_t blk, uint8_t *buf, const uint64_t len);
+    int (*blk_read)(struct mmc_dev *dev, uint32_t blk, uint8_t *buf, const uint32_t len);
     
     /**
      * @brief Function to write blocks of data
@@ -154,7 +163,7 @@ struct mmc_ops {
      * @return: Error code on failure
      */
     int (*blk_write)
-        (struct mmc_dev *dev, uint64_t blk, const uint8_t *buf, const uint64_t len);
+        (struct mmc_dev *dev, uint32_t blk, const uint8_t *buf, const uint32_t len);
     
     /**
      * @brief Function to erase a block of data
@@ -163,7 +172,7 @@ struct mmc_ops {
      * @param blk: block to erase
      * @return: Error code on failure
      */
-    int (*blk_erase)(struct mmc_dev *dev, uint64_t blk);
+    int (*blk_erase)(struct mmc_dev *dev, uint32_t blk);
 
     /**
      * @brief Function to generate device information
@@ -179,7 +188,7 @@ struct mmc_ops {
      * @param dev: mmc device to read from
      * @return: Error code on failure
      */
-    uint64_t (*n_sectors)(struct mmc_dev *dev);
+    uint32_t (*n_sectors)(struct mmc_dev *dev);
 };
 
 /**

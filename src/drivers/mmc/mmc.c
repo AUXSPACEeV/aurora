@@ -62,4 +62,14 @@ mmc_response_t mmc_cmd_get_resp_type(uint8_t cmd)
     }
 }
 
+/*----------------------------------------------------------------------------*/
+
+const char *mmc_type_to_str(mmc_type_t type) {
+    switch (type) {
+        case SD_CARD_TYPE_SD1:  return "SD1";
+        case SD_CARD_TYPE_SD2:  return "SD2";
+        case SD_CARD_TYPE_SDHC: return "SDHC";
+    }
+}
+
 /* [] END OF FILE */
