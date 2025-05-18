@@ -7,11 +7,13 @@
  */
 #pragma once
 
+#include <generated/autoconf.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "pico/stdlib.h"
 #include "pico/time.h"
+
 
 typedef enum log_level {
     LOG_TRACE,

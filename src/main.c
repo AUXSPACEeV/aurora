@@ -1,6 +1,6 @@
 /**
  * AURORA - AUxspace ROcket opeRAting System
- * Copyright (C) 2025 2025 Auxspace e.V.
+ * Copyright (C) 2025 Auxspace e.V.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal

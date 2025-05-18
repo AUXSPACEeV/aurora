@@ -1,5 +1,5 @@
 if (NOT DEFINED BOARD_SRC_PATH)
-    message(FATAL_ERROR "Board '${PICO_BOARD}' not supported.")
+    message(FATAL_ERROR "Board '${BOARD}' not supported.")
 endif ()
 
 # Add the standard include files to the build
@@ -7,6 +7,7 @@ set(AURORA_INCLUDES
         ${FREERTOS_KERNEL_PATH}/Common/include
         ${BOARD_SRC_PATH}/include
         ${AURORA_SRC_PATH}/include
+        ${CMAKE_BINARY_DIR}/kconfig/include
         )
 
 add_subdirectory(common)

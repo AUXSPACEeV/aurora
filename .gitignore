@@ -1,2 +1,4 @@
 build
 *.env
+.config
+**__pycache__**

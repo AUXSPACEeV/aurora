@@ -1,13 +1,12 @@
 # Aurora Drivers
 
-add_library(aurora_drivers
+set (AURORA_INCLUDES ${AURORA_INCLUDES})
+
+set (AURORA_DRV_SOURCES
         spi.c
         )
 
-add_subdirectory(mmc)
-add_subdirectory(misc)
-
-target_link_libraries(aurora_drivers
+set(AURORA_DRV_LIBS
         pico_stdlib
         pico_binary_info
         pico_malloc
@@ -15,12 +14,27 @@ target_link_libraries(aurora_drivers
         hardware_dma
         hardware_irq
         hardware_gpio
+)
+
+if(CONFIG_MMC)
+    list(APPEND AURORA_DRV_LIBS
         hardware_spi
         aurora_mmc
         aurora_misc
         )
+endif()
+
+add_library(aurora_drivers
+        ${AURORA_DRV_SOURCES}
+        )
+
+add_subdirectory(mmc)
+add_subdirectory(misc)
+
+target_link_libraries(aurora_drivers
+        ${AURORA_DRV_LIBS}
+        )
 
 target_include_directories(aurora_drivers PRIVATE
-        ${AURORA_SRC_PATH}/include
-        ${BOARD_SRC_PATH}/include
+        ${AURORA_INCLUDES}
         )

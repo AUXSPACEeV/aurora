@@ -30,11 +30,9 @@ function build_picotool() {
   make install
 }
 
-function build_app() {
+function setup_builddir() {
   set -e
-  local AURORA_BUILD_OUT="${BUILDER_APPLICATION}/build/src"
-
-  echo "[debug]: Building AURORA for platform \"$PICO_BOARD\""
+  echo "[debug]: Setting up builddir for platform \"$BOARD\""
 
   # compile picotool
   test -x ~/.local/bin/picotool || build_picotool
@@ -43,6 +41,15 @@ function build_app() {
   echo "Running cmake ..."
   cd "${BUILDER_APPLICATION}"
   cmake -S . -B build
+}
+
+function build_app() {
+  set -e
+  local AURORA_BUILD_OUT="${BUILDER_APPLICATION}/build/src"
+
+  echo "[debug]: Building AURORA for platform \"$BOARD\""
+
+  setup_builddir
 
   # compile and link project
   echo "Compiling sources ..."
@@ -59,9 +66,22 @@ function build_app() {
 function clean_app() {
   set -e
 
+  if [ ! -d "${BUILDER_APPLICATION}/build" ]; then
+    return
+  fi
+
   cd "${BUILDER_APPLICATION}/build"
   make clean
   echo "Build dir cleaned."
+}
+
+function menuconfig() {
+  set -e
+
+  setup_builddir
+
+  cd "${BUILDER_APPLICATION}/build"
+  make menuconfig
 }
 
 ################################################################################
@@ -88,8 +108,8 @@ fi
 
 while [ $# -gt 0 ]; do
   case $1 in
-    -b|--pico-board)
-      declare -x PICO_BOARD="$2"
+    -b|--board)
+      declare -x BOARD="$2"
       shift 2
       ;;
     build)
@@ -105,6 +125,10 @@ while [ $# -gt 0 ]; do
       exec "$BUILDER_APPLICATION/scripts/docs.sh" \
         --src-dir "$BUILDER_APPLICATION/docs" \
         $@
+      ;;
+    menuconfig)
+      COMMAND="menuconfig"
+      shift
       ;;
     shell)
       COMMAND="/bin/bash"

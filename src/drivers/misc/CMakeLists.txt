@@ -9,6 +9,5 @@ target_link_libraries(aurora_misc
         )
 
 target_include_directories(aurora_misc PRIVATE
-        ${AURORA_SRC_PATH}/include
-        ${BOARD_SRC_PATH}/include
+        ${AURORA_INCLUDES}/include
         )

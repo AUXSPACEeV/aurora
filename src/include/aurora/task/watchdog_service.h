@@ -10,9 +10,6 @@
 
 #pragma once
 
- /* WDT timeout in ms */
-#define WDT_CNTR_MS              (10000U)
-
 /**
  * @brief Start the watchdog service task
  *
@@ -23,7 +20,8 @@ int start_wdt_task(void);
 /**
  * @brief Initialize the watchdog timer
  *
- * @note This function enables the watchdog timer with a timeout of WDT_CNTR_MS.
+ * @note This function enables the watchdog timer with a timeout of
+ * CONFIG_WDT_CNTR_MS.
  */
 void init_wdt(void);
 

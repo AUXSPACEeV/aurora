@@ -53,7 +53,8 @@ RUN apt-get install -y --no-install-recommends \
 # Other packages required in the container + development tools
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    gosu sudo openssh-client less neovim file strace git-core ca-certificates
+    gosu sudo openssh-client less neovim file strace git-core ca-certificates \
+    ninja-build
 
 # Setup the container builder user
 RUN groupadd --gid ${PGID} builder
