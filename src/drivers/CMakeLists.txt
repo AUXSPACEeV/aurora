@@ -14,11 +14,11 @@ set(AURORA_DRV_LIBS
         hardware_dma
         hardware_irq
         hardware_gpio
+        hardware_spi
 )
 
 if(CONFIG_MMC)
     list(APPEND AURORA_DRV_LIBS
-        hardware_spi
         aurora_mmc
         aurora_misc
         )
