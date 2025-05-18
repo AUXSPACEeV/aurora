@@ -84,8 +84,8 @@ struct spi_config {
 
 /**
  * @brief get total number of registered SPI drivers
- * 
- * @return 
+ *
+ * @return number of registered SPI drivers
  */
 size_t spi_get_num();
 

@@ -27,6 +27,7 @@
 #include "hardware/spi.h"
 
 #include <aurora/compiler.h>
+#include <aurora/config.h>
 #include <aurora/drivers/mmc/mmc.h>
 #include <aurora/drivers/mmc/spi_mmc.h>
 #include <aurora/list.h>
@@ -92,7 +93,7 @@ static size_t spi_mmc_resp_size(mmc_response_t resp_type);
  * @details This function sends a CMD9 command to the card to get the Card
  * Specific Data (CSD) and then extracts the number of sectors from the CSD.
  */
-static uint64_t spi_mmc_sectors(struct mmc_dev *dev);
+static uint32_t spi_mmc_sectors(struct mmc_dev *dev);
 
 /**
  * @brief Send a message via spi
@@ -188,14 +189,18 @@ static void spi_mmc_go_low_frequency(struct spi_mmc_context *ctx)
 
 /*----------------------------------------------------------------------------*/
 
+static void spi_mmc_resume_frequency(struct spi_mmc_context *ctx)
+{
+    spi_set_baudrate(ctx->spi->hw_spi, ctx->spi->baud_rate);
+}
+
+/*----------------------------------------------------------------------------*/
+
 static int spi_mmc_transfer(struct spi_mmc_context *ctx, const uint8_t *tx,
                             uint8_t* rx, size_t length)
 {
-    log_trace("%s(0x%016llx, 0x%016llx, 0x%016llx)\r\n", __FUNCTION__,
-              (uintptr_t)tx, (uintptr_t)rx, length);
-
     int len;
-    int ret;
+    int ret = 0;
 
     // assert(512 == length || 1 == length);
     assert(tx || rx);
@@ -207,7 +212,10 @@ static int spi_mmc_transfer(struct spi_mmc_context *ctx, const uint8_t *tx,
         ret = spi_transfer_dma(ctx->spi, tx, rx, length);
     } else {
         len = spi_write_read_blocking(ctx->spi->hw_spi, tx, rx, length);
-        ret = len == length ? 0 : -EIO;
+        if (len != length) {
+            log_error("SPI transfer failed: %d != %d\r\n", len, length);
+            ret = -EIO;
+        }
     }
 
     cs_deselect(ctx->cs_pin);
@@ -251,6 +259,8 @@ static int spi_mmc_wait_ready(struct spi_mmc_context *ctx)
 static uint8_t spi_mmc_send_cmd(struct spi_mmc_context *ctx,
                                 struct spi_mmc_message msg, uint8_t *rx)
 {
+    log_trace("%s({.cmd = 0x%02lx, .arg = 0x%08lx, .crc7 = 0x%02lx}, 0x%08lx)",
+              __FUNCTION__, msg.cmd, msg.arg, msg.crc7, (uintptr_t)rx);
     const size_t packet_size = 6;
     const uint max_retries = 0x10;
 
@@ -266,7 +276,7 @@ static uint8_t spi_mmc_send_cmd(struct spi_mmc_context *ctx,
     cmdPacket[3] = (msg.arg >> 8);
     cmdPacket[4] = (msg.arg >> 0);
 
-#if CONFIG_MMC_CRC_ENABLED
+#if IS_ENABLED(CONFIG_MMC_CRC_ENABLED)
     cmdPacket[5] = (crc7(cmdPacket, 5) << 1) | msg.stop;
 #else
     cmdPacket[5] = (msg.crc7 << 1) | msg.stop;
@@ -278,13 +288,13 @@ static uint8_t spi_mmc_send_cmd(struct spi_mmc_context *ctx,
 
     // The received byte immediataly following CMD12 is a stuff byte,
     // it should be discarded before receive the response of the CMD12.
-    // if (MMC_CMD_STOP_TRANSMISSION == msg.cmd) {
-    //     spi_mmc_transfer(ctx, &tx, &response, 1);
-    // }
+    if (MMC_CMD_STOP_TRANSMISSION == msg.cmd) {
+        spi_mmc_transfer(ctx, &tx, &response, 1);
+    }
 
     // Loop for response: Response is sent back within command response time
     // (NCR), 0 to 8 bytes for SDC
-    memset(rx, 0xff, spi_mmc_resp_size(resp_size));
+    memset(rx, 0xff, resp_size);
     for (int i = 0; i < max_retries; i++) {
         spi_mmc_transfer(ctx, &tx, &response, 1);
         // Got the response
@@ -298,6 +308,7 @@ static uint8_t spi_mmc_send_cmd(struct spi_mmc_context *ctx,
         }
     }
     // R1 part of response
+    log_debug("CMD 0x%02x response: %02x\n", msg.cmd, response);
     return response;
 }
 
@@ -306,6 +317,8 @@ static uint8_t spi_mmc_send_cmd(struct spi_mmc_context *ctx,
 static int spi_mmc_send_msg(struct spi_mmc_context *ctx,
                             const struct spi_mmc_message msg, uint8_t* resp)
 {
+    log_trace("%s({.cmd = 0x%02lx, .arg = 0x%08lx, .crc7 = 0x%02lx}, 0x%08lx)",
+              __FUNCTION__, msg.cmd, msg.arg, msg.crc7, (uintptr_t)resp);
     /**
      * @note: no nullptr error handling done here for better performance.
      * Make sure values are valid before calling send_msg!
@@ -319,7 +332,7 @@ static int spi_mmc_send_msg(struct spi_mmc_context *ctx,
 
 /*----------------------------------------------------------------------------*/
 
-static uint64_t spi_mmc_sectors(struct mmc_dev *dev)
+static uint32_t spi_mmc_sectors(struct mmc_dev *dev)
 {
     log_trace("%s()\r\n", __FUNCTION__);
     // CMD9, Response R2 (R1 byte + 16-byte block read)
@@ -334,7 +347,7 @@ static uint64_t spi_mmc_sectors(struct mmc_dev *dev)
     uint32_t c_size, c_size_mult, read_bl_len;
     uint32_t block_len, mult, blocknr;
     uint32_t hc_c_size;
-    uint64_t blocks = 0, capacity = 0;
+    uint32_t blocks = 0, capacity = 0;
     uint8_t csd[16] = {0};
     uint8_t *resp = malloc(resp_size);
     size_t i;
@@ -376,7 +389,7 @@ static uint64_t spi_mmc_sectors(struct mmc_dev *dev)
             mult = 1 << (c_size_mult +
                          2);         // MULT = 2^C_SIZE_MULT+2 (C_SIZE_MULT < 8)
             blocknr = (c_size + 1) * mult;  // BLOCKNR = (C_SIZE+1) * MULT
-            capacity = (uint64_t)blocknr *
+            capacity = (uint32_t)blocknr *
                        block_len;  // memory capacity = BLOCKNR * BLOCK_LEN
             blocks = capacity / dev->blksize;
             log_debug("Standard Capacity: c_size: %lu\r\n", c_size);
@@ -428,9 +441,9 @@ static int spi_mmc_wait_token(struct spi_mmc_context *ctx, uint8_t token) {
 /*----------------------------------------------------------------------------*/
 
 static int __spi_mmc_read_block(struct mmc_dev *dev, uint8_t *buf,
-                                const uint64_t len)
+                                const uint32_t len)
 {
-    log_trace("%s(0x%016llx, 0x%016llx)\r\n", __FUNCTION__, (uintptr_t)buf,
+    log_trace("%s(0x%08lx, 0x%016llx)\r\n", __FUNCTION__, (uintptr_t)buf,
               len);
     const uint8_t dummy = 0xff;
     uint8_t resp = 0xff;
@@ -456,7 +469,7 @@ static int __spi_mmc_read_block(struct mmc_dev *dev, uint8_t *buf,
     ret = spi_mmc_transfer(ctx, &dummy, &resp, 1);
     crc |= resp;
 
-#if CONFIG_MMC_CRC_ENABLED
+#if IS_ENABLED(CONFIG_MMC_CRC_ENABLED)
     uint32_t crc_result;
     // Compute and verify checksum
     crc_result = crc16((void *)buf, len);
@@ -473,12 +486,12 @@ static int __spi_mmc_read_block(struct mmc_dev *dev, uint8_t *buf,
 
 /*----------------------------------------------------------------------------*/
 
-static int spi_mmc_read_blocks(struct mmc_dev *dev, uint64_t blk, uint8_t *buf,
-                               const uint64_t len)
+static int spi_mmc_read_blocks(struct mmc_dev *dev, uint32_t blk, uint8_t *buf,
+                               const uint32_t len)
 {
-    log_trace("%s(0x%016llx, 0x%016llx, 0x%016llx)\r\n", __FUNCTION__, blk,
+    log_trace("%s(0x%016llx, 0x%08lx, 0x%016llx)\r\n", __FUNCTION__, blk,
               (uintptr_t)buf, len);
-    uint32_t blockCnt = len;
+    uint32_t blockCnt = (uint32_t)len;  // SPI cmd can only handle 32 bit
     struct spi_mmc_context *ctx = (struct spi_mmc_context *)dev->priv;
     struct spi_mmc_message read_cmd = SPI_MMC_CMD(
         len > 1 ? MMC_CMD_READ_MULTIPLE_BLOCK : MMC_CMD_READ_SINGLE_BLOCK, 0);
@@ -503,7 +516,7 @@ static int spi_mmc_read_blocks(struct mmc_dev *dev, uint64_t blk, uint8_t *buf,
     } else {
         read_cmd.arg = blk * dev->blksize;
     }
-    // Write command ro receive data
+    // Write command to receive data
     ret = spi_mmc_send_cmd(ctx, read_cmd, &response);
 
     if (response & R1_SPI_ERROR) {
@@ -653,7 +666,7 @@ static int spi_mmc_init(struct mmc_dev *dev)
 
     // Wait for at least 74 cycles with MOSI and CS asserted
     memset(&spi_init_message, 0xff, sizeof(spi_init_message));
-    for (i = 0; i < (74 / (sizeof(spi_init_message) * 8) + 1); i++) {
+    for (i = 0; i < ((74 / (sizeof(spi_init_message) * 8)) + 1); i++) {
         spi_mmc_send_msg(ctx, spi_init_message, &resp);
     }
 
@@ -675,10 +688,10 @@ static int spi_mmc_init(struct mmc_dev *dev)
     ret = spi_mmc_voltage_select(dev);
     if (ret != 0) {
         log_error("SPI MMC version check failed.\n");
-        goto error;
     }
+    log_debug("SPI MMC version/type: %s\n", mmc_type_to_str(dev->version));
 
-error:
+    spi_mmc_resume_frequency(ctx);
     return ret;
 }
 

@@ -1,7 +1,5 @@
 # Aurora Application Sources
 
-set (AURORA_APP_SOURCES none_app.c)
-
 set (AURORA_APP_LIBS
         FreeRTOS-Kernel
         pico_stdlib
@@ -11,7 +9,7 @@ set (AURORA_APP_LIBS
 )
 
 if (CONFIG_SENSOR_BOARD)
-        list(APPEND AURORA_APP_SOURCES
+        set(AURORA_APP_SOURCES
                 sensor_board.c
                 )
 
@@ -22,6 +20,10 @@ if (CONFIG_SENSOR_BOARD)
                 hardware_spi
                 aurora_mmc
                 aurora_misc
+                )
+else ()
+        set (AURORA_APP_SOURCES
+                none_app.c
                 )
 endif()
 

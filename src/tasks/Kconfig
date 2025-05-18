@@ -7,7 +7,7 @@ menu "tasks"
 
 config WDT_CNTR_MS
     int "Watchdog timeout (ms)"
-    default 1000
+    default 5000
     help
         Watchdog timeout in milliseconds.
 
