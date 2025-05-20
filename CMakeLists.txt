@@ -26,6 +26,8 @@ if (NOT DEFINED BOARD)
     endif ()
 endif ()
 
+include(${CMAKE_MODULE_PATH}/compiler.cmake)
+
 # Cmake kconfig
 include(${CMAKE_MODULE_PATH}/cmake_kconfig.cmake)
 
@@ -66,6 +68,6 @@ project(auxspace_aurora
 
 # Initialise the Raspberry Pi Pico SDK before diving into subdirectories
 pico_sdk_init()
-  
+
 # The compiled library code is here
 add_subdirectory(src)

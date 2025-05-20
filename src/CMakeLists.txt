@@ -18,7 +18,8 @@ add_subdirectory(apps)
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(aurora main.c)
-target_compile_features(aurora PRIVATE cxx_std_17)
+
+target_compile_features(aurora PRIVATE cxx_std_20)
 
 target_include_directories(aurora PUBLIC
         ${AURORA_INCLUDES}
@@ -51,3 +52,5 @@ pico_enable_stdio_uart(aurora 1)
 pico_enable_stdio_usb(aurora 1)
 
 pico_add_extra_outputs(aurora)
+
+enable_strict_warnings(aurora)
