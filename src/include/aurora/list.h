@@ -25,8 +25,8 @@
 # define POISON_POINTER_DELTA 0
 #endif
 
-#define LIST_POISON1  ((void *) 0x100 + POISON_POINTER_DELTA)
-#define LIST_POISON2  ((void *) 0x122 + POISON_POINTER_DELTA)
+#define LIST_POISON1  ((void *) (0x100 + POISON_POINTER_DELTA))
+#define LIST_POISON2  ((void *) (0x122 + POISON_POINTER_DELTA))
 
 /*
  * Use __READ_ONCE() instead of READ_ONCE() if you do not require any

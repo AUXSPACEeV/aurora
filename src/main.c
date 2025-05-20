@@ -103,7 +103,7 @@ static void prv_setup_early_tasks(void)
 
 /*----------------------------------------------------------------------------*/
 
-static void x_main_task(void* args)
+static void x_main_task(void __attribute__((unused)) *args)
 {
     /* Wait 5 seconds */
     int ret;

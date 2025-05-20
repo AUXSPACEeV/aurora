@@ -17,9 +17,9 @@
 #include "pico/malloc.h"
 
 #include <aurora/app.h>
-#include <aurora/log.h>
-#include <aurora/spi.h>
+#include <aurora/drivers/spi.h>
 #include <aurora/drivers/mmc/spi_mmc.h>
+#include <aurora/log.h>
 
 static struct spi_config *spi;
 static struct mmc_drv *mmc;
@@ -123,7 +123,7 @@ void aurora_main(void)
     for(;;) {
         vTaskDelay(xDelay);
         if (mmc->ops->n_sectors)
-            log_info("Sectors on card: %ld\n", mmc->ops->n_sectors(mmc->dev));
+            log_info("Sectors on card: %llu\n", mmc->ops->n_sectors(mmc->dev));
         if (mmc->ops->blk_read) {
             uint8_t *data = calloc(1, mmc->dev->blksize);
             int ret = mmc->ops->blk_read(mmc->dev, 0x0, data, 1);

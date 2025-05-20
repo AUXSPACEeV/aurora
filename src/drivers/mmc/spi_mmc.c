@@ -30,9 +30,9 @@
 #include <aurora/config.h>
 #include <aurora/drivers/mmc/mmc.h>
 #include <aurora/drivers/mmc/spi_mmc.h>
+#include <aurora/drivers/spi.h>
 #include <aurora/list.h>
 #include <aurora/log.h>
-#include <aurora/spi.h>
 
 /* Prototypes */
 
@@ -71,10 +71,12 @@ static int spi_mmc_init(struct mmc_dev *dev);
  * @param msg: message to send
  * @param rx: SPI transfer receive buffer. Has to be sized so that the SPI
  * response fits
- * @return: R1 part of response
+ * @param is_acmd: true if the command is an ACMD, false otherwise
+ * @return: 0 on success, error code otherwise
  */
-static uint8_t spi_mmc_send_cmd(struct spi_mmc_context *ctx,
-                                struct spi_mmc_message msg, uint8_t *rx);
+static int spi_mmc_send_cmd(struct spi_mmc_context *ctx,
+                            struct spi_mmc_message msg, uint8_t *rx,
+                            bool is_acmd);
 
 /**
  * @brief get the sizie in bytes for an MMC response type
@@ -93,7 +95,7 @@ static size_t spi_mmc_resp_size(mmc_response_t resp_type);
  * @details This function sends a CMD9 command to the card to get the Card
  * Specific Data (CSD) and then extracts the number of sectors from the CSD.
  */
-static uint32_t spi_mmc_sectors(struct mmc_dev *dev);
+static uint64_t spi_mmc_sectors(struct mmc_dev *dev);
 
 /**
  * @brief Send a message via spi
@@ -237,7 +239,7 @@ static int spi_mmc_wait_ready(struct spi_mmc_context *ctx)
 
     for(i = 0; i < max_r; ++i) {
         ret = spi_mmc_transfer(ctx, &dummy, &resp, 1);
-        if (!(ret & R1_SPI_ERROR) && (resp != 0x00)) {
+        if (resp != 0x00) {
             break;
         }
     }
@@ -256,18 +258,36 @@ static int spi_mmc_wait_ready(struct spi_mmc_context *ctx)
 
 /*----------------------------------------------------------------------------*/
 
-static uint8_t spi_mmc_send_cmd(struct spi_mmc_context *ctx,
-                                struct spi_mmc_message msg, uint8_t *rx)
+static int spi_mmc_send_cmd(struct spi_mmc_context *ctx,
+                                struct spi_mmc_message msg, uint8_t *rx,
+                                bool is_acmd)
 {
     log_trace("%s({.cmd = 0x%02lx, .arg = 0x%08lx, .crc7 = 0x%02lx}, 0x%08lx)",
               __FUNCTION__, msg.cmd, msg.arg, msg.crc7, (uintptr_t)rx);
+
     const size_t packet_size = 6;
     const uint max_retries = 0x10;
-
-    uint8_t response = 0xff;
     const size_t resp_size = spi_mmc_resp_size(mmc_cmd_get_resp_type(msg.cmd));
-    uint8_t tx = 0xff;
+    const struct spi_mmc_message cmd55 = SPI_MMC_CMD(MMC_CMD_APP_CMD, 0);
+
+    int ret = 0;
+    uint8_t response = 0xff;
+    uint8_t dummy = 0xff;
     char cmdPacket[packet_size];
+
+    if (is_acmd) {
+        ret = spi_mmc_send_cmd(ctx, cmd55, &response, false);
+        if (ret) {
+            log_error("CMD55 failed: %02x\n", response);
+            return -EIO;
+        }
+        response = 0xff;
+
+        if (spi_mmc_wait_ready(ctx)) {
+            log_error("Waiting for card to be ready failed.\n");
+            return R1_SPI_ERROR;
+        }
+    }
 
     // Prepare the command packet
     cmdPacket[0] = (msg.start << 6) | msg.cmd;
@@ -289,27 +309,27 @@ static uint8_t spi_mmc_send_cmd(struct spi_mmc_context *ctx,
     // The received byte immediataly following CMD12 is a stuff byte,
     // it should be discarded before receive the response of the CMD12.
     if (MMC_CMD_STOP_TRANSMISSION == msg.cmd) {
-        spi_mmc_transfer(ctx, &tx, &response, 1);
+        spi_mmc_transfer(ctx, &dummy, &response, 1);
     }
 
     // Loop for response: Response is sent back within command response time
     // (NCR), 0 to 8 bytes for SDC
     memset(rx, 0xff, resp_size);
     for (int i = 0; i < max_retries; i++) {
-        spi_mmc_transfer(ctx, &tx, &response, 1);
+        spi_mmc_transfer(ctx, &dummy, &response, 1);
         // Got the response
         if (!(response & R1_SPI_ERROR)) {
             // parse the rest of the response
             rx[0] = response;
             for(int j = 1; j < resp_size; j++) {
-                spi_mmc_transfer(ctx, &tx, &rx[j], 1);
+                spi_mmc_transfer(ctx, &dummy, &rx[j], 1);
             }
             break;
         }
     }
     // R1 part of response
-    log_debug("CMD 0x%02x response: %02x\n", msg.cmd, response);
-    return response;
+    log_debug("%sCMD%u: %02x\n", is_acmd ? "A" : "", msg.cmd, response);
+    return (response & R1_SPI_ERROR) ? -EIO : 0;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -319,20 +339,13 @@ static int spi_mmc_send_msg(struct spi_mmc_context *ctx,
 {
     log_trace("%s({.cmd = 0x%02lx, .arg = 0x%08lx, .crc7 = 0x%02lx}, 0x%08lx)",
               __FUNCTION__, msg.cmd, msg.arg, msg.crc7, (uintptr_t)resp);
-    /**
-     * @note: no nullptr error handling done here for better performance.
-     * Make sure values are valid before calling send_msg!
-     */
-    uint8_t response;
 
-    response = spi_mmc_send_cmd(ctx, msg, resp);
-
-    return response & R1_SPI_ERROR;
+    return spi_mmc_send_cmd(ctx, msg, resp, false);
 }
 
 /*----------------------------------------------------------------------------*/
 
-static uint32_t spi_mmc_sectors(struct mmc_dev *dev)
+static uint64_t spi_mmc_sectors(struct mmc_dev *dev)
 {
     log_trace("%s()\r\n", __FUNCTION__);
     // CMD9, Response R2 (R1 byte + 16-byte block read)
@@ -347,7 +360,7 @@ static uint32_t spi_mmc_sectors(struct mmc_dev *dev)
     uint32_t c_size, c_size_mult, read_bl_len;
     uint32_t block_len, mult, blocknr;
     uint32_t hc_c_size;
-    uint32_t blocks = 0, capacity = 0;
+    uint64_t blocks = 0, capacity = 0;
     uint8_t csd[16] = {0};
     uint8_t *resp = malloc(resp_size);
     size_t i;
@@ -355,13 +368,13 @@ static uint32_t spi_mmc_sectors(struct mmc_dev *dev)
     memset(resp, 0xff, resp_size);
 
     /* Send CMD 9 to request 16-byte block of CSD register data */
-    ret = spi_mmc_send_msg(ctx, cmd9, resp);
+    ret = spi_mmc_send_cmd(ctx, cmd9, resp, false);
     /* resp (R2) has to be valid before reading 16-byte block */
     if (ret) {
         log_error("CMD9 failed: %d\n", ret);
         log_debug("Full CMD9 response:\n", resp[0]);
         for (i = 0; i < resp_size; i++)
-        log_debug("%d: %02x\n", i, resp[i]);
+        log_debug("%u: %02x\n", i, resp[i]);
         goto free_response;
     }
 
@@ -389,22 +402,23 @@ static uint32_t spi_mmc_sectors(struct mmc_dev *dev)
             mult = 1 << (c_size_mult +
                          2);         // MULT = 2^C_SIZE_MULT+2 (C_SIZE_MULT < 8)
             blocknr = (c_size + 1) * mult;  // BLOCKNR = (C_SIZE+1) * MULT
-            capacity = (uint32_t)blocknr *
+            capacity = (uint64_t)blocknr *
                        block_len;  // memory capacity = BLOCKNR * BLOCK_LEN
-            blocks = capacity / dev->blksize;
+            blocks = capacity / (uint64_t)dev->blksize;
             log_debug("Standard Capacity: c_size: %lu\r\n", c_size);
             log_debug("Sectors: 0x%llx : %llu\r\n", blocks, blocks);
             log_debug("Capacity: 0x%llx : %llu MB\r\n", capacity,
-                       (capacity / (1024U * 1024U)));
+                       (uint64_t)(capacity / (1024U * 1024U)));
             break;
         case 1:
             hc_c_size =
                 ext_bits(csd, 69, 48);       // device size : C_SIZE : [69:48]
-            blocks = (hc_c_size + 1) << 10;  // block count = C_SIZE+1) * 1K
+            blocks = ((uint64_t)hc_c_size + 1) << 10;
+                                             // block count = C_SIZE+1) * 1K
                                              // byte (512B is block size)
             log_debug("SDHC/SDXC Card: hc_c_size: %lu\r\n", hc_c_size);
-            log_debug("Sectors: %8llu\r\n", blocks);
-            log_debug("Capacity: %8llu MB\r\n", (blocks / (2048U)));
+            log_debug("Sectors: %16llu\r\n", blocks);
+            log_debug("Capacity: %16llu MB\r\n", (uint64_t)(blocks / (2048U)));
             break;
 
         default:
@@ -497,7 +511,7 @@ static int spi_mmc_read_blocks(struct mmc_dev *dev, uint32_t blk, uint8_t *buf,
         len > 1 ? MMC_CMD_READ_MULTIPLE_BLOCK : MMC_CMD_READ_SINGLE_BLOCK, 0);
     struct spi_mmc_message cmd12 = SPI_MMC_CMD(MMC_CMD_STOP_TRANSMISSION, 0);
     uint8_t response = 0xff;
-    uint8_t __attribute__((unused)) ret;
+    int ret;
 
     if (blk + blockCnt > dev->num_blocks) {
         log_error("Cannot read %ld blocks from %ld: out of bounds (%ld)\n",
@@ -511,15 +525,14 @@ static int spi_mmc_read_blocks(struct mmc_dev *dev, uint32_t blk, uint8_t *buf,
 
     // SDSC Card (CCS=0) uses byte unit address
     // SDHC and SDXC Cards (CCS=1) use block unit address (512 Bytes unit)
-    if (dev->version == SD_CARD_TYPE_SD2) {
+    if (dev->version == SD_CARD_TYPE_SDHC) {
         read_cmd.arg = blk;
     } else {
         read_cmd.arg = blk * dev->blksize;
     }
     // Write command to receive data
-    ret = spi_mmc_send_cmd(ctx, read_cmd, &response);
-
-    if (response & R1_SPI_ERROR) {
+    ret = spi_mmc_send_cmd(ctx, read_cmd, &response, false);
+    if (ret) {
         log_error("Got error while reading blocks from SD Card: %02x\n", response);
         return -EIO;
     }
@@ -535,9 +548,9 @@ static int spi_mmc_read_blocks(struct mmc_dev *dev, uint32_t blk, uint8_t *buf,
     }
     // Send CMD12(0x00000000) to stop the transmission for multi-block transfer
     if (len > 1) {
-        ret = spi_mmc_send_cmd(ctx, cmd12, &response);
+        ret = spi_mmc_send_cmd(ctx, cmd12, &response, false);
     }
-    return rd_status ? rd_status : (response & R1_SPI_ERROR ? -EIO : 0);
+    return rd_status ? rd_status : ret;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -581,17 +594,16 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
     uint num_retries = 0;
     uint8_t response = 0xff;
     uint8_t *cmd8_resp;
-    int ret;
+    uint8_t ret;
     struct spi_mmc_context *ctx = (struct spi_mmc_context *)dev->priv;
     struct spi_mmc_message acmd41 = SPI_MMC_CMD(SD_CMD_APP_SEND_OP_COND, 0);
     const struct spi_mmc_message cmd8 = SPI_MMC_CMD_CRC(
                                             MMC_CMD_SEND_EXT_CSD, 0x1AA, 0x43);
-    const struct spi_mmc_message cmd55 = SPI_MMC_CMD(MMC_CMD_APP_CMD, 0);
     const struct spi_mmc_message cmd58 = SPI_MMC_CMD(MMC_CMD_SPI_READ_OCR, 0);
 
     cmd8_resp = malloc(spi_mmc_resp_size(mmc_cmd_get_resp_type(cmd8.cmd)));
-    ret = spi_mmc_send_msg(ctx, cmd8, cmd8_resp);
-    if (cmd8_resp[0] & R1_SPI_ILLEGAL_COMMAND) {
+    ret = spi_mmc_send_cmd(ctx, cmd8, cmd8_resp, false);
+    if (ret || cmd8_resp[0] & R1_SPI_ILLEGAL_COMMAND) {
         dev->version = SD_CARD_TYPE_SD1;
     // only need last byte of r7 response (echo-back)
     } else if(cmd8_resp[4] & 0xAA) {
@@ -607,20 +619,7 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
     response = 0xff;
     while(response == 0xff) {
         response = 0xff;
-        ret = spi_mmc_send_msg(ctx, cmd55, &response);
-        if (ret) {
-            log_error("Sending CMD55 failed.\n");
-            return -EIO;
-        }
-
-        response = 0xff;
-        ret = spi_mmc_wait_ready(ctx);
-        if (ret) {
-            log_error("Waiting for card to be ready failed.\n");
-            continue;
-        }
-
-        ret = spi_mmc_send_msg(ctx, acmd41, &response);
+        ret = spi_mmc_send_cmd(ctx, acmd41, &response, true);
         if (ret) {
             log_error("Sending ACMD41 failed.\n");
             return -EIO;
@@ -628,16 +627,16 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev)
             log_error("Sending ACMD41 timed out.\n");
             return -ETIMEDOUT;
         }
+        sleep_us(10);
     }
 
     // if SD2 read OCR register to check for SDHC card
     if (dev->version == SD_CARD_TYPE_SD2) {
-        response = 0xff;
-        if (spi_mmc_send_msg(ctx, cmd58, &response)) {
+        if (spi_mmc_send_msg(ctx, cmd58, cmd8_resp)) {
             log_error("Sending CMD58 failed.\n");
             return -EIO;
         }
-        if (!(response & R1_SPI_ERROR) && response & 0XC0) {
+        if (!(cmd8_resp[0] & R1_SPI_ERROR) && cmd8_resp[0] & 0XC0) {
             dev->version = SD_CARD_TYPE_SDHC;
         }
         // discard rest of ocr - contains allowed voltage range

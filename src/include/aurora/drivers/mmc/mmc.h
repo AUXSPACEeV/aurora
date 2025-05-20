@@ -109,7 +109,7 @@ struct mmc_dev {
     char *name;
     mmc_type_t version;
     uint32_t blksize;
-    uint32_t num_blocks;
+    uint64_t num_blocks;
     bool initialized;
     void *priv;
 };
@@ -188,7 +188,7 @@ struct mmc_ops {
      * @param dev: mmc device to read from
      * @return: Error code on failure
      */
-    uint32_t (*n_sectors)(struct mmc_dev *dev);
+    uint64_t (*n_sectors)(struct mmc_dev *dev);
 };
 
 /**

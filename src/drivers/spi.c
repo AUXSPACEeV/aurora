@@ -12,8 +12,8 @@
 #include <errno.h>
 
 #include <aurora/compiler.h>
+#include <aurora/drivers/spi.h>
 #include <aurora/log.h>
-#include <aurora/spi.h>
 
 /* Fileprivate structs and typedefs */
 
@@ -78,7 +78,7 @@ struct spi_config *spi_get_by_num(size_t num)
     log_trace("%s(0x%016llx)\r\n", __FUNCTION__, num);
 
     struct spi_config* cfg = NULL;
-    int i;
+    size_t i = 0;
 
     assert(num < spi_get_num());
 
@@ -113,8 +113,8 @@ static void in_spi_irq_handler(const uint DMA_IRQ_num, io_rw_32 *dma_hw_ints_p)
                 *dma_hw_ints_p = 1 << state->rx_dma;  // Clear it.
                 assert(!dma_channel_is_busy(state->rx_dma));
                 assert(!sem_available(&state->sem));
-                bool ok = sem_release(&state->sem);
-                assert(ok);
+                bool __attribute__((unused)) ok = sem_release(&state->sem);
+                assert(sem_release(&state->sem));
             }
         }
     }

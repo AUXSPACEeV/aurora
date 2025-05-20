@@ -19,8 +19,8 @@
 #include "pico/types.h"
 
 #include <aurora/list.h>
-#include <aurora/spi.h>
 #include <aurora/drivers/mmc/mmc.h>
+#include <aurora/drivers/spi.h>
 
 #ifndef BIT
 #define BIT(x)  ((uint32_t)(1 << (x)))
