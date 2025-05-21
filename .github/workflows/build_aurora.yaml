@@ -44,3 +44,4 @@ jobs:
           build/aurora.elf
           build/aurora.uf2
         if-no-files-found: warn
+        retention-days: 7
