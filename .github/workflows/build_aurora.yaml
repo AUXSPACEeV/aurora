@@ -35,7 +35,7 @@ jobs:
     - name: Upload Binaries
       uses: actions/upload-artifact@v4.6.2
       # Only upload artifacts of boards, not tests (might not generate uf2)
-      if: matrix.board != test
+      if: "${{ matrix.board != 'test' }}"
       with:
         # Artifact name
         name: binaries
