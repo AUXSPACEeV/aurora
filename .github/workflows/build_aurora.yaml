@@ -16,10 +16,8 @@ jobs:
       fail-fast: false
 
       # Set up a matrix to run the following 4 configurations:
-      # 1. <Linux, Release, RPI Pico>
-      # 2. <Linux, Release, RPI Pico W>
-      # 3. <Linux, Release, RPI Pico 2>
-      # 4. <Linux, Release, RPI Pico 2 W>
+      # 1. <Linux, Release, Sensor Board (custom Auxspace hardware)>
+      # 2. <Linux, Release, Test Board (used for unit tests (TODO))>
       #
       # To add more build types (Release, Debug, RelWithDebInfo, etc.) customize the build_type list.
       matrix:
@@ -33,3 +31,16 @@ jobs:
     - name: Build
       # Build AURORA with the given configuration..
       run: AURORA_CI_BUILD=1 ./run.sh --board ${{ matrix.board }} build
+
+    - name: Upload Binaries
+      uses: actions/upload-artifact@v4.6.2
+      # Only upload artifacts of boards, not tests (might not generate uf2)
+      if: matrix.board != test
+      with:
+        # Artifact name
+        name: binaries
+        path: |
+          build/aurora.bin
+          build/aurora.elf
+          build/aurora.uf2
+        if-no-files-found: warn
