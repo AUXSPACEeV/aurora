@@ -1,0 +1,33 @@
+# Simple Job to build the AURORA Docs
+name: Build AURORA Docs
+
+on:
+  push:
+    branches: [ "main", "next" ]
+  pull_request:
+    branches: [ "main", "next" ]
+  schedule:
+  - cron: "0 2 * * *"
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Fetch Dependencies
+      # Get dependencies for Aurora docs
+      run: AURORA_CI_BUILD=1 ./run.sh docs setup  
+
+    - name: Fetch Dependencies
+      # Build HTML docs
+      run: AURORA_CI_BUILD=1 ./run.sh docs html
+
+    - name: Upload HTML
+      uses: actions/upload-artifact@v4.6.2
+      with:
+        # Artifact name
+        name: static-webpage
+        path: docs/_build/html/
+        if-no-files-found: error
+        retention-days: 1
