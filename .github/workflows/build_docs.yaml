@@ -4,22 +4,20 @@ name: Build AURORA Docs
 on:
   push:
     branches: [ "main", "next" ]
-  pull_request:
-    branches: [ "main", "next" ]
   schedule:
   - cron: "0 2 * * *"
 
 jobs:
   build-docs:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
 
     - name: Fetch Dependencies
       # Get dependencies for Aurora docs
-      run: AURORA_CI_BUILD=1 ./run.sh docs setup  
+      run: AURORA_CI_BUILD=1 ./run.sh docs setup
 
-    - name: Fetch Dependencies
+    - name: Build HTML Docs
       # Build HTML docs
       run: AURORA_CI_BUILD=1 ./run.sh docs html
 
