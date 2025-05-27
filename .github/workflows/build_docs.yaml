@@ -13,16 +13,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Fetch Dependencies
-      # Get dependencies for Aurora docs
-      run: |
-        git submodule update --init
-        cd src/sdk && git submodule update --init && cd ..
-        ./scripts/docs.sh --src-dir "./docs" setup
-
     - name: Build HTML Docs
       # Build HTML docs
-      run: ./run.sh docs html
+      run: AURORA_CI_BUILD=1 ./run.sh docs html
 
     - name: Upload HTML
       uses: actions/upload-artifact@v4.6.2

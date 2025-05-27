@@ -63,6 +63,33 @@ function build_app() {
   fi
 }
 
+function aurora_docs_setup() {
+  set -e
+
+  local tmp_dir="$(pwd)"
+
+  cd "$BUILDER_APPLICATION/docs"
+
+  if [ ! -d ".venv" ]; then
+    python3 -m venv .venv
+  fi
+
+  source .venv/bin/activate
+  python3 -m pip install -r requirements.txt
+
+  cd "$tmp_dir"
+}
+
+function aurora_docs() {
+  if [ "${AURORA_CI_BUILD}" = "1" ]; then
+    aurora_docs_setup
+  fi
+
+  exec "$BUILDER_APPLICATION/scripts/docs.sh" \
+    --src-dir "$BUILDER_APPLICATION/docs" \
+    $@
+}
+
 function aurora_clean() {
   set -e
 
@@ -141,9 +168,8 @@ while [ $# -gt 0 ]; do
       ;;
     docs)
       shift
-      exec "$BUILDER_APPLICATION/scripts/docs.sh" \
-        --src-dir "$BUILDER_APPLICATION/docs" \
-        $@
+      aurora_docs $@
+      exit
       ;;
     menuconfig)
       COMMAND="menuconfig"
