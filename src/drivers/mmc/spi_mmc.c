@@ -3,7 +3,7 @@
  * @brief Sources for MMC/SD I/O via SPI
  * @note This file contains the source code for MMC/SD I/O via SPI.
  * The source code is derived from various open source projects:
- * 
+ *
  * @ref https://github.com/torvalds/linux
  * @ref https://github.com/u-boot/u-boot
  * @ref https://github.com/arduino-libraries/SD
@@ -36,14 +36,14 @@
 
 /* Prototypes */
 
-/** 
+/**
  * @brief extract bits from abyte array
- * 
+ *
  * @param data: byte array pointer
  * @param msb: Most significant bit to extract in data array
  * @param lsb: Least significant bit to extract in data array
  * @return: Bits between lsb and msb, shifted and masked accordingly
- * 
+ *
  * @note Use if the bitfield to extract may span multiple bytes, possibly even
  * non-aligned.
  */
@@ -51,14 +51,14 @@ static uint32_t ext_bits(uint8_t *data, int msb, int lsb);
 
 /**
  * @brief Enable low frequency SPI mode for SDCard
- * 
+ *
  * @param ctx: pointer to spi mmc driver context
  */
 static void spi_mmc_go_low_frequency(struct spi_mmc_context *ctx);
 
 /**
  * @brief Initialize the mmc driver data and context
- * 
+ *
  * @param ctx: pointer to spi mmc driver context
  * @return: Error code
  */
@@ -66,7 +66,7 @@ static int spi_mmc_init(struct mmc_dev *dev);
 
 /**
  * @brief Send an SPI MMC command to the SDCard (raw)
- * 
+ *
  * @param ctx: pointer to spi mmc driver context
  * @param msg: message to send
  * @param rx: SPI transfer receive buffer. Has to be sized so that the SPI
@@ -80,7 +80,7 @@ static int spi_mmc_send_cmd(struct spi_mmc_context *ctx,
 
 /**
  * @brief get the sizie in bytes for an MMC response type
- * 
+ *
  * @param resp_type: mmc response type
  * @return: size of the response in bytes
  */
@@ -99,7 +99,7 @@ static uint64_t spi_mmc_sectors(struct mmc_dev *dev);
 
 /**
  * @brief Send a message via spi
- * 
+ *
  * @param ctx: pointer to spi mmc driver context
  * @param msg: message to send
  * @param resp: SPI transfer receive buffer. Has to be sized so that the SPI
@@ -111,7 +111,7 @@ static int spi_mmc_send_msg(struct spi_mmc_context *ctx,
 
 /**
  * @brief send card reset command
- * 
+ *
  * @param ctx: pointer to spi mmc driver context
  * @return: Error code
  */
@@ -119,7 +119,7 @@ static int spi_mmc_send_reset(struct spi_mmc_context *ctx);
 
 /**
  * @brief Do an SPI transfer
- * 
+ *
  * @param ctx: pointer to spi mmc driver context
  * @param tx: SPI write buffer
  * @param rx: SPI receive buffer
@@ -131,7 +131,7 @@ static int spi_mmc_transfer(struct spi_mmc_context *ctx, const uint8_t *tx,
 
 /**
  * @brief Send the voltage select command to the card
- * 
+ *
  * @param dev: pointer to spi mmc device driver
  * @return: Error code
  */
@@ -139,13 +139,33 @@ static int spi_mmc_voltage_select(struct mmc_dev *dev);
 
 /**
  * @brief Wait for the card to be ready
- * 
+ *
  * @param dev: pointer to spi mmc device driver
  * @return: Error code
  *
  * TODO: add timeout via timer/rtc instead of fixed retries
  */
 static int spi_mmc_wait_ready(struct spi_mmc_context *ctx);
+
+/**
+ * @brief read blocks from the spi mmc/sd card
+ *
+ * @param dev: mmc device struct
+ * @param blk: block number to read
+ * @param buf: readback buffer
+ * @param len: number of blocks to read
+ * @return: Error code
+ */
+static int spi_mmc_read_blocks(struct mmc_dev *dev, uint32_t blk, uint8_t *buf,
+                               const uint32_t len);
+
+/**
+ * @brief Probe function for the driver
+ *
+ * @param dev: mmc device struct to probe
+ * @return: Error code
+ */
+static int spi_mmc_probe(struct mmc_dev *dev);
 
 /* Driver function implementation */
 
@@ -161,6 +181,15 @@ static uint32_t ext_bits(uint8_t *data, int msb, int lsb) {
     }
     return bits;
 }
+
+const static struct mmc_ops drv_ops = {
+    .probe = &spi_mmc_probe,
+    .blk_read = &spi_mmc_read_blocks,
+    .blk_write = NULL, // TODO
+    .blk_erase = NULL, // TODO
+    .generate_info = NULL, // TODO
+    .n_sectors = &spi_mmc_sectors,
+};
 
 /*----------------------------------------------------------------------------*/
 
@@ -362,9 +391,11 @@ static uint64_t spi_mmc_sectors(struct mmc_dev *dev)
     uint32_t hc_c_size;
     uint64_t blocks = 0, capacity = 0;
     uint8_t csd[16] = {0};
-    uint8_t *resp = malloc(resp_size);
+    uint8_t *resp;
     size_t i;
 
+    spi_lock(ctx->spi);
+    resp = malloc(resp_size);
     memset(resp, 0xff, resp_size);
 
     /* Send CMD 9 to request 16-byte block of CSD register data */
@@ -428,6 +459,7 @@ static uint64_t spi_mmc_sectors(struct mmc_dev *dev)
 free_response:
     free(resp);
     dev->num_blocks = blocks;
+    spi_unlock(ctx->spi);
     return blocks;
 }
 
@@ -518,8 +550,12 @@ static int spi_mmc_read_blocks(struct mmc_dev *dev, uint32_t blk, uint8_t *buf,
                blockCnt, blk, dev->num_blocks);
         return -EINVAL;
     }
+
+    spi_lock(ctx->spi);
+
     if (!ctx->spi->state->initialized || !dev->initialized) {
         log_error("Cannot read SPI MMC blocks: Driver not initialized.");
+        spi_unlock(ctx->spi);
         return -EHOSTDOWN;
     }
 
@@ -534,6 +570,7 @@ static int spi_mmc_read_blocks(struct mmc_dev *dev, uint32_t blk, uint8_t *buf,
     ret = spi_mmc_send_cmd(ctx, read_cmd, &response, false);
     if (ret) {
         log_error("Got error while reading blocks from SD Card: %02x\n", response);
+        spi_unlock(ctx->spi);
         return -EIO;
     }
     // receive the data : one block at a time
@@ -550,6 +587,8 @@ static int spi_mmc_read_blocks(struct mmc_dev *dev, uint32_t blk, uint8_t *buf,
     if (len > 1) {
         ret = spi_mmc_send_cmd(ctx, cmd12, &response, false);
     }
+
+    spi_unlock(ctx->spi);
     return rd_status ? rd_status : ret;
 }
 
@@ -661,6 +700,7 @@ static int spi_mmc_init(struct mmc_dev *dev)
         return -EINVAL;
     }
 
+    spi_lock(ctx->spi);
     spi_mmc_go_low_frequency(ctx);
 
     // Wait for at least 74 cycles with MOSI and CS asserted
@@ -691,10 +731,12 @@ static int spi_mmc_init(struct mmc_dev *dev)
     log_debug("SPI MMC version/type: %s\n", mmc_type_to_str(dev->version));
 
     spi_mmc_resume_frequency(ctx);
+    spi_unlock(ctx->spi);
+
     return ret;
 }
 
-int spi_mmc_probe(struct mmc_dev *dev)
+static int spi_mmc_probe(struct mmc_dev *dev)
 {
     log_trace("%s()\r\n", __FUNCTION__);
     int ret;
@@ -756,31 +798,17 @@ struct mmc_drv *spi_mmc_drv_init(struct spi_config *spi, uint cs_pin)
     dev->blksize = BLOCK_SIZE_SD;
     dev->priv = ctx;
 
-    struct mmc_ops *ops = (struct mmc_ops *)malloc(sizeof(struct mmc_ops));
-    if (!ops) {
-        log_error("Could not allocate SPI MMC ops: %d\n", -ENOMEM);
-        goto free_dev;
-    }
-    ops->probe = &spi_mmc_probe;
-    ops->blk_read = &spi_mmc_read_blocks;
-    ops->blk_write = NULL; // TODO
-    ops->blk_erase = NULL; // TODO
-    ops->generate_info = NULL; // TODO;
-    ops->n_sectors = &spi_mmc_sectors;
-
     struct mmc_drv *drv = calloc(1, sizeof(struct mmc_drv));
     if (!drv) {
         log_error("Could not allocate SPI MMC driver: %d\n", -ENOMEM);
-        goto free_ops;
+        goto free_dev;
     }
     drv->dev = dev;
-    drv->ops = ops;
+    drv->ops = &drv_ops;
 
     mutex_exit(&spi_mmc_drv_init_mutex);
     return drv;
 
-free_ops:
-    free(ops);
 free_dev:
     free(dev);
 free_ctx:
@@ -795,12 +823,15 @@ out:
 void spi_mmc_drv_deinit(struct mmc_drv *drv)
 {
     log_trace("%s()\r\n", __FUNCTION__);
+    auto_init_mutex(spi_mmc_drv_deinit_mutex);
+    mutex_enter_blocking(&spi_mmc_drv_deinit_mutex);
+
     if (!drv) {
-        return;
+        goto out;
     }
 
     if (!drv->dev) {
-        goto free_ops;
+        goto free_drv;
     }
 
     if (drv->dev->priv) {
@@ -810,11 +841,11 @@ void spi_mmc_drv_deinit(struct mmc_drv *drv)
 
     free(drv->dev);
 
-free_ops:
-    if (drv->ops)
-        free(drv->ops);
-
+free_drv:
     free(drv);
+
+out:
+    mutex_exit(&spi_mmc_drv_deinit_mutex);
 }
 
 /* [] END OF FILE */

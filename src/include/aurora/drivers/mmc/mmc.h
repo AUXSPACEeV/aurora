@@ -199,7 +199,7 @@ struct mmc_ops {
  */
 struct mmc_drv {
     struct mmc_dev *dev;
-    struct mmc_ops *ops;
+    const struct mmc_ops *ops;
 };
 
 /**
