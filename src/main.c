@@ -88,6 +88,8 @@ int main(void)
 
     vTaskStartScheduler();
 
+    log_warning("Aurora finished SMP processes. Exiting...\n");
+
     return 0;
 }
 
