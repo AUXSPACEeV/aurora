@@ -908,3 +908,5 @@ static inline size_t list_count_nodes(struct list_head *head)
  */
 #define list_safe_reset_next(pos, n, member)				\
 	n = list_next_entry(pos, member)
+
+/* [] END OF FILE */

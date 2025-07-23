@@ -3,6 +3,7 @@
         80
     ],
     "files.associations": {
+        "*.inc": "bitbake",
         "*.h": "c",
         "*.c": "c",
         "cstdlib": "c",
@@ -19,7 +20,9 @@
         "*.yml": "yaml",
         "*.xml": "xml",
         "*.toml": "toml",
-        "cstdint": "c"
+        "cstdint": "c",
+        "random": "c",
+        "vector": "c"
     },
     "editor.formatOnSave": false,
 }

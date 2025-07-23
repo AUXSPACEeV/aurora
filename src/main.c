@@ -38,8 +38,8 @@
 
 /* Local includes */
 #include <aurora/app.h>
-#include <aurora/compiler.h>
 #include <aurora/log.h>
+#include <aurora/macros.h>
 #include <aurora/task/freertos_scheduling.h>
 #include <aurora/task/watchdog_service.h>
 

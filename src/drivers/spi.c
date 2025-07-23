@@ -11,9 +11,9 @@
 
 #include <errno.h>
 
-#include <aurora/compiler.h>
 #include <aurora/drivers/spi.h>
 #include <aurora/log.h>
+#include <aurora/macros.h>
 
 /* Fileprivate structs and typedefs */
 
