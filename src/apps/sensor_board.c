@@ -18,6 +18,7 @@
 
 #include <aurora/app.h>
 #include <aurora/drivers/spi.h>
+#include <aurora/drivers/mmc/mmc.h>
 #include <aurora/drivers/mmc/spi_mmc.h>
 #include <aurora/log.h>
 
@@ -70,7 +71,7 @@ static int setup_sdcard(void)
         log_error("SPI SD init failed.\n");
         return -ENODEV;
     }
-    ret = mmc->ops->probe(mmc->dev);
+    ret = mmc_init(mmc);
     if (ret) {
         log_error("SPI SD init failed: %d\n", ret);
         return ret;
@@ -119,20 +120,20 @@ void aurora_hwdeinit(void)
 void aurora_main(void)
 {
     const TickType_t xDelay = 3000 / portTICK_PERIOD_MS;
+    const uint32_t deadbeef = 0xdeadbeef;
 
     for(;;) {
         vTaskDelay(xDelay);
-        if (mmc->ops->n_sectors)
-            log_info("Sectors on card: %llu\n", mmc->ops->n_sectors(mmc->dev));
-        if (mmc->ops->blk_read) {
-            uint8_t *data = calloc(1, mmc->dev->blksize);
-            int ret = mmc->ops->blk_read(mmc->dev, 0x0, data, 1);
-            if (ret) {
-                log_error("ERROR reading blocks: %d\n", ret);
-            }
-            hexdump(data, mmc->dev->blksize);
-            free(data);
+        uint8_t *data = calloc(1, mmc->dev->blksize);
+        int ret = mmc_bread(mmc, 0x0, 1, data);
+        hexdump(data, mmc->dev->blksize);
+        if (ret) {
+            log_error("ERROR reading blocks: %d\n", ret);
+            break;
         }
+        memcpy((uint8_t *)&deadbeef, data, sizeof(deadbeef));
+        mmc_bwrite(mmc, 0x0, 1, data);
+        free(data);
     }
 }
 /* EOF */

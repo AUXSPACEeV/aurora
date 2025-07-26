@@ -275,6 +275,23 @@
 #define SD_SWITCH_CHECK		0
 #define SD_SWITCH_SWITCH	1
 
+/* SCR definitions in different words */
+#define SD_HIGHSPEED_BUSY	0x00020000
+#define SD_HIGHSPEED_SUPPORTED	0x00020000
+
+#define UHS_SDR12_BUS_SPEED	0
+#define HIGH_SPEED_BUS_SPEED	1
+#define UHS_SDR25_BUS_SPEED	1
+#define UHS_SDR50_BUS_SPEED	2
+#define UHS_SDR104_BUS_SPEED	3
+#define UHS_DDR50_BUS_SPEED	4
+
+#define SD_MODE_UHS_SDR12	BIT(UHS_SDR12_BUS_SPEED)
+#define SD_MODE_UHS_SDR25	BIT(UHS_SDR25_BUS_SPEED)
+#define SD_MODE_UHS_SDR50	BIT(UHS_SDR50_BUS_SPEED)
+#define SD_MODE_UHS_SDR104	BIT(UHS_SDR104_BUS_SPEED)
+#define SD_MODE_UHS_DDR50	BIT(UHS_DDR50_BUS_SPEED)
+
 #define OCR_BUSY		0x80000000
 #define OCR_HCS			0x40000000
 #define OCR_S18R		0x1000000
@@ -324,10 +341,6 @@
 #define SD_HIGHSPEED_BUSY	0x00020000
 #define SD_HIGHSPEED_SUPPORTED	0x00020000
 
-#define UHS_CAPS (MMC_CAP(UHS_SDR12) | MMC_CAP(UHS_SDR25) | \
-		  MMC_CAP(UHS_SDR50) | MMC_CAP(UHS_SDR104) | \
-		  MMC_CAP(UHS_DDR50))
-
 struct sd_ssr {
 	unsigned int au;		/* In sectors */
 	unsigned int erase_timeout;	/* In milliseconds */
@@ -361,6 +374,15 @@ enum bus_mode {
 	MMC_HS_400_ES,
 	MMC_MODES_END,
 };
+
+#define UHS_CAPS (MMC_CAP(UHS_SDR12) | MMC_CAP(UHS_SDR25) | \
+		  MMC_CAP(UHS_SDR50) | MMC_CAP(UHS_SDR104) | \
+		  MMC_CAP(UHS_DDR50))
+
+static inline bool supports_uhs(uint caps)
+{
+	return (caps & UHS_CAPS) ? true : false;
+}
 
 /**
  * @brief MMC Card command
@@ -405,7 +427,7 @@ struct mmc_dev {
     char *name;
     uint32_t version;
     uint32_t blksize;
-    uint64_t num_blocks;
+    uint32_t num_blocks;
     bool initialized;
     bool init_in_progress;
     uint32_t host_caps;
@@ -445,11 +467,12 @@ struct mmc_dev {
     uint8_t part_support;
 	uint8_t part_attr;
 	uint8_t wr_rel_set;
-	uint8_t part_config;
 	uint32_t hc_wp_grp_size;	/* in 512-byte sectors */
 	bool can_trim;
 	uint32_t cardtype;		/* cardtype read from the MMC */
 	uint32_t bus_width;
+	bool tuning:1;
+	bool hs400_tuning:1;
     void *priv;
 };
 
@@ -471,6 +494,15 @@ struct mmc_ops {
      * @return: Error code on failure
      */
     int (*deferred_probe)(struct mmc_dev *dev);
+	/**
+	 * reinit() - Re-initialization to clear old configuration for
+	 * mmc rescan.
+	 *
+	 * @dev:	Device to reinit
+	 * @return 0 if Ok, -ve if error
+	 */
+	int (*reinit)(struct mmc_dev *dev);
+	int (*init)(struct mmc_dev *dev);
 
     /**
      * @brief Send a command to the card
@@ -512,10 +544,17 @@ struct mmc_ops {
  */
 struct mmc_drv {
     struct mmc_dev *dev;
-    const struct mmc_ops *ops;
+    struct mmc_ops *ops;
 };
 
 int mmc_send_cmd(struct mmc_drv *mmc, struct mmc_cmd *cmd, struct mmc_data *data);
+
+int mmc_init(struct mmc_drv *mmc);
+
+int mmc_bread(struct mmc_drv *mmc, uint32_t start, uint32_t blkcnt, void *dst);
+
+int mmc_bwrite(struct mmc_drv *mmc, uint32_t start, uint32_t blkcnt,
+			   const void *src);
 
 #ifdef CONFIG_MMC_SPI
 #define mmc_host_is_spi(mmc)	((mmc)->host_caps & MMC_MODE_SPI)
