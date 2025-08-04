@@ -377,7 +377,10 @@ static int mmc_spi_request(struct mmc_dev *dev, struct mmc_cmd *cmd,
 	uint8_t resp8 = 0, resp16[2] = { 0 }, resp40[5] = { 0 }, resp_match_value = 0;
 	struct spi_mmc_context *ctx = (struct spi_mmc_context *)dev->priv;
 
-	spi_lock(ctx->spi);
+	if (!spi_lock(ctx->spi)) {
+		log_error("Could not get SPI Bus lock: timeout");
+		return -ETIMEDOUT;
+	}
 
 	for (i = 0; i < 4; i++)
 		cmd->response[i] = 0;
@@ -512,7 +515,7 @@ static int mmc_spi_set_ios(struct mmc_dev *dev)
 /*----------------------------------------------------------------------------*/
 
 static struct mmc_ops drv_ops = {
-	.set_ios	= mmc_spi_set_ios,
+	.set_ios  = mmc_spi_set_ios,
 	.send_cmd = mmc_spi_request,
 };
 

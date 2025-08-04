@@ -419,7 +419,7 @@ int mmc_send_ext_csd(struct mmc_drv *mmc, uint8_t *ext_csd)
 
 static int mmc_go_idle(struct mmc_drv *mmc)
 {
-	struct mmc_cmd cmd;
+	struct mmc_cmd cmd = { 0 };
 	int err;
 
 	sleep_ms(1);
@@ -1911,6 +1911,11 @@ int mmc_get_op_cond(struct mmc_drv *mmc, bool quiet)
 	 * mmc rescan.
 	 */
 	err = mmc_reinit(mmc);
+
+	/* made sure it's not NULL earlier */
+	if (mmc->ops->init)
+		err = mmc->ops->init(mmc->dev);
+
 	if (err)
 		return err;
 

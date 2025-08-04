@@ -241,12 +241,14 @@ int aurora_spi_init(struct spi_config *spi)
     }
 
     //// The SPI may be shared (using multiple SSs); protect it
-    //spi->mutex = xSemaphoreCreateRecursiveMutex();
-    //xSemaphoreTakeRecursive(spi->mutex, portMAX_DELAY);
-    if (!mutex_is_initialized(&spi->state->mutex)) {
-        mutex_init(&spi->state->mutex);
+    // For access blocking:
+    if (spi->state->sem.max_permits == 0)
+        sem_init(&spi->state->sem, 1, 1);
+
+    if (!spi_lock(spi)) {
+        log_error("SPI bus is blocked.");
+        return -ETIMEDOUT;
     }
-    spi_lock(spi);
 
     if (mutex_is_initialized(&spi_drivers.mutex) == false) {
         spi_drv_list_init();
@@ -255,8 +257,6 @@ int aurora_spi_init(struct spi_config *spi)
     // Default:
     if (!spi->baud_rate)
         spi->baud_rate = 10 * 1000 * 1000;
-    // For the IRQ notification:
-    sem_init(&spi->state->sem, 0, 1);
 
     /* Configure component */
     // Enable SPI at 100 kHz and connect to GPIOs
@@ -379,7 +379,8 @@ void aurora_spi_deinit(struct spi_config *spi)
         return;
     }
 
-    spi_lock(spi);
+    while (!spi_lock(spi))
+        ;;
 
     mutex_enter_blocking(&spi_drivers.mutex);
     list_del(&spi->node);

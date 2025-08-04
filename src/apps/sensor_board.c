@@ -29,7 +29,7 @@ static struct mmc_drv *mmc;
 
 static int setup_spi_config(void)
 {
-    spi = (struct spi_config *)malloc(sizeof(struct spi_config));
+    spi = (struct spi_config *)calloc(1, sizeof(struct spi_config));
     if (spi == NULL) {
         log_error("Could not allocate SPI driver.\n");
         return -ENOMEM;

@@ -31,7 +31,6 @@
 
 /* Library includes. */
 #include <stdio.h>
-#include <errno.h>
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
 #include "hardware/watchdog.h"
@@ -44,7 +43,7 @@
 #include <aurora/task/watchdog_service.h>
 
 /* main task defines */
-#define MAIN_TASK_PRI       (configMAX_PRIORITIES / 2)
+#define MAIN_TASK_PRI       (configMAX_PRIORITIES - 1)
 #define MAIN_TASK_STACKSIZE (configMINIMAL_STACK_SIZE * 0x10)
 
 /**
@@ -60,7 +59,7 @@ static void prv_setup_early_tasks(void);
  * @param args Unused task arguments
  */
 static void x_main_task(void* args);
-static TaskHandle_t main_task_handle = NULL;
+static __attribute__((aligned(32))) TaskHandle_t main_task_handle = NULL;
 
 /*----------------------------------------------------------------------------*/
 
