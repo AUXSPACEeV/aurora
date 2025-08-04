@@ -232,7 +232,7 @@ int aurora_spi_init(struct spi_config *spi)
     mutex_enter_blocking(&aurora_spi_init_mutex);
 
     if (spi->state == NULL) {
-        spi->state = malloc(sizeof(struct spi_config_state));
+        spi->state = calloc(1, sizeof(struct spi_config_state));
     }
 
     if (spi->state->initialized) {
@@ -286,7 +286,6 @@ int aurora_spi_init(struct spi_config *spi)
     gpio_pull_up(spi->miso_gpio);
 
     if (!spi->use_dma) {
-        spi_unlock(spi);
         goto out;
     }
 
@@ -355,8 +354,6 @@ int aurora_spi_init(struct spi_config *spi)
     }
     irq_set_enabled(spi->DMA_IRQ_num, true);
 
-    spi_unlock(spi);
-
 out:
     mutex_enter_blocking(&spi_drivers.mutex);
     spi->node = LIST_HEAD_INIT(spi->node);
@@ -365,6 +362,7 @@ out:
 
     spi->state->initialized = true;
 
+    spi_unlock(spi);
     mutex_exit(&aurora_spi_init_mutex);
     return true;
 }

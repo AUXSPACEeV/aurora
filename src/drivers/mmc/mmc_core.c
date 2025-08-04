@@ -367,7 +367,7 @@ static uint mmc_mode2freq(struct mmc_drv *mmc, enum bus_mode mode)
 	      [MMC_HS_400_ES]	= 200000000,
 	};
 
-	if (mode == MMC_LEGACY)
+	if (mode == MMC_LEGACY && mmc->dev->legacy_speed)
 		return mmc->dev->legacy_speed;
 	else if (mode >= MMC_MODES_END)
 		return 0;
@@ -1837,6 +1837,8 @@ static int mmc_send_if_cond(struct mmc_drv *mmc)
 
 int mmc_getcd(struct mmc_drv *mmc)
 {
+    log_trace("%s()\r\n", __FUNCTION__);
+
     struct mmc_ops *ops = mmc->ops;
 
 	if (ops->get_cd)
@@ -1878,6 +1880,8 @@ static void mmc_set_initial_state(struct mmc_drv *mmc)
 
 static int mmc_reinit(struct mmc_drv *drv)
 {
+    log_trace("%s()\r\n", __FUNCTION__);
+
 	struct mmc_ops *ops = drv->ops;
 
 	if (ops->reinit)
@@ -1888,6 +1892,8 @@ static int mmc_reinit(struct mmc_drv *drv)
 
 int mmc_get_op_cond(struct mmc_drv *mmc, bool quiet)
 {
+    log_trace("%s()\r\n", __FUNCTION__);
+
 	bool uhs_en = supports_uhs(mmc->dev->host_caps);
 	int err;
 
@@ -1905,11 +1911,14 @@ int mmc_get_op_cond(struct mmc_drv *mmc, bool quiet)
 	 * mmc rescan.
 	 */
 	err = mmc_reinit(mmc);
-
-	/* made sure it's not NULL earlier */
-	err = mmc->ops->init(mmc->dev);
 	if (err)
 		return err;
+
+	if (mmc->ops->init) {
+		err = mmc->ops->init(mmc->dev);
+		if (err)
+			return err;
+	}
 
 	mmc->dev->ddr_mode = 0;
 
@@ -2152,6 +2161,8 @@ int mmc_bwrite(struct mmc_drv *mmc, uint32_t start, uint32_t blkcnt,
 
 int mmc_start_init(struct mmc_drv *mmc)
 {
+	log_trace("%s()\r\n", __FUNCTION__);
+
 	bool no_card;
 	int err = 0;
 
@@ -2184,6 +2195,8 @@ int mmc_start_init(struct mmc_drv *mmc)
 
 static int mmc_complete_init(struct mmc_drv *mmc)
 {
+    log_trace("%s()\r\n", __FUNCTION__);
+
 	int err = 0;
 
 	mmc->dev->init_in_progress = false;
@@ -2201,6 +2214,8 @@ static int mmc_complete_init(struct mmc_drv *mmc)
 
 int mmc_init(struct mmc_drv *mmc)
 {
+	log_trace("%s()\r\n", __FUNCTION__);
+
     int err = 0;
 	unsigned long start;
 

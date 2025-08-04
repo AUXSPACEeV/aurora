@@ -78,33 +78,36 @@
 #define R1B_TIMEOUT             3000000 /* 1 sec */
 
 static int spi_mmc_transfer(struct spi_mmc_context *ctx, const uint8_t *tx,
-                            uint8_t* rx, size_t length)
+                            uint8_t* rx, size_t length, uint32_t flags)
 {
+	log_trace("%s(tx=0x%p, rx=0x%p, len=0x%08x)\r\n", __FUNCTION__, tx, rx,
+			  length);
+
     int len;
     int ret = 0;
-    const uint8_t tx_dummy = 0xff;
-    uint8_t rx_dummy = 0;
 
-    // assert(512 == length || 1 == length);
-    assert(tx || rx);
-    // assert(!(tx && rx));
+    uint8_t *spi_tx = tx ? tx : calloc(len, sizeof(uint8_t));
+    uint8_t *spi_rx = rx ? rx : calloc(len, sizeof(uint8_t));
 
-    cs_select(ctx->cs_pin);
+	if (!tx) {
+		memset(spi_tx, 0xff, length);
+	}
 
-    tx = tx ? tx : &tx_dummy;
-    rx = rx ? rx : &rx_dummy;
+	if (flags & SPI_TRANSFER_FLG_XFER_START)
+    	cs_select(ctx->cs_pin);
 
     if (ctx->spi->use_dma) {
-        ret = spi_transfer_dma(ctx->spi, tx, rx, length);
+        ret = spi_transfer_dma(ctx->spi, spi_tx, spi_rx, length);
     } else {
-        len = spi_write_read_blocking(ctx->spi->hw_spi, tx, rx, length);
+        len = spi_write_read_blocking(ctx->spi->hw_spi, spi_tx, spi_rx, length);
         if (len != length) {
             log_error("SPI transfer failed: %d != %d\r\n", len, length);
             ret = -EIO;
         }
     }
 
-    cs_deselect(ctx->cs_pin);
+	if (flags & SPI_TRANSFER_FLG_XFER_STOP)
+    	cs_deselect(ctx->cs_pin);
 
     return ret;
 }
@@ -147,21 +150,25 @@ static int mmc_spi_sendcmd(struct spi_mmc_context *ctx,
 	cmdo[5] = cmdarg;
 	cmdo[6] = (crc7(&cmdo[1], 5) << 1) | 0x01;
 
-	ret = spi_mmc_transfer(ctx, cmdo, NULL, sizeof(cmdo) * 8);
-	if (ret)
+	ret = spi_mmc_transfer(ctx, cmdo, NULL, sizeof(cmdo) * 8, SPI_TRANSFER_FLG_XFER_START);
+	if (ret) {
+		log_error("MMC SPI send failed: %d", ret);
 		return ret;
+	}
 
-	ret = spi_mmc_transfer(ctx, NULL, &r, 1 * 8);
-	if (ret)
+	ret = spi_mmc_transfer(ctx, NULL, &r, 1 * 8, SPI_TRANSFER_FLG_NONE);
+	if (ret) {
+		log_error("MMC SPI receive failed: %d", ret);
 		return ret;
-
+	}
+	
 	log_debug("%s: cmd%d", __func__, cmdidx);
 
 	if (resp_match)
 		r = ~resp_match_value;
 	i = CMD_TIMEOUT;
 	while (i) {
-		ret = spi_mmc_transfer(ctx, NULL, &r, 1 * 8);
+		ret = spi_mmc_transfer(ctx, NULL, &r, 1 * 8, SPI_TRANSFER_FLG_NONE);
 		if (ret)
 			return ret;
 		log_debug(" resp%d=0x%x", rpos, r);
@@ -182,7 +189,7 @@ static int mmc_spi_sendcmd(struct spi_mmc_context *ctx,
 
 	resp[0] = r;
 	for (i = 1; i < resp_size; i++) {
-		ret = spi_mmc_transfer(ctx, NULL, &r, 1 * 8);
+		ret = spi_mmc_transfer(ctx, NULL, &r, 1 * 8, SPI_TRANSFER_FLG_NONE);
 		if (ret)
 			return ret;
 		log_debug(" resp%d=0x%x", rpos, r);
@@ -193,7 +200,7 @@ static int mmc_spi_sendcmd(struct spi_mmc_context *ctx,
 	if (r1b == true) {
 		i = R1B_TIMEOUT;
 		while (i) {
-			ret = spi_mmc_transfer(ctx, NULL, &r, 1 * 8);
+			ret = spi_mmc_transfer(ctx, NULL, &r, 1 * 8, SPI_TRANSFER_FLG_NONE);
 			if (ret)
 				return ret;
 
@@ -229,7 +236,7 @@ static int mmc_spi_readdata(struct spi_mmc_context *ctx,
 
 	while (bcnt--) {
 		for (i = 0; i < READ_TIMEOUT; i++) {
-			ret = spi_mmc_transfer(ctx, NULL, &r1, 1 * 8);
+			ret = spi_mmc_transfer(ctx, NULL, &r1, 1 * 8, SPI_TRANSFER_FLG_NONE);
 			if (ret)
 				return ret;
 			if (r1 == SPI_TOKEN_SINGLE)
@@ -237,14 +244,14 @@ static int mmc_spi_readdata(struct spi_mmc_context *ctx,
 		}
 		log_debug("%s: data tok%d 0x%x\n", __func__, i, r1);
 		if (r1 == SPI_TOKEN_SINGLE) {
-			ret = spi_mmc_transfer(ctx, NULL, buf, bsize * 8);
+			ret = spi_mmc_transfer(ctx, NULL, buf, bsize * 8, SPI_TRANSFER_FLG_NONE);
 			if (ret)
 				return ret;
-			ret = spi_mmc_transfer(ctx, NULL, &crc, 2 * 8);
+			ret = spi_mmc_transfer(ctx, NULL, &crc, 2 * 8, SPI_TRANSFER_FLG_NONE);
 			if (ret)
 				return ret;
 #if IS_ENABLED(CONFIG_MMC_SPI_CRC_ON)
-			uint8_t crc_ok = crc16_ccitt(buf, bsize);
+			uint8_t crc_ok = crc7(buf, bsize);
 			if (crc_ok != crc) {
 				log_debug("%s: data crc error, expected %02x got %02x\n",
 				      __func__, crc_ok, crc);
@@ -292,13 +299,13 @@ static int mmc_spi_writedata(struct spi_mmc_context *ctx, const void *xbuf,
 
 	while (bcnt--) {
 #if IS_ENABLED(CONFIG_MMC_SPI_CRC_ON)
-		crc = crc7((u8 *)buf, bsize);
+		crc = crc7((uint8_t *)buf, bsize);
 #endif
-		spi_mmc_transfer(ctx, tok, NULL, 2 * 8);
-		spi_mmc_transfer(ctx, buf, NULL, bsize * 8);
-		spi_mmc_transfer(ctx, &crc, NULL, 2 * 8);
+		spi_mmc_transfer(ctx, tok, NULL, 2 * 8, SPI_TRANSFER_FLG_NONE);
+		spi_mmc_transfer(ctx, buf, NULL, bsize * 8, SPI_TRANSFER_FLG_NONE);
+		spi_mmc_transfer(ctx, &crc, NULL, 2 * 8, SPI_TRANSFER_FLG_NONE);
 		for (i = 0; i < CMD_TIMEOUT; i++) {
-			spi_mmc_transfer(ctx, NULL, &r1, 1 * 8);
+			spi_mmc_transfer(ctx, NULL, &r1, 1 * 8, SPI_TRANSFER_FLG_NONE);
 			if ((r1 & 0x10) == 0) /* response token */
 				break;
 		}
@@ -306,7 +313,7 @@ static int mmc_spi_writedata(struct spi_mmc_context *ctx, const void *xbuf,
 		if (SPI_MMC_RESPONSE_CODE(r1) == SPI_RESPONSE_ACCEPTED) {
 			log_debug("%s: data accepted\n", __func__);
 			for (i = 0; i < WRITE_TIMEOUT; i++) { /* wait busy */
-				spi_mmc_transfer(ctx, NULL, &r1, 1 * 8);
+				spi_mmc_transfer(ctx, NULL, &r1, 1 * 8, SPI_TRANSFER_FLG_NONE);
 				if (i && r1 == 0xff) {
 					r1 = 0;
 					break;
@@ -327,9 +334,9 @@ static int mmc_spi_writedata(struct spi_mmc_context *ctx, const void *xbuf,
 	}
 	if (multi && bcnt == -1) { /* stop multi write */
 		tok[1] = SPI_TOKEN_STOP_TRAN;
-		spi_mmc_transfer(ctx, tok, NULL, 2 * 8);
+		spi_mmc_transfer(ctx, tok, NULL, 2 * 8, SPI_TRANSFER_FLG_NONE);
 		for (i = 0; i < WRITE_TIMEOUT; i++) { /* wait busy */
-			spi_mmc_transfer(ctx, NULL, &r1, 1 * 8);
+			spi_mmc_transfer(ctx, NULL, &r1, 1 * 8, SPI_TRANSFER_FLG_NONE);
 			if (i && r1 == 0xff) {
 				r1 = 0;
 				break;
@@ -361,6 +368,8 @@ static int mmc_spi_writedata(struct spi_mmc_context *ctx, const void *xbuf,
 static int mmc_spi_request(struct mmc_dev *dev, struct mmc_cmd *cmd,
 						   struct mmc_data *data)
 {
+    log_trace("%s()\r\n", __FUNCTION__);
+
 	int i, multi, ret = 0;
 	uint8_t *resp = NULL;
 	uint32_t resp_size = 0;
@@ -482,133 +491,8 @@ static int mmc_spi_request(struct mmc_dev *dev, struct mmc_cmd *cmd,
 	}
 
 done:
+	spi_mmc_transfer(dev->priv, NULL, NULL, 0, SPI_TRANSFER_FLG_XFER_STOP);
 	spi_unlock(ctx->spi);
-
-	return ret;
-}
-
-static int mmc_spi_send_cmd(struct spi_mmc_context *ctx, struct mmc_cmd *cmd,
-			      struct mmc_data *data)
-{
-	int i, multi, ret = 0;
-	uint8_t *resp = NULL;
-	uint32_t resp_size = 0;
-	bool resp_match = false, r1b = false;
-	uint8_t resp8 = 0, resp16[2] = { 0 }, resp40[5] = { 0 }, resp_match_value = 0;
-
-	for (i = 0; i < 4; i++)
-		cmd->response[i] = 0;
-
-	switch (cmd->cmdidx) {
-	case SD_CMD_APP_SEND_OP_COND:
-	case MMC_CMD_SEND_OP_COND:
-		resp = &resp8;
-		resp_size = sizeof(resp8);
-		cmd->cmdarg = 0x40000000;
-		break;
-	case SD_CMD_SEND_IF_COND:
-		resp = (uint8_t *)&resp40[0];
-		resp_size = sizeof(resp40);
-		resp_match = true;
-		resp_match_value = R1_SPI_IDLE;
-		break;
-	case MMC_CMD_SPI_READ_OCR:
-		resp = (uint8_t *)&resp40[0];
-		resp_size = sizeof(resp40);
-		break;
-	case MMC_CMD_SEND_STATUS:
-		resp = (uint8_t *)&resp16[0];
-		resp_size = sizeof(resp16);
-		break;
-	case MMC_CMD_SET_BLOCKLEN:
-	case MMC_CMD_SPI_CRC_ON_OFF:
-		resp = &resp8;
-		resp_size = sizeof(resp8);
-		resp_match = true;
-		resp_match_value = 0x0;
-		break;
-	case MMC_CMD_STOP_TRANSMISSION:
-	case MMC_CMD_ERASE:
-		resp = &resp8;
-		resp_size = sizeof(resp8);
-		r1b = true;
-		break;
-	case MMC_CMD_SEND_CSD:
-	case MMC_CMD_SEND_CID:
-	case MMC_CMD_READ_SINGLE_BLOCK:
-	case MMC_CMD_READ_MULTIPLE_BLOCK:
-	case MMC_CMD_WRITE_SINGLE_BLOCK:
-	case MMC_CMD_WRITE_MULTIPLE_BLOCK:
-	case MMC_CMD_APP_CMD:
-	case SD_CMD_ERASE_WR_BLK_START:
-	case SD_CMD_ERASE_WR_BLK_END:
-		resp = &resp8;
-		resp_size = sizeof(resp8);
-		break;
-	default:
-		resp = &resp8;
-		resp_size = sizeof(resp8);
-		resp_match = true;
-		resp_match_value = R1_SPI_IDLE;
-		break;
-	};
-
-	ret = mmc_spi_sendcmd(ctx, cmd->cmdidx, cmd->cmdarg, cmd->resp_type,
-			      resp, resp_size, resp_match, resp_match_value, r1b);
-	if (ret)
-		goto done;
-
-	switch (cmd->cmdidx) {
-	case SD_CMD_APP_SEND_OP_COND:
-	case MMC_CMD_SEND_OP_COND:
-		cmd->response[0] = (resp8 & R1_SPI_IDLE) ? 0 : OCR_BUSY;
-		break;
-	case SD_CMD_SEND_IF_COND:
-	case MMC_CMD_SPI_READ_OCR:
-		cmd->response[0] = resp40[4];
-		cmd->response[0] |= (uint)resp40[3] << 8;
-		cmd->response[0] |= (uint)resp40[2] << 16;
-		cmd->response[0] |= (uint)resp40[1] << 24;
-		break;
-	case MMC_CMD_SEND_STATUS:
-		if (resp16[0] || resp16[1])
-			cmd->response[0] = MMC_STATUS_ERROR;
-		else
-			cmd->response[0] = MMC_STATUS_RDY_FOR_DATA;
-		break;
-	case MMC_CMD_SEND_CID:
-	case MMC_CMD_SEND_CSD:
-		ret = mmc_spi_readdata(ctx, cmd->response, 1, 16);
-		if (ret)
-			return ret;
-		for (i = 0; i < 4; i++)
-			cmd->response[i] =
-				cpu_to_be32(cmd->response[i]);
-		break;
-	default:
-		cmd->response[0] = resp8;
-		break;
-	}
-
-	log_debug("%s: cmd%d resp0=0x%x resp1=0x%x resp2=0x%x resp3=0x%x\n",
-	      __func__, cmd->cmdidx, cmd->response[0], cmd->response[1],
-	      cmd->response[2], cmd->response[3]);
-
-	if (data) {
-		log_debug("%s: data flags=0x%x blocks=%d block_size=%d\n",
-		      __func__, data->flags, data->blocks, data->blocksize);
-		multi = (cmd->cmdidx == MMC_CMD_WRITE_MULTIPLE_BLOCK);
-		if (data->flags == MMC_DATA_READ)
-			ret = mmc_spi_readdata(ctx, data->dest,
-					       data->blocks, data->blocksize);
-		else if  (data->flags == MMC_DATA_WRITE)
-			ret = mmc_spi_writedata(ctx, data->src,
-						data->blocks, data->blocksize,
-						multi);
-	}
-
-done:
-	spi_mmc_transfer(ctx, NULL, NULL, 0);
 
 	return ret;
 }
@@ -617,6 +501,11 @@ done:
 
 static int mmc_spi_set_ios(struct mmc_dev *dev)
 {
+	log_trace("%s(clock=%u)", __FUNCTION__, dev->clock);
+
+	struct spi_mmc_context *ctx = dev->priv;
+	ctx->spi->baud_rate = dev->clock;
+	spi_set_baudrate(ctx->spi->hw_spi, dev->clock);
 	return 0;
 }
 
@@ -632,6 +521,7 @@ static struct mmc_ops drv_ops = {
 struct mmc_drv *spi_mmc_drv_init(struct spi_config *spi, uint cs_pin)
 {
     log_trace("%s(%u)\r\n", __FUNCTION__, cs_pin);
+
     auto_init_mutex(spi_mmc_drv_init_mutex);
     mutex_enter_blocking(&spi_mmc_drv_init_mutex);
 

@@ -73,6 +73,11 @@ int main(void)
 {
     int ret;
 
+    volatile int catchme = 0;
+    for (;;)
+        if (catchme)
+            break;
+
     /* Configure the hardware ready to run the demo. */
     stdio_init_all();
     init_wdt();

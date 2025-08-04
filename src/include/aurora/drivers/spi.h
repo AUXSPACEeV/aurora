@@ -21,6 +21,11 @@
 #include "hardware/spi.h"
 
 #include <aurora/list.h>
+#include <aurora/macros.h>
+
+#define SPI_TRANSFER_FLG_NONE           BIT(0)
+#define SPI_TRANSFER_FLG_XFER_START     BIT(1)
+#define SPI_TRANSFER_FLG_XFER_STOP      BIT(2)
 
 /**
  * @brief SPI SDCard driver configuration state structure
