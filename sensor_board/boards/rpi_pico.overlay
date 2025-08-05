@@ -1,0 +1,52 @@
+/*
+ * Copyright (c) 2025 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+    chosen {
+        zephyr,console = &cdc_acm_uart0;
+    };
+};
+
+&zephyr_udc0 {
+    cdc_acm_uart0: cdc_acm_uart0 {
+        compatible = "zephyr,cdc-acm-uart";
+        label = "CDC_ACM_0";
+    };
+};
+
+&pinctrl {
+	spi0_default: spi0_default {
+		group1 {
+			pinmux = <SPI0_CSN_P21>, <SPI0_SCK_P18>, <SPI0_TX_P19>;
+		};
+		group2 {
+			pinmux = <SPI0_RX_P16>;
+			input-enable;
+		};
+	};
+};
+
+&spi0 {
+    status = "okay";
+    cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi0_default>;
+    pinctrl-names = "default";
+
+	sdhc0: sdhc@0 {
+		compatible = "zephyr,sdhc-spi-slot";
+		reg = <0>;
+		status = "okay";
+		mmc {
+			compatible = "zephyr,sdmmc-disk";
+			status = "okay";
+			disk-name = "SD";
+		};
+		spi-max-frequency = <1000000>;
+	};
+};
+
+&gpio0 {
+	status = "okay";
+};

@@ -12,43 +12,30 @@ set -e
 # Functions                                                                    #
 ################################################################################
 
-function log_debug() {
-    if [ $LOG_LEVEL -ge $LOG_LEVEL_DEBUG ]; then
-        echo "DEBUG: $@"
-    fi
-}
-
-function log_info() {
-    if [ $LOG_LEVEL -ge $LOG_LEVEL_INFO ]; then
-        echo "INFO: $@"
-    fi
-}
-
-function log_warn() {
-    if [ $LOG_LEVEL -ge $LOG_LEVEL_WARN ]; then
-        >&2 echo "WARNING: $@"
-    fi
-}
-
-function log_err() {
-    if [ $LOG_LEVEL -ge $LOG_LEVEL_ERR ]; then
-        >&2 echo "ERROR: $@"
-    fi
-}
-
 function print_help() {
     echo "Usage:"
-    echo "  $0 [OPTIONS] { build | checkout | cleanall | shell }"
+    echo "  $0 [OPTIONS] { build | clean | container| menuconfig | shell }"
     echo
     echo "Positional arguments:"
     echo "  build                          Build the platform image."
-    echo "  checkout                       Checkout the layers and sources."
     echo "  clean                          Clean the build directory."
+    echo "  container CMD                  Manage the dev container."
+    echo "                                 Commands are:"
+    echo "                                   - build"
+    echo "                                   - rm"
+    echo "                                   - run"
+    echo "                                   - start"
+    echo "                                   - stop"
+    echo "  menuconfig                     Open the menuconfig for BOARD."
     echo "  shell                          Open a shell in the container."
     echo
     echo "Options":
+    echo "-b|--board BOARD                 Choose a board config for zephyr."
+    echo "                                 Defaults to ${ZEPHYR_BOARD}."
     echo "   --container-dir DIR           Use custom container directory."
     echo "                                 Defaults to ${CONTAINER_DIR}."
+    echo "   --container-tag TAG           Tag of the container."
+    echo "                                 Defaults to ${CONTAINER_TAG}."
     echo "-e|--engine { docker | podman }  Use a specific container engine."
     echo "                                 Defaults to ${CONTAINER_ENGINE}."
     echo "-h|--help                        Print this help text."
@@ -63,88 +50,8 @@ function print_help() {
     echo "-v|--verbose                     Set DEBUG log level (+set -x)."
 }
 
-function check_and_build_container() {
-    log_info "Checking container engine ..."
-    if [ "${CONTAINER_ENGINE}" = "podman" ]; then
-        _CONTAINER_BIN="podman"
-        _CONTAINER_BUILD_BIN="buildah"
-    elif [ "${CONTAINER_ENGINE}" = "docker" ]; then
-        _CONTAINER_BIN="docker"
-        _CONTAINER_BUILD_BIN="docker buildx"
-    else
-        log_err "Unknown container engine: $CONTAINER_ENGINE"
-        exit 1
-    fi
-
-    # Check if a container with the specified name exists
-    log_info "Checking for existing $_CONTAINER_BIN images ..."
-    if ! ${_CONTAINER_BIN} images -a --format '{{.Repository}}' \
-        | grep -q "$CONTAINER_NAME"; then
-        log_warn "Image for container '$CONTAINER_NAME' not found."
-        build_container
-    elif [ -n "$REBUILD_CONTAINER_IMAGE" ]; then
-        log_info "Force rebuild activated."
-        build_container
-    else
-        log_info "Image for container '$CONTAINER_TAG' already exists."
-        log_info "Skipping container build."
-    fi
-}
-
-function build_container {
-    log_info "Building container '$CONTAINER_TAG' ..."
-    if [ -z "${_CONTAINER_BUILD_BIN}" ]; then
-        log_err "No container build command passed."
-        exit 1
-    fi
-
-    DOCKER_BUILDKIT=1 ${_CONTAINER_BUILD_BIN} build \
-        --build-arg PUID=$(id -u) \
-        --build-arg PGID=$(id -g) \
-        --build-arg ZEPHYR_SOURCE_SW_VERSION=${ZEPHYR_SOURCE_SW_VERSION} \
-        --tag $CONTAINER_TAG \
-        --file "$CONTAINER_DIR/Dockerfile" \
-        "$CONTAINER_DIR"
-}
-
-function start_container {
-    log_info "Starting container $CONTAINER_NAME"
-    $_CONTAINER_BIN start $CONTAINER_NAME
-}
-
-function run_container_cmd {
-    local use_run_cmd="${1:-0}"
-    if [ "$use_run_cmd" = "1" ]; then
-        log_info "Running '$CONTAINER_TAG' ..."
-        $_CONTAINER_BIN run \
-            $CONTAINER_RUNTIME_ARGS \
-            $CONTAINER_TAG \
-            $COMMAND
-    else
-        log_info "Attaching to running container '$CONTAINER_NAME' ..."
-        $_CONTAINER_BIN exec -it \
-            $CONTAINER_NAME \
-            /builder/container-entrypoint.sh $COMMAND
-    fi
-}
-
-function run_container() {
-    local use_run_cmd="0"
-    if ! ${_CONTAINER_BIN} container ls -a --format '{{.Names}}' \
-        | grep -q "$CONTAINER_NAME"; then
-        log_warn "Container '$CONTAINER_NAME' does not exist. Using 'run' command."
-        use_run_cmd="1"
-    elif ! ${_CONTAINER_BIN} ps --format '{{.Names}}' \
-        | grep -q "$CONTAINER_NAME"; then
-        log_warn "Container '$CONTAINER_NAME' is stopped. Using 'start' command."
-        start_container
-    fi
-
-    run_container_cmd $use_run_cmd
-}
-
 ################################################################################
-# Variables                                                                    #
+# Basic setup                                                                  #
 ################################################################################
 
 # THISDIR
@@ -155,31 +62,37 @@ case "${unameOut}" in
     *)          machine="${unameOut}"
 esac
 
-log_info "Detected System: $machine"
+# No logging yet, need THISDIR first
+echo "Detected System: $machine"
 
 if [ "$machine" = "Mac" ]; then
-    THISDIR="$(dirname $(readlink -f $0))"
+    declare -x -r THISDIR="$(dirname $(readlink -f $0))"
 else
-    THISDIR="$(dirname $(readlink -e -- $0))"
+    declare -x -r THISDIR="$(dirname $(readlink -e -- $0))"
 fi
 
-# Logging
-declare -i LOG_LEVEL_ERR=0
-declare -i LOG_LEVEL_WARN=1
-declare -i LOG_LEVEL_INFO=2
-declare -i LOG_LEVEL_DEBUG=3
-declare -i LOG_LEVEL=${LOG_LEVEL_INFO}
+################################################################################
+# Includes                                                                     #
+################################################################################
 
-# Container
-CONTAINER_DIR="${THISDIR}/container"
-CONTAINER_NAME="auxspace-zephyr-builder"
-CONTAINER_TAG="${CONTAINER_NAME}:local"
-CONTAINER_ENGINE="docker"
-_CONTAINER_BIN="docker"
-_CONTAINER_BUILD_BIN="docker buildx"
-ZEPHYR_SOURCE_SW_VERSION="main"
-ZEPHYR_WORKSPACE="/builder/zephyr-workspace"
-ZEPHYR_APPLICATION="${ZEPHYR_WORKSPACE}/zephyr-example-setup"
+source $THISDIR/scripts/lib/log.sh
+source $THISDIR/scripts/lib/container.sh
+
+################################################################################
+# Variables and constants                                                      #
+################################################################################
+
+# Environment from file
+if [ -f "$THISDIR/aurora.env" ]; then
+    source "$THISDIR/aurora.env"
+fi
+
+# Zephyr config
+AURORA_APPLICATION_DIR=${AURORA_APPLICATION_DIR:-"${THISDIR}"}
+ZEPHYR_SOURCE_SW_VERSION=${ZEPHYR_SOURCE_SW_VERSION:-"main"}
+ZEPHYR_APPLICATION=${ZEPHYR_APPLICATION:-"sensor_board"}
+ZEPHYR_WORKSPACE=${ZEPHYR_WORKSPACE:-"$(dirname ${THISDIR})"}
+ZEPHYR_BOARD=${ZEPHYR_BOARD:-"rpi_pico"}
 
 ################################################################################
 # Commandline arg parser                                                       #
@@ -187,6 +100,10 @@ ZEPHYR_APPLICATION="${ZEPHYR_WORKSPACE}/zephyr-example-setup"
 
 while [ $# -gt 0 ]; do
     case $1 in
+        -b|--board)
+            ZEPHYR_BOARD="$2"
+            shift 2
+            ;;
         --container-dir)
             CONTAINER_DIR="$2"
             shift 2
@@ -221,8 +138,13 @@ while [ $# -gt 0 ]; do
         *)
             COMMAND="$1"
             case "${COMMAND}" in
-                build|shell|cleanall|checkout)
+                build|shell|clean|menuconfig)
+                    COMMAND="${BOARD:+ --board $ZEPHYR_BOARD} $1"
                     shift
+                    ;;
+                container)
+                    do_container "$2"
+                    exit 0
                     ;;
                 *)
                     log_err "No such command: ${COMMAND}"
@@ -238,15 +160,22 @@ done
 # Build vars from argparsing                                                   #
 ################################################################################
 
-CONTAINER_RUNTIME_ARGS=" \
-    -it \
-    --name ${CONTAINER_NAME} \
-    -e PUID=`id -u` \
-    -e PGID=`id -g` \
-    --user $(id -u):$(id -g) \
-    -v "${THISDIR}:${ZEPHYR_APPLICATION}:rw" \
-    --workdir ${ZEPHYR_APPLICATION} \
+CONTAINER_RUNTIME_ARGS+=" \
+    -e ZEPHYR_APPLICATION="${ZEPHYR_APPLICATION}" \
+    -e AURORA_APPLICATION_DIR="${AURORA_APPLICATION_DIR}" \
+    -e ZEPHYR_WORKSPACE="${ZEPHYR_WORKSPACE}" \
+    -e ZEPHYR_BOARD="${ZEPHYR_BOARD}" \
+    -v "${THISDIR}:${AURORA_APPLICATION_DIR}:rw" \
+    --workdir ${AURORA_APPLICATION_DIR} \
 "
+
+if [ "$CONTAINER_ENGINE" = "docker" ]; then
+    CONTAINER_RUNTIME_ARGS+=" \
+        -e PUID=`id -u` \
+        -e PGID=`id -g` \
+        --user $(id -u):$(id -g) \
+    "
+fi
 
 ################################################################################
 # Error checking                                                               #
@@ -256,6 +185,15 @@ if [ -z "${COMMAND}" ]; then
     log_err "No command specified."
     print_help
     exit 1
+fi
+
+################################################################################
+# Main                                                                         #
+################################################################################
+
+# run entrypoint directly if in container
+if [ -x /sbin/entrypoint ]; then
+    exec /sbin/entrypoint $COMMAND
 fi
 
 ################################################################################

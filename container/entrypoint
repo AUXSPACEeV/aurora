@@ -1,0 +1,118 @@
+#!/bin/bash
+#
+# Zephyr application docker entrypoint
+#
+# Author: Maximilian Stephan @ Auxspace e.V.
+# Copyright (c) 2024 Auxspace e.V.
+#
+
+set -e
+
+################################################################################
+# Functions                                                                    #
+################################################################################
+
+function first_boot_actions() {
+  local tmp_dir=$(dirname -- "$FIRST_BOOT_TMP_FLAG")
+
+  if [ "${ZEPHYR_WORKSPACE}" != $(dirname "$AURORA_APPLICATION_DIR") ]; then
+    log_warn "${ZEPHYR_WORKSPACE} != $(dirname $AURORA_APPLICATION_DIR)"
+  fi
+
+  cd "${ZEPHYR_WORKSPACE}"
+  west init --local "${AURORA_APPLICATION_DIR}" --mf west.yml
+  west update
+  west zephyr-export
+  pip install -r ./zephyr/scripts/requirements.txt
+  source ./zephyr/zephyr-env.sh
+
+  # Setup tmp_dir if not already done
+  sudo mkdir -p "$tmp_dir"
+  sudo chown -R builder:builder "$tmp_dir"
+
+  # Signalize our success
+  touch "${FIRST_BOOT_TMP_FLAG}"
+}
+
+# TODO: Build functions
+
+function build_app() {
+  echo "INFO: Building \"${ZEPHYR_APPLICATION}\" for ${ZEPHYR_BOARD} ..."
+
+  cd "${AURORA_APPLICATION_DIR}"
+  west build -b "${ZEPHYR_BOARD}" "${ZEPHYR_APPLICATION}"
+}
+
+function checkout_app() {
+  echo "ERROR: Checkout function not implemented yet!"
+}
+
+function clean_app() {
+  echo "ERROR: Clean function not implemented yet!"
+}
+
+################################################################################
+# Variables                                                                    #
+################################################################################
+
+COMMAND="/bin/bash"
+declare -a ARGS=()
+
+# Flag that shows if everything has already been initialized.
+FIRST_BOOT_TMP_FLAG="/var/auxspace/first_boot"
+
+################################################################################
+# Run first boot code to setup the environment correctly                       #
+################################################################################
+
+if [ ! -f "$FIRST_BOOT_TMP_FLAG" ]; then
+  first_boot_actions
+fi
+
+################################################################################
+# Commandline arg parser                                                       #
+################################################################################
+
+while [ $# -gt 0 ]; do
+  case $1 in
+    -b|--board)
+      declare -x BOARD="$2"
+      shift 2
+      ;;
+    build)
+      COMMAND=build_app
+      shift
+      ;;
+    clean)
+      COMMAND=clean_app
+      shift
+      ;;
+    menuconfig)
+      COMMAND="menuconfig"
+      shift
+      ;;
+    shell)
+      COMMAND="/bin/bash"
+      # Required for podman build, since in podman container you are root
+      if [ ! "${BUILDER_HOME}" = "$HOME" ]; then
+        cp "${BUILDER_HOME}/.bashrc" ~/.bashrc
+        cp "${BUILDER_HOME}/.bash_aliases" ~/.bash_aliases
+      fi
+      shift
+      ;;
+    --*)
+      echo "ERROR: No such option: $1"
+      exit 1
+      ;;
+    *)
+      echo "ERROR: No such command: ${1}"
+      exit 1
+      ;;
+  esac
+done
+
+################################################################################
+# Run command                                                                  #
+################################################################################
+
+$COMMAND ${ARGS[@]}

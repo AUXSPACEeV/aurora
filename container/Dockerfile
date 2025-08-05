@@ -19,6 +19,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Home directory for builder user
 ENV BUILDER_HOME="/builder"
+ENV color_prompt="yes"
 
 # Update APT index + setup and install locales
 RUN apt-get update && \
@@ -51,6 +52,7 @@ RUN echo "builder  ALL=(ALL:ALL) NOPASSWD:ALL" > /etc/sudoers.d/builder-nopasswd
 RUN echo 'Defaults env_keep += "ftp_proxy http_proxy https_proxy no_proxy"' >> /etc/sudoers.d/builder-nopasswd
 
 # Python virtualenv for pip packages
+COPY .gitconfig ~/.gitconfig
 RUN mkdir -p /builder/.ssh && chmod 700 /builder/.ssh
 RUN mkdir -p /opt/venv
 RUN mkdir -p -m 0700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
@@ -61,40 +63,21 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Install zephyr python dependencies + SDK
 RUN python3 -m pip install west
 RUN cd /builder && \
-    wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.0/zephyr-sdk-0.17.0_linux-x86_64.tar.xz && \
-    wget -O - https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.0/sha256.sum | shasum --check --ignore-missing && \
-    tar xvf zephyr-sdk-0.17.0_linux-x86_64.tar.xz && \
-    cd zephyr-sdk-0.17.0 && \
+    wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.3/zephyr-sdk-0.17.3_linux-x86_64.tar.xz && \
+    wget -O - https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.3/sha256.sum | shasum --check --ignore-missing && \
+    tar xvf zephyr-sdk-0.17.3_linux-x86_64.tar.xz && \
+    cd zephyr-sdk-0.17.3 && \
     ./setup.sh -c -h
 # To install a certain type of sdk:
 # ./setup.sh -c -h -t aarch64-zephyr-elf
-
-# Download auxspace zephyr to /builder/zephyr-workspace
-RUN west init \
-    -m https://github.com/AUXSPACEeV/zephyr-example-setup \
-    --mr ${ZEPHYR_SOURCE_SW_VERSION} \
-    /builder/zephyr-workspace
-
-# Set up zephyr
-RUN cd /builder/zephyr-workspace && \
-    west update && \
-    west zephyr-export && \
-    pip install -r ./zephyr/scripts/requirements.txt
-
-# Remove this application folder - we will use a mount for this later
-RUN rm -rf /builder/zephyr-workspace/zephyr-example-setup
 
 # Change permissions for the builder user
 RUN chown -R ${PUID}:${PGID} /opt/venv
 RUN chown -R ${PUID}:${PGID} /builder
 
-# Configure user
-USER builder
-RUN mkdir -p -m 0700 /builder/.ssh && ssh-keyscan github.com >> /builder/.ssh/known_hosts
-
 # Bash aliases
 COPY bash_aliases /builder/.bash_aliases
 # Set and start the container entrypoint
-COPY container-entrypoint.sh /builder/container-entrypoint.sh
+COPY entrypoint /sbin/entrypoint
 
-ENTRYPOINT [ "/builder/container-entrypoint.sh" ]
+ENTRYPOINT [ "/sbin/entrypoint" ]

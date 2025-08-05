@@ -69,3 +69,8 @@ __pycache__/
 
 # docs
 /doc/_build*
+
+
+
+# zephyr cmake cache
+.cache

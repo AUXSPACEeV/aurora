@@ -1,8 +1,14 @@
-# `zephyr-example-setup`
+# `AURORA`
 
-> Example setup of applications using the Auxspace Zephyr port
+> **AU**xspace **RO**cket ope**RA**ting System
 
 ## General Info
+
+### Disclaimer
+
+This Project is a fork of the official
+[Zephyr Example Project](https://github.com/zephyrproject-rtos/example-application)
+with a few tweaks.
 
 ### Technical Terms
 
@@ -18,28 +24,29 @@ for building and containerizing your applications"
 (<https://docs.docker.com/engine/>)
 * `device-tree`: Tree-like configuration for hardware integration
 
-### Project Information
+### Introduction
 
-This Project is a fork of the official
-[Zephyr Example Project](https://github.com/zephyrproject-rtos/example-application)
-with a few tweaks.
-All changes made in comparison to the zephyr example application are
-traceable through the well-documented git history of this project.
-The original README.md from the upstream repository has been moved to
-[doc/README.md](./doc/README.md) for the sole purpose of having an
-easier and more specific entrypoint for newcomers and first semester
-students with this Auxspace-specific document.
+**AURORA** is an open-source software project developed by Auxspace e.V.,
+a student-driven initiative dedicated to building rockets and providing
+hands-on aerospace engineering experience.
+This project is specifically designed for the **METER-2** rocket,
+incorporating a modular electronics stack for optimal performance and
+flexibility.
 
-As the title of this repository suggests, the application is using zephyr
-as an RTOS.
-The Zephyr Kernel acts **application-centric**, which means that
-the application implements the main entrypoint and includes the
-Zephyr Kernel.
-Zephyr supports memory protection, simultaneous multi-processing
-(`SMP`) and many more useful features.
-Integrating custom boards is kept straighforward with
-device-tree and Kconfig hardware configuration, similar
-to the [Linux Kernel](https://github.com/torvalds/linux).
+The **AURORA** system leverages a series of interconnected PCBs
+communicating over **CAN**, with each PCB housing a microchip running
+the **AURORA** software.
+The primary purpose of **AURORA** is to serve as avionics software,
+managing essential data such as air pressure, acceleration, gyro, and
+magnetometer readings.
+Using the **Zephyr** kernel, **AURORA** handles task
+scheduling and real-time operations, enabling reliable and efficient
+communication between multiple **AURORA** instances through
+**CAN**.
+
+Join us as we continue to develop and refine **AURORA**,
+contributing to the advancement of rocket technology and student
+expertise in aerospace engineering!
 
 ## Setup
 
@@ -57,7 +64,7 @@ To install docker, head to the
 select your distro and follow the instructions.
 
 [podman](https://podman.io/docs/installation)
-should also work in this project and can be selected using the `-e`
+also works for this project and can be selected using the `--engine`
 option in the `run.sh` wrapper.
 
 ### Container and Zephyr Workspace
@@ -65,37 +72,92 @@ option in the `run.sh` wrapper.
 After installing docker, all requirements are met to run the wrapper script:
 
 ```bash
-# Open a shell in the development container
-./run.sh shell
+# Open a shell in the development container for the rpi_pico board
+./run.sh -b rpi_pico shell
 ```
 
-The Zephyr workspace is configured to be at */builder/zephyr-workspace*.
-Zephyr itself is then found at */builder/zephyr-workspace/zephyr* and this
-application at */builder/zephyr-workspace/zephyr-example-setup*.
+The Zephyr workspace is configured to be at *$(pwd)/..*.
+Zephyr itself is then found at *<zephyr-workspace>/zephyr* and this
+application at *<zephyr-workspace>/<aurora>*.
 
-*/builder/zephyr-workspace/zephyr-example-setup* is mounted into the container,
+*<zephyr-workspace>/<aurora>* is mounted into the container,
 so changes that you perform inside the container will take effect in this
 repository and vice-versa.
 
-Run `west update` in */builder/zephyr-workspace* to update modules.
+Run `west update` in *<zephyr-workspace>* to update modules.
+
+**example**:
+
+```bash
+# Set up workspace directories
+mkdir zephyr-workspace && cd zephyr-workspace
+
+# Clone the project into the workspace
+git clone https://github.com/AUXSPACEeV/aurora.git aurora
+cd aurora
+
+# Run the container
+./run.sh -b rpi_pico shell
+```
 
 ## Build
 
-```bash
-cd /builder/zephyr-workspace/zephyr-example-setup
+The following command is an example of how to use west when building an
+application:
 
-# Build the project for the m33 core on the rpi pico 2 (example)
-west build -b rpi_pico2/rp2350a/m33 app
+```bash
+# Build the sensor_board project for the rpi pico
+west build -b rpi_pico sensor_board
 ```
 
 The output from the build will be at
-*/builder/zephyr-workspace/zephyr-example-setup/build/zephyr*
-called `zephyr.uf2`.
+*<zephyr-workspace>/<aurora>/build/zephyr*
+called `zephyr.uf2` and `zephyr.elf`.
 
 ## Deployment
+
+### West
 
 Deploy the binary to your board by either using `west flash` or in case of the
 Raspberry Pi Pico series, copy it onto the Pi's storage.
 
 Currently, flashing from inside the docker container is untested and
-might need patching.
+unimplemented.
+
+### Openocd
+
+Natively, you can use openocd and gdb to flash and debug an application:
+
+```bash
+# Flash the PI
+sudo openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000" -c "program build/zephyr/zephyr.elf verify reset exit"
+
+# Attach to debug probe
+sudo openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000"
+
+# Connect gdb to openocd
+gdb build/zephyr/zephyr.elf
+>target remote localhost:3333
+>monitor reset init
+
+# Start debugging!
+```
+
+### Standard USB Interface
+
+The RP2040 comes with a backup bootloader, in case the QSPI Flash is not
+reachable by the ROM bootloader.
+The `BOOTSEL` switch deasserts the QSPI CS pin and opens up the fallback
+loader, which is a simple USB interface.
+When connecting the PI to your PC in this state, the PI is registered as
+an external drive called `RPI-RP2`, which can load `.uf2` files.
+
+Copy the files from your drive to the volume like so:
+
+```bash
+# Linux example
+cp build/zephyr/zephyr.uf2 /mount/${USER}/RPI-RP2
+```
+
+The PI should reboot and immediately start running your uploaded
+application.

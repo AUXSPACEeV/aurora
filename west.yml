@@ -3,18 +3,19 @@
 
 manifest:
   remotes:
-    - name: auxspace-rtos
-      url-base: https://github.com/AUXSPACEeV
-
+    - name: zephyr-rtos
+      url-base: https://github.com/zephyrproject-rtos/
+  defaults:
+    remote: zephyr-rtos
   projects:
     - name: zephyr
-      remote: auxspace-rtos
+      remote: zephyr-rtos
       revision: main
       import:
         # By using name-allowlist we can clone only the modules that are
         # strictly needed by the application.
         name-allowlist:
-          - cmsis      # required by the ARM port
+          - zephyr
+          - cmsis_6    # required by the ARM port for Cortex-M
           - hal_rpi_pico   # required by the rpi_pico boards (raspberrypi based)
-          - hal_stm32  # required by the nucleo_f302r8 board (STM32 based)
           - fatfs      # required for filesystem operations (ff.h)
