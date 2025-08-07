@@ -3,19 +3,24 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <stdio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
 #include <app_version.h>
 
 #if defined(CONFIG_STORAGE)
+#include <ff.h>
+#include <zephyr/fs/fs.h>
 #include <lib/storage.h>
+
+#define LOGFILE_NAME 		"events.log"
+#define LOGFILE_NAME_LEN	MAX(sizeof(LOGFILE_NAME), strlen(DISK_MOUNT_PT))
 #endif /* CONFIG_STORAGE */
 
 #if defined(CONFIG_USB_SERIAL)
 #include "usb_serial.h"
 #endif /* CONFIG_USB_SERIAL */
-
 
 LOG_MODULE_REGISTER(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 
@@ -31,7 +36,7 @@ int main(void)
 	}
 #endif /* CONFIG_USB_SERIAL */
 
-	printk("Auxspace Sensor Board %s\n", APP_VERSION_STRING);
+	LOG_INF("Auxspace Sensor Board %s\n", APP_VERSION_STRING);
 
 #if defined(CONFIG_STORAGE)
 	ret = storage_init();
@@ -39,8 +44,50 @@ int main(void)
 		LOG_ERR("Could not initialize storage (%d)", ret);
 		return 1;
 	}
+
+	char path[MAX_PATH];
+	struct fs_file_t file;
+	struct fs_dir_t dir;
+	int base = strlen(DISK_MOUNT_PT);
+
+	fs_file_t_init(&file);
+	fs_dir_t_init(&dir);
+
+	if (base >= (sizeof(path) - LOGFILE_NAME_LEN)) {
+		LOG_ERR("Not enough concatenation buffer to create file paths");
+		return -EOF;
+	}
+
+	LOG_INF("Creating some dir entries in %s", DISK_MOUNT_PT);
+	strncpy(path, DISK_MOUNT_PT, sizeof(path));
+
+	path[base++] = '/';
+	path[base] = 0;
+	strcat(&path[base], LOGFILE_NAME);
+
+	if (fs_open(&file, path, FS_O_CREATE) != 0) {
+		LOG_ERR("Failed to create file %s", path);
+		return -EBADF;
+	}
+	fs_close(&file);
+
+	path[base] = 0;
+	strcat(&path[base], "cache");
+
+	ret = fs_opendir(&dir, path);
+	if (ret) {
+		if (fs_mkdir(path) != 0) {
+			LOG_ERR("Failed to create dir %s", path);
+			/* If code gets here, it has at least successes to create the
+			 * file so allow function to return true.
+			 */
+			return -ENOENT;
+		}
+		return ret;
+	}
+
 #endif /* CONFIG_STORAGE */
 
-	printk("Sensor board exiting.\n");
+	LOG_INF("Sensor board exiting.\n");
 	return 0;
 }
