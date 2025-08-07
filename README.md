@@ -14,15 +14,17 @@ with a few tweaks.
 
 * `RTOS`: **R**eal-**T**ime **O**perating **S**ystem
 * `µC`: **Mi**cro**C**ontroller (µ - Controller)
-* `MCU`: **M**icro**C**ontroller **Unit**
+* `MCU`: **M**icro**C**ontroller **U**nit
 * `SOC`: **S**ystem **O**n **C**hip
 * `Zephyr`: Open-Source RTOS Kernel for a large variety of MCUs and SOCs
+(<https://www.zephyrproject.org/>)
 * `fork`: A *forked* repository is a direct clone of another, with custom
 modifications made
 * `Docker`: "Docker Engine is an open source containerization technology
 for building and containerizing your applications"
 (<https://docs.docker.com/engine/>)
-* `device-tree`: Tree-like configuration for hardware integration
+* `devicetree`: Tree-like configuration for hardware integration
+(<https://docs.kernel.org/devicetree/index.html>)
 
 ### Introduction
 
