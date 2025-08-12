@@ -152,8 +152,25 @@ cd aurora
 
 ## Build
 
+### Important Directories
+
+The important directories in this project are
+
+1. **\<zephyr-workspace\>**
+2. **\<aurora\>**
+
+If you ran
+`west init -m https://github.com/AUXSPACEeV/aurora --mr maxist-develop workspace`
+in **~/aurora-workspace** then **\<zephyr-workspace\>** will be at
+**~/aurora-workspace/workspace** and **\<aurora\>** at
+**~/aurora-workspace/workspace/aurora**.
+
+### Example Build
+
 The following command is an example of how to use west when building an
-application:
+application.
+Start the command from the **\<aurora\>** dir, as explained in
+[Important Directories](#important-directories).
 
 ```bash
 # Build the sensor_board project for the rpi pico
@@ -161,7 +178,7 @@ west build -b rpi_pico sensor_board
 ```
 
 The output from the build will be at
-*\<zephyr-workspace\>/\<aurora\>/build/zephyr*
+**\<aurora\>/build/zephyr**,
 called `zephyr.uf2` and `zephyr.elf`.
 
 ## Deployment
@@ -206,7 +223,7 @@ Copy the files from your drive to the volume like so:
 
 ```bash
 # Linux example
-cp build/zephyr/zephyr.uf2 /mount/${USER}/RPI-RP2
+cp build/zephyr/zephyr.uf2 /media/${USER}/RPI-RP2
 ```
 
 The PI should reboot and immediately start running your uploaded
