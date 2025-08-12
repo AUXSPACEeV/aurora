@@ -56,7 +56,51 @@ Setup Zephyr using either the docker container in this directory or follow the
 [Getting Started Guide](https://docs.zephyrproject.org/latest/develop/getting_started/index.html)
 from the Zephyr project.
 
+### Native
+
+First, create a workspace:
+
+```bash
+mkdir aurora_workspace && cd aurora_workspace
+```
+
+And add a python virtualenv to install west and other dependencies:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+
+python3 -m pip install west
+```
+
+Also, don't forget the Zephyr SDK (it's big, so ensure you have enough free space):
+
+```bash
+wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.3/zephyr-sdk-0.17.3_linux-x86_64.tar.xz
+wget -O - https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.3/sha256.sum | shasum --check --ignore-missing
+tar xvf zephyr-sdk-0.17.3_linux-x86_64.tar.xz
+cd zephyr-sdk-0.17.3
+./setup.sh -c -h
+
+# Or alternatively only install for the target platform you desire (e.g. aarch64):
+# ./setup.sh -c -h -t aarch64-zephyr-elf
+```
+
+When all dependencies are setup and ready, fetch the aurora sources:
+
+```bash
+west init -m https://github.com/AUXSPACEeV/aurora --mr maxist-develop workspace
+cd workspace
+west update
+west zephyr-export
+
+python3 -m pip install -r ./zephyr/scripts/requirements.txt
+source ./zephyr/zephyr-env.sh
+```
+
 ### Docker
+
+<details> <summary> <b>Build Dependencies</b> (<i>click</i> to open) </summary>
 
 If you don't want to install all Zephyr dependencies by yourself and system-wide,
 this repository also comes with a configured docker container.
@@ -69,7 +113,9 @@ select your distro and follow the instructions.
 also works for this project and can be selected using the `--engine`
 option in the `run.sh` wrapper.
 
-### Container and Zephyr Workspace
+</details>
+
+<details> <summary> <b>Container and Zephyr Workspace</b> (<i>click</i> to open) </summary>
 
 After installing docker, all requirements are met to run the wrapper script:
 
@@ -79,14 +125,14 @@ After installing docker, all requirements are met to run the wrapper script:
 ```
 
 The Zephyr workspace is configured to be at *$(pwd)/..*.
-Zephyr itself is then found at *<zephyr-workspace>/zephyr* and this
-application at *<zephyr-workspace>/<aurora>*.
+Zephyr itself is then found at *\<zephyr-workspace\>/zephyr* and this
+application at *\<zephyr-workspace\>/\<aurora\>*.
 
 *<zephyr-workspace>/<aurora>* is mounted into the container,
 so changes that you perform inside the container will take effect in this
 repository and vice-versa.
 
-Run `west update` in *<zephyr-workspace>* to update modules.
+Run `west update` in *\<zephyr-workspace\>* to update modules.
 
 **example**:
 
@@ -102,6 +148,8 @@ cd aurora
 ./run.sh -b rpi_pico shell
 ```
 
+</details>
+
 ## Build
 
 The following command is an example of how to use west when building an
@@ -113,7 +161,7 @@ west build -b rpi_pico sensor_board
 ```
 
 The output from the build will be at
-*<zephyr-workspace>/<aurora>/build/zephyr*
+*\<zephyr-workspace\>/\<aurora\>/build/zephyr*
 called `zephyr.uf2` and `zephyr.elf`.
 
 ## Deployment
