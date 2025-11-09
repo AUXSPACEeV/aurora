@@ -50,7 +50,7 @@ static int lsdir(const char *path)
 		return res;
 	}
 
-	LOG_INF("\nListing dir %s ...\n", path);
+	LOG_INF("Listing dir %s ...\n", path);
 	for (;;) {
 		/* Verify fs_readdir() */
 		res = fs_readdir(&dirp, &entry);
