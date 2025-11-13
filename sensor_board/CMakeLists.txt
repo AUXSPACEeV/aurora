@@ -22,3 +22,8 @@ endif()
 if(CONFIG_SIMPLE_STORAGE)
     target_sources(app PRIVATE src/simple_storage.c)
 endif()
+
+# Conditionally include imu.c if CONFIG_IMU is enabled
+if(CONFIG_IMU)
+    target_sources(app PRIVATE src/imu.c)
+endif()

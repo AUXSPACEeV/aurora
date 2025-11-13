@@ -26,6 +26,24 @@
 			input-enable;
 		};
 	};
+
+	spi1_default: spi1_default {
+		group1 {
+			pinmux = <SPI1_CSN_P13>, <SPI1_SCK_P10>, <SPI1_TX_P11>;
+		};
+		group2 {
+			pinmux = <SPI1_RX_P12>;
+			input-enable;
+		};
+	};
+
+	i2c0_default: i2c0_default {
+		group1 {
+			pinmux = <I2C0_SDA_P20>, <I2C0_SCL_P21>;
+			input-enable;
+			input-schmitt-enable;
+		};
+	};
 };
 
 &spi0 {
@@ -45,6 +63,27 @@
 		};
 		spi-max-frequency = <17000000>;
 	};
+};
+
+&i2c0 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&i2c0_default>;
+    pinctrl-names = "default";
+
+	imu0: lsm6dso32@6b {
+		compatible = "st,lsm6dso32";
+		reg = <0x6b>;
+
+		status = "okay";
+	};
+};
+
+&spi1 {
+    status = "okay";
+    cs-gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi1_default>;
+    pinctrl-names = "default";
 };
 
 &gpio0 {

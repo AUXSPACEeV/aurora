@@ -37,6 +37,18 @@ config MULTI_STORAGE
 
 endchoice
 
+config IMU
+	bool "Support for IMU"
+	help
+	  This option enables functionality for the Inertial Measurement Unit (IMU).
+
+config IMU_HZ
+    string "IMU sampling rate (Hz)"
+    default "10.0"
+	depends on IMU
+    help
+      Desired IMU sampling rate in Hertz (floating-point allowed).
+
 config USB_SERIAL
 	bool "Support for USB serial console"
 	help

@@ -7,6 +7,7 @@
 #
 
 set -e
+set -x
 
 ################################################################################
 # Functions                                                                    #
@@ -165,7 +166,7 @@ CONTAINER_RUNTIME_ARGS+=" \
     -e AURORA_APPLICATION_DIR="${AURORA_APPLICATION_DIR}" \
     -e ZEPHYR_WORKSPACE="${ZEPHYR_WORKSPACE}" \
     -e ZEPHYR_BOARD="${ZEPHYR_BOARD}" \
-    -v "${THISDIR}:${AURORA_APPLICATION_DIR}:rw" \
+    -v "${ZEPHYR_WORKSPACE}:${ZEPHYR_WORKSPACE}:rw" \
     --workdir ${AURORA_APPLICATION_DIR} \
 "
 

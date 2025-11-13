@@ -138,23 +138,18 @@ function start_container() {
 function run_container_cmd() {
     local use_run_cmd="${1:-0}"
     local run_cmd="shell"
-    local run_cmd_args="-d"
 
     if [ "$AURORA_CI_BUILD" = "1" ]; then
         run_cmd="$COMMAND"
-        unset run_cmd_args
     fi
 
     if [ "$use_run_cmd" = "1" ]; then
         log_info "Running '${_CONTAINER_NAME}:$CONTAINER_TAG' ..."
-        $CONTAINER_BIN run \
+        exec $CONTAINER_BIN run \
             $run_cmd_args \
             $CONTAINER_RUNTIME_ARGS \
             ${_CONTAINER_NAME}:$CONTAINER_TAG \
             ${run_cmd}
-        if [ "$AURORA_CI_BUILD" = "1" ]; then
-            exit 0
-        fi
     fi
 
     if ! ${CONTAINER_BIN} ps --format '{{.Names}}' \

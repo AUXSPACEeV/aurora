@@ -58,6 +58,8 @@ from the Zephyr project.
 
 ### Native
 
+<details> <summary> <b>Step-by-step guide for containerless buildenv</b> (<i>click</i> to open) </summary>
+
 First, create a workspace:
 
 ```bash
@@ -98,9 +100,11 @@ python3 -m pip install -r ./zephyr/scripts/requirements.txt
 source ./zephyr/zephyr-env.sh
 ```
 
+</details>
+
 ### Docker
 
-<details> <summary> <b>Build Dependencies</b> (<i>click</i> to open) </summary>
+**Build Dependencies**
 
 If you don't want to install all Zephyr dependencies by yourself and system-wide,
 this repository also comes with a configured docker container.
@@ -113,9 +117,17 @@ select your distro and follow the instructions.
 also works for this project and can be selected using the `--engine`
 option in the `run.sh` wrapper.
 
-</details>
+**Directory setup**
 
-<details> <summary> <b>Container and Zephyr Workspace</b> (<i>click</i> to open) </summary>
+Create a workspace and add the aurora app to it:
+
+```bash
+mkdir zephyr_workspace
+git clone -b maxist-develop git@github.com:AUXSPACEeV/aurora.git zephyr_workspace/aurora
+cd zephyr_workspace/aurora
+```
+
+**Container and Zephyr Workspace**
 
 After installing docker, all requirements are met to run the wrapper script:
 

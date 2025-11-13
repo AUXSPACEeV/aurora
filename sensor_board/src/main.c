@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -19,8 +20,12 @@
 #endif /* CONFIG_STORAGE */
 
 #if defined(CONFIG_USB_SERIAL)
-#include "usb_serial.h"
+#include <lib/usb_serial.h>
 #endif /* CONFIG_USB_SERIAL */
+
+#if defined(CONFIG_IMU)
+#include <lib/imu.h>
+#endif /* CONFIG_IMU */
 
 LOG_MODULE_REGISTER(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 
@@ -87,6 +92,20 @@ int main(void)
 	}
 
 #endif /* CONFIG_STORAGE */
+
+#if defined(CONFIG_IMU)
+	const struct device *const imu = DEVICE_DT_GET_ONE(st_lsm6dso32);
+	if (imu_init(imu)) {
+		LOG_ERR("Could not initialize IMU: %d", ret);
+	}
+#if !defined(CONFIG_LSM6DSO_TRIGGER)
+	float imu_hz = strtof(CONFIG_IMU_HZ, NULL);
+	for(;;) {
+		imu_poll(imu);
+		k_sleep(K_MSEC((int)(1000 / imu_hz)));
+	}
+#endif /* CONFIG_LSM6DSO_TRIGGER */
+#endif /* CONFIG_IMU */
 
 	LOG_INF("Sensor board exiting.\n");
 	return 0;

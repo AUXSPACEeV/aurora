@@ -6,7 +6,7 @@
 
 #include <string.h>
 
-#include "usb_serial.h"
+#include <lib/usb_serial.h>
 
 LOG_MODULE_REGISTER(usb_serial, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 

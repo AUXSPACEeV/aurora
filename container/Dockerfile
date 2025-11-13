@@ -63,10 +63,10 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Install zephyr python dependencies + SDK
 RUN python3 -m pip install west
 RUN cd /builder && \
-    wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.3/zephyr-sdk-0.17.3_linux-x86_64.tar.xz && \
-    wget -O - https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.3/sha256.sum | shasum --check --ignore-missing && \
-    tar xvf zephyr-sdk-0.17.3_linux-x86_64.tar.xz && \
-    cd zephyr-sdk-0.17.3 && \
+    wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/zephyr-sdk-0.17.4_linux-x86_64.tar.xz && \
+    wget -O - https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/sha256.sum | shasum --check --ignore-missing && \
+    tar xvf zephyr-sdk-0.17.4_linux-x86_64.tar.xz && \
+    cd zephyr-sdk-0.17.4 && \
     ./setup.sh -c -h
 # To install a certain type of sdk:
 # ./setup.sh -c -h -t aarch64-zephyr-elf
