@@ -36,7 +36,7 @@ jobs:
           toolchains: arm-zephyr-eabi:riscv64-zephyr-elf:x86_64-zephyr-elf
           ccache-cache-key: ${{ matrix.os }}
 
-      - name: Build firmware
+      - name: Build sensor_board firmware
         working-directory: aurora
         shell: bash
         run: |
@@ -44,6 +44,15 @@ jobs:
             EXTRA_TWISTER_FLAGS="--short-build-path -O/tmp/twister-out"
           fi
           west twister -T sensor_board -v --inline-logs --integration $EXTRA_TWISTER_FLAGS
+
+      - name: Build HUMMEL firmware
+        working-directory: aurora
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            EXTRA_TWISTER_FLAGS="--short-build-path -O/tmp/twister-out"
+          fi
+          west twister -T hummel_ctrl -v --inline-logs --integration $EXTRA_TWISTER_FLAGS
 
       - name: Twister Tests
         working-directory: aurora

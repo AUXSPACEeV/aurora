@@ -1,0 +1,148 @@
+/*
+ * Copyright (c) 2025 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	chosen {
+		/* Console and shell over CDC ACM */
+		zephyr,console = &snippet_cdc_acm_console_uart;
+		zephyr,shell-uart = &snippet_cdc_acm_console_uart;
+
+		/* Sensors */
+		auxspace,baro = &ms5607_0;
+		auxspace,imu = &lsm6dso32_0;
+
+		/* Storage */
+		auxspace,mmc = &mmc0;
+		auxspace,ffs = &ffs0;
+
+		/* motor */
+		auxspace,servo = &pwm_servo0;
+	};
+
+	fstab {
+		compatible = "zephyr,fstab";
+		ffs0: ffs0 {
+			compatible = "zephyr,fstab,fatfs";
+			automount;
+			disk-access;
+			mount-point = "/MMC:";
+		};
+	};
+
+	pwm_servo0: pwm_servo {
+		compatible = "pwm-servo";
+		pwms = <&pwm_ctrl0 0 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
+		min-pulse = <PWM_USEC(700)>;
+		max-pulse = <PWM_USEC(2500)>;
+	};
+};
+
+&zephyr_udc0 {
+	snippet_cdc_acm_console_uart: snippet_cdc_acm_console_uart {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+&pinctrl {
+	spi0_default: spi0_default {
+		group1 {
+			pinmux = <SPI0_CSN_P17>, <SPI0_SCK_P18>, <SPI0_TX_P19>;
+		};
+		group2 {
+			pinmux = <SPI0_RX_P16>;
+			input-enable;
+		};
+	};
+
+	spi1_default: spi1_default {
+		group1 {
+			pinmux = <SPI1_CSN_P13>, <SPI1_SCK_P10>, <SPI1_TX_P11>;
+		};
+		group2 {
+			pinmux = <SPI1_RX_P12>;
+			input-enable;
+		};
+	};
+
+	i2c0_default: i2c0_default {
+		group1 {
+			pinmux = <I2C0_SDA_P20>, <I2C0_SCL_P21>;
+			input-enable;
+			input-schmitt-enable;
+		};
+	};
+
+	i2c1_default: i2c1_default {
+		group1 {
+			pinmux = <I2C1_SDA_P2>, <I2C1_SCL_P3>;
+			input-enable;
+			input-schmitt-enable;
+		};
+	};
+};
+
+&spi0 {
+	status = "okay";
+	cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+
+	pinctrl-0 = <&spi0_default>;
+	pinctrl-names = "default";
+
+	sdhc0: sdhc@0 {
+		compatible = "zephyr,sdhc-spi-slot";
+		reg = <0>;
+		status = "okay";
+		mmc0: mmc {
+			compatible = "zephyr,sdmmc-disk";
+			disk-name = "MMC";
+			status = "okay";
+		};
+		spi-max-frequency = <25000000>;
+	};
+};
+
+&spi1 {
+	status = "okay";
+	cs-gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi1_default>;
+	pinctrl-names = "default";
+};
+
+&i2c0 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&i2c0_default>;
+	pinctrl-names = "default";
+
+	lsm6dso32_0: lsm6dso32@6b {
+		compatible = "st,lsm6dso32";
+		reg = <0x6b>;
+		status = "okay";
+	};
+
+	ms5607_0: ms5607@77 {
+		compatible = "meas,ms5607";
+		reg = <0x77>;
+		status = "okay";
+	};
+};
+
+&i2c1 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&i2c1_default>;
+	pinctrl-names = "default";
+
+	pwm_ctrl0: pca9685@40 {
+		status = "okay";
+		compatible = "nxp,pca9685-pwm";
+		reg = <0x40>;
+		#pwm-cells = <3>;
+	};
+};
+
+&gpio0 {
+	status = "okay";
+};
