@@ -1,0 +1,29 @@
+#-------------------------------------------------------------------------------
+# Hopper controller prototype
+#
+# Copyright (c) 2025 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+cmake_minimum_required(VERSION 3.20.0)
+
+find_package(Zephyr)
+project(hopper_ctrl)
+
+target_sources(app PRIVATE 
+    src/main.c
+    )
+
+# Conditionally include usb_serial.c if CONFIG_USB_SERIAL is enabled
+if(CONFIG_USB_SERIAL)
+    target_sources(app PRIVATE src/usb_serial.c)
+endif()
+
+# Conditionally include usb_serial.c if CONFIG_SIMPLE_STORAGE is enabled
+if(CONFIG_STORAGE)
+    target_sources(app PRIVATE src/storage.c)
+endif()
+
+# Conditionally include gyro.c if CONFIG_GYRO is enabled
+if(CONFIG_GYRO)
+    target_sources(app PRIVATE src/gyro.c)
+endif()

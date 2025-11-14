@@ -1,0 +1,79 @@
+/*
+ * Copyright (c) 2025 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+    chosen {
+        zephyr,console = &cdc_acm_uart0;
+    };
+};
+
+&zephyr_udc0 {
+    cdc_acm_uart0: cdc_acm_uart0 {
+        compatible = "zephyr,cdc-acm-uart";
+        label = "CDC_ACM_0";
+    };
+};
+
+&pinctrl {
+	spi0_default: spi0_default {
+		group1 {
+			pinmux = <SPI0_CSN_P17>, <SPI0_SCK_P18>, <SPI0_TX_P19>;
+		};
+		group2 {
+			pinmux = <SPI0_RX_P16>;
+			input-enable;
+		};
+	};
+	spi1_default: spi1_default {
+		group1 {
+			pinmux = <SPI1_CSN_P13>, <SPI1_SCK_P10>, <SPI1_TX_P11>;
+		};
+		group2 {
+			pinmux = <SPI1_RX_P12>;
+			input-enable;
+		};
+	};
+};
+
+&spi0 {
+	status = "okay";
+	cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi0_default>;
+	pinctrl-names = "default";
+
+	sdhc0: sdhc@0 {
+		compatible = "zephyr,sdhc-spi-slot";
+		reg = <0>;
+		status = "okay";
+		mmc {
+			compatible = "zephyr,sdmmc-disk";
+			status = "okay";
+			disk-name = "SD";
+		};
+		spi-max-frequency = <17000000>;
+	};
+};
+
+&spi1 {
+	status = "okay";
+	cs-gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi1_default>;
+	pinctrl-names = "default";
+
+	gyro0: bmi08x@0 {
+		compatible = "bosch,bmi08x-gyro";
+		reg = <0>;
+		int-gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
+		spi-max-frequency = <17000000>;
+		int3-4-map-io = <0x01>;
+		int3-4-conf-io = <0x02>;
+		gyro-hz = "1000_116";
+		gyro-fs = <1000>;
+	};
+};
+
+&gpio0 {
+	status = "okay";
+};
