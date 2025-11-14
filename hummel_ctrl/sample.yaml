@@ -1,0 +1,41 @@
+sample:
+  name: Sensor Board
+common:
+  tags: filesystem
+  modules:
+    - fatfs
+tests:
+  sample.filesystem.fat_fs:
+    depends_on: sdhc
+    harness: console
+    harness_config:
+      fixture: fixture_sdhc
+      type: multi_line
+      regex:
+        - "Block count"
+        - "Sector size"
+        - "Memory Size"
+        - "Disk mounted"
+  sample.filesystem.fat_fs.rpi_pico:
+    build_only: true
+    platform_allow: rpi_pico
+    extra_args:
+      - EXTRA_CONF_FILE=boards/rpi_pico.conf
+      - DTC_OVERLAY_FILE=boards/rpi_pico.overlay
+  sample.filesystem.fat_fs.rpi_pico2_hazard3:
+    build_only: true
+    platform_allow: rpi_pico2/rp2350a/hazard3
+    extra_args:
+      - EXTRA_CONF_FILE=boards/rpi_pico2_hazard3.conf
+      - DTC_OVERLAY_FILE=boards/rpi_pico2_hazard3.overlay
+  sample.filesystem.fat_fs.has_sdmmc_disk:
+    build_only: true
+    filter: dt_compat_enabled("zephyr,sdmmc-disk")
+    integration_platforms:
+      - rpi_pico
+      - rpi_pico2_hazard3
+tests:
+  hummel_ctrl.default: {}
+  hummel_ctrl.debug:
+    extra_overlay_confs:
+      - debug.conf
