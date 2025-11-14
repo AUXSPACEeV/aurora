@@ -31,20 +31,19 @@
 
 /* Library includes. */
 #include <stdio.h>
-#include <errno.h>
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
 #include "hardware/watchdog.h"
 
 /* Local includes */
 #include <aurora/app.h>
-#include <aurora/compiler.h>
 #include <aurora/log.h>
+#include <aurora/macros.h>
 #include <aurora/task/freertos_scheduling.h>
 #include <aurora/task/watchdog_service.h>
 
 /* main task defines */
-#define MAIN_TASK_PRI       (configMAX_PRIORITIES / 2)
+#define MAIN_TASK_PRI       (configMAX_PRIORITIES - 1)
 #define MAIN_TASK_STACKSIZE (configMINIMAL_STACK_SIZE * 0x10)
 
 /**
@@ -60,7 +59,7 @@ static void prv_setup_early_tasks(void);
  * @param args Unused task arguments
  */
 static void x_main_task(void* args);
-static TaskHandle_t main_task_handle = NULL;
+static __attribute__((aligned(32))) TaskHandle_t main_task_handle = NULL;
 
 /*----------------------------------------------------------------------------*/
 
@@ -72,6 +71,11 @@ static TaskHandle_t main_task_handle = NULL;
 int main(void)
 {
     int ret;
+
+    volatile int catchme = 0;
+    for (;;)
+        if (catchme)
+            break;
 
     /* Configure the hardware ready to run the demo. */
     stdio_init_all();
@@ -87,6 +91,8 @@ int main(void)
     }
 
     vTaskStartScheduler();
+
+    log_warning("Aurora finished SMP processes. Exiting...\n");
 
     return 0;
 }

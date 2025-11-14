@@ -21,6 +21,11 @@
 #include "hardware/spi.h"
 
 #include <aurora/list.h>
+#include <aurora/macros.h>
+
+#define SPI_TRANSFER_FLG_NONE           BIT(0)
+#define SPI_TRANSFER_FLG_XFER_START     BIT(1)
+#define SPI_TRANSFER_FLG_XFER_STOP      BIT(2)
 
 /**
  * @brief SPI SDCard driver configuration state structure
@@ -31,7 +36,6 @@
  * @param rx_dma_cfg: DMA channel configuration for RX
  * @param initialized: true if the state is initialized, false otherwise
  * @param sem: semaphore for synchronization
- * @param mutex: mutex for synchronization
  *
  * @note This structure is used to hold the state of the SPI SDCard driver and
  * is set by the driver.
@@ -44,7 +48,6 @@ struct spi_config_state {
     dma_channel_config rx_dma_cfg;
     bool initialized;
     semaphore_t sem;
-    mutex_t mutex;
 };
 
 /**
@@ -173,15 +176,13 @@ static inline void cs_deselect(uint cs_pin)
 /*----------------------------------------------------------------------------*/
 
 /**
- * @brief Lock the SPI state mutex
+ * @brief Lock the SPI state semaphore
  * 
  * @param spi: spi config to lock
  */
-static inline void spi_lock(struct spi_config *spi)
+static inline bool spi_lock(struct spi_config *spi)
 {
-    struct spi_config_state *state = spi->state;
-    assert(mutex_is_initialized(&state->mutex));
-    mutex_enter_blocking(&state->mutex);
+    return sem_acquire_timeout_ms(&spi->state->sem, 1);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -193,9 +194,7 @@ static inline void spi_lock(struct spi_config *spi)
  */
 static inline void spi_unlock(struct spi_config *spi)
 {
-    struct spi_config_state *state = spi->state;
-    assert(mutex_is_initialized(&state->mutex));
-    mutex_exit(&state->mutex);
+    sem_release(&spi->state->sem);
 }
 
 /* [] END OF FILE */

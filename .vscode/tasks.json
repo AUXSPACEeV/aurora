@@ -4,13 +4,13 @@
         {
             "label": "setup aurora",
             "type": "shell",
-            "command": "./run.sh setup",
+            "command": "./run.sh -b sensor_board setup",
             "problemMatcher": []
         },
         {
             "label": "build aurora",
             "type": "shell",
-            "command": "./run.sh build",
+            "command": "./run.sh -b sensor_board build",
             "problemMatcher": [],
             "group": {
                 "kind": "build",
@@ -20,13 +20,13 @@
         {
             "label": "clean aurora",
             "type": "shell",
-            "command": "./run.sh clean",
+            "command": "./run.sh -b sensor_board clean",
             "problemMatcher": []
         },
         {
             "label": "setup docs",
             "type": "shell",
-            "command": "./run.sh docs setup",
+            "command": "./run.sh -b sensor_board docs setup",
             "problemMatcher": []
         },
         {

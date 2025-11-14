@@ -22,10 +22,6 @@
 #include <aurora/drivers/mmc/mmc.h>
 #include <aurora/drivers/spi.h>
 
-#ifndef BIT
-#define BIT(x)  ((uint32_t)(1 << (x)))
-#endif
-
 /* MMC/SD in SPI mode reports R1 status always */
 #define R1_SPI_IDLE			    BIT(0)
 #define R1_SPI_ERASE_RESET		BIT(1)
@@ -38,28 +34,6 @@
 #define R1_SPI_ERROR			BIT(7)
 
 #define SPI_MMC_START_BLOCK     (0xFE)
-
-/**
- * @brief SPI SDCard command structure (48 bits)
- *
- * @param start: two start bits, set to "0b01"
- * @param cmd: six bits for the command number
- * @param arg: 32 bits for the arguments
- * @param crc7: 7 bit CRC32 sum
- * @param stop: at last one stop bit
- *
- * @note This structure is used to send commands to the SDCard.
- * @note The structure is packed to ensure that the data is aligned correctly.
- *
- * @ref https://users.ece.utexas.edu/~valvano/EE345M/SD_Physical_Layer_Spec.pdf
- */
-struct spi_mmc_message {
-    uint8_t start : 2;
-    uint8_t cmd : 6;
-    uint32_t arg;
-    uint8_t crc7 : 7;
-    uint8_t stop : 1;
-}__attribute__((packed));
 
 /**
  * @brief SPI SDCard command macro

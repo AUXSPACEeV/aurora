@@ -49,8 +49,8 @@ pico_set_program_name(aurora "aurora")
 pico_set_program_version(aurora "0.1")
 
 pico_enable_stdio_uart(aurora 1)
-pico_enable_stdio_usb(aurora 1)
+pico_enable_stdio_usb(aurora 0)
 
 pico_add_extra_outputs(aurora)
 
-enable_strict_warnings(aurora)
+# enable_strict_warnings(aurora)

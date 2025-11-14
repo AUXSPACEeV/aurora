@@ -3,7 +3,7 @@
  * @brief Sources for MMC/SD I/O via SPI
  * @note This file contains the source code for MMC/SD I/O via SPI.
  * The source code is derived from various open source projects:
- * 
+ *
  * @ref https://github.com/torvalds/linux
  * @ref https://github.com/u-boot/u-boot
  * @ref https://github.com/arduino-libraries/SD
@@ -26,703 +26,505 @@
 #include "hardware/irq.h"
 #include "hardware/spi.h"
 
-#include <aurora/compiler.h>
 #include <aurora/config.h>
+#include <aurora/crc.h>
 #include <aurora/drivers/mmc/mmc.h>
 #include <aurora/drivers/mmc/spi_mmc.h>
 #include <aurora/drivers/spi.h>
 #include <aurora/list.h>
 #include <aurora/log.h>
+#include <aurora/macros.h>
 
-/* Prototypes */
+/* MMC/SD in SPI mode reports R1 status always */
+#define R1_SPI_IDLE			BIT(0)
+#define R1_SPI_ERASE_RESET		BIT(1)
+#define R1_SPI_ILLEGAL_COMMAND		BIT(2)
+#define R1_SPI_COM_CRC			BIT(3)
+#define R1_SPI_ERASE_SEQ		BIT(4)
+#define R1_SPI_ADDRESS			BIT(5)
+#define R1_SPI_PARAMETER		BIT(6)
+/* R1 bit 7 is always zero, reuse this bit for error */
+#define R1_SPI_ERROR			BIT(7)
 
-/** 
- * @brief extract bits from abyte array
- * 
- * @param data: byte array pointer
- * @param msb: Most significant bit to extract in data array
- * @param lsb: Least significant bit to extract in data array
- * @return: Bits between lsb and msb, shifted and masked accordingly
- * 
- * @note Use if the bitfield to extract may span multiple bytes, possibly even
- * non-aligned.
+/* Response tokens used to ack each block written: */
+#define SPI_MMC_RESPONSE_CODE(x)	((x) & 0x1f)
+#define SPI_RESPONSE_ACCEPTED		((2 << 1)|1)
+#define SPI_RESPONSE_CRC_ERR		((5 << 1)|1)
+#define SPI_RESPONSE_WRITE_ERR		((6 << 1)|1)
+
+/*
+ * Read and write blocks start with these tokens and end with crc;
+ * on error, read tokens act like a subset of R2_SPI_* values.
  */
-static uint32_t ext_bits(uint8_t *data, int msb, int lsb);
+/* single block write multiblock read */
+#define SPI_TOKEN_SINGLE		0xfe
+/* multiblock write */
+#define SPI_TOKEN_MULTI_WRITE		0xfc
+/* terminate multiblock write */
+#define SPI_TOKEN_STOP_TRAN		0xfd
 
-/**
- * @brief Enable low frequency SPI mode for SDCard
- * 
- * @param ctx: pointer to spi mmc driver context
- */
-static void spi_mmc_go_low_frequency(struct spi_mmc_context *ctx);
+/* MMC SPI commands start with a start bit "0" and a transmit bit "1" */
+#define MMC_SPI_CMD(x) (0x40 | (x))
 
-/**
- * @brief Initialize the mmc driver data and context
- * 
- * @param ctx: pointer to spi mmc driver context
- * @return: Error code
- */
-static int spi_mmc_init(struct mmc_dev *dev);
+/* bus capability */
+#define MMC_SPI_VOLTAGE			(MMC_VDD_32_33 | MMC_VDD_33_34)
+#define MMC_SPI_MIN_CLOCK		400000	/* 400KHz to meet MMC spec */
+#define MMC_SPI_MAX_CLOCK		25000000 /* SD/MMC legacy speed */
 
-/**
- * @brief Send an SPI MMC command to the SDCard (raw)
- * 
- * @param ctx: pointer to spi mmc driver context
- * @param msg: message to send
- * @param rx: SPI transfer receive buffer. Has to be sized so that the SPI
- * response fits
- * @param is_acmd: true if the command is an ACMD, false otherwise
- * @return: 0 on success, error code otherwise
- */
-static int spi_mmc_send_cmd(struct spi_mmc_context *ctx,
-                            struct spi_mmc_message msg, uint8_t *rx,
-                            bool is_acmd);
-
-/**
- * @brief get the sizie in bytes for an MMC response type
- * 
- * @param resp_type: mmc response type
- * @return: size of the response in bytes
- */
-static size_t spi_mmc_resp_size(mmc_response_t resp_type);
-
-/**
- * @brief Get the number of sectors on an SD card.
- *
- * @param dev: pointer to spi mmc device driver
- * @return: number of sectors on the card, or 0 if an error occurred.
- *
- * @details This function sends a CMD9 command to the card to get the Card
- * Specific Data (CSD) and then extracts the number of sectors from the CSD.
- */
-static uint64_t spi_mmc_sectors(struct mmc_dev *dev);
-
-/**
- * @brief Send a message via spi
- * 
- * @param ctx: pointer to spi mmc driver context
- * @param msg: message to send
- * @param resp: SPI transfer receive buffer. Has to be sized so that the SPI
- * response fits
- * @return: Error code
- */
-static int spi_mmc_send_msg(struct spi_mmc_context *ctx,
-                            const struct spi_mmc_message msg, uint8_t* resp);
-
-/**
- * @brief send card reset command
- * 
- * @param ctx: pointer to spi mmc driver context
- * @return: Error code
- */
-static int spi_mmc_send_reset(struct spi_mmc_context *ctx);
-
-/**
- * @brief Do an SPI transfer
- * 
- * @param ctx: pointer to spi mmc driver context
- * @param tx: SPI write buffer
- * @param rx: SPI receive buffer
- * @param length: total length of SPI transfer in words (here: bytes)
- * @return: Error code
- */
-static int spi_mmc_transfer(struct spi_mmc_context *ctx, const uint8_t *tx,
-                            uint8_t* rx, size_t length);
-
-/**
- * @brief Send the voltage select command to the card
- * 
- * @param dev: pointer to spi mmc device driver
- * @return: Error code
- */
-static int spi_mmc_voltage_select(struct mmc_dev *dev);
-
-/**
- * @brief Wait for the card to be ready
- * 
- * @param dev: pointer to spi mmc device driver
- * @return: Error code
- *
- * TODO: add timeout via timer/rtc instead of fixed retries
- */
-static int spi_mmc_wait_ready(struct spi_mmc_context *ctx);
-
-/* Driver function implementation */
-
-static uint32_t ext_bits(uint8_t *data, int msb, int lsb) {
-    uint32_t bits = 0;
-    uint32_t size = 1 + msb - lsb;
-    for (uint32_t i = 0; i < size; i++) {
-        uint32_t position = lsb + i;
-        uint32_t byte = 15 - (position >> 3);
-        uint32_t bit = position & 0x7;
-        uint32_t value = (data[byte] >> bit) & 1;
-        bits |= value << i;
-    }
-    return bits;
-}
-
-/*----------------------------------------------------------------------------*/
-
-static size_t spi_mmc_resp_size(mmc_response_t resp_type)
-{
-    switch (resp_type) {
-        case MMC_RESP_R1:
-        case MMC_RESP_R1b:
-            return 1;   // 8 Bits
-        case MMC_RESP_R2:
-            return 2;  // 16 Bits
-        case MMC_RESP_R3:
-        case MMC_RESP_R6:
-        case MMC_RESP_R7:
-            return 5;   // 40 Bits
-        default:
-            return 1;  // At least 1 byte has to be read
-    }
-}
-
-/*----------------------------------------------------------------------------*/
-
-static void spi_mmc_go_low_frequency(struct spi_mmc_context *ctx)
-{
-    // Actual frequency: 398089
-    spi_set_baudrate(ctx->spi->hw_spi, 400 * 1000);
-}
-
-/*----------------------------------------------------------------------------*/
-
-static void spi_mmc_resume_frequency(struct spi_mmc_context *ctx)
-{
-    spi_set_baudrate(ctx->spi->hw_spi, ctx->spi->baud_rate);
-}
-
-/*----------------------------------------------------------------------------*/
+/* timeout value */
+#define CMD_TIMEOUT             8
+#define READ_TIMEOUT            3000000 /* 1 sec */
+#define WRITE_TIMEOUT           3000000 /* 1 sec */
+#define R1B_TIMEOUT             3000000 /* 1 sec */
 
 static int spi_mmc_transfer(struct spi_mmc_context *ctx, const uint8_t *tx,
-                            uint8_t* rx, size_t length)
+                            uint8_t* rx, size_t length, uint32_t flags)
 {
+	log_trace("%s(tx=0x%p, rx=0x%p, len=0x%08x)\r\n", __FUNCTION__, tx, rx,
+			  length);
+
     int len;
     int ret = 0;
 
-    // assert(512 == length || 1 == length);
-    assert(tx || rx);
-    // assert(!(tx && rx));
+    uint8_t *spi_tx = tx ? tx : calloc(len, sizeof(uint8_t));
+    uint8_t *spi_rx = rx ? rx : calloc(len, sizeof(uint8_t));
 
-    cs_select(ctx->cs_pin);
+	if (!tx) {
+		memset(spi_tx, 0xff, length);
+	}
+
+	if (flags & SPI_TRANSFER_FLG_XFER_START)
+    	cs_select(ctx->cs_pin);
 
     if (ctx->spi->use_dma) {
-        ret = spi_transfer_dma(ctx->spi, tx, rx, length);
+        ret = spi_transfer_dma(ctx->spi, spi_tx, spi_rx, length);
     } else {
-        len = spi_write_read_blocking(ctx->spi->hw_spi, tx, rx, length);
+        len = spi_write_read_blocking(ctx->spi->hw_spi, spi_tx, spi_rx, length);
         if (len != length) {
             log_error("SPI transfer failed: %d != %d\r\n", len, length);
             ret = -EIO;
         }
     }
 
-    cs_deselect(ctx->cs_pin);
+	if (flags & SPI_TRANSFER_FLG_XFER_STOP)
+    	cs_deselect(ctx->cs_pin);
 
     return ret;
 }
 
-/*----------------------------------------------------------------------------*/
-
-static int spi_mmc_wait_ready(struct spi_mmc_context *ctx)
+/**
+ * mmc_spi_sendcmd() - send a command to the SD card
+ *
+ * @ctx:	mmc_spi device
+ * @cmdidx:	command index
+ * @cmdarg:	command argument
+ * @resp_type:	card response type
+ * @resp:	buffer to store the card response
+ * @resp_size:	size of the card response
+ * @resp_match:	if true, compare each of received bytes with @resp_match_value
+ * @resp_match_value:	a value to be compared with each of received bytes
+ * @r1b:	if true, receive additional bytes for busy signal token
+ * Return: 0 if OK, -ETIMEDOUT if no card response is received, -ve on error
+ */
+static int mmc_spi_sendcmd(struct spi_mmc_context *ctx,
+			   uint8_t cmdidx, uint32_t cmdarg, uint32_t resp_type,
+			   uint8_t *resp, uint32_t resp_size,
+			   bool resp_match, uint8_t resp_match_value, bool r1b)
 {
-    log_trace("%s()\r\n", __FUNCTION__);
-    const uint32_t max_r = 10;
+	int i, rpos = 0, ret = 0;
+	uint8_t cmdo[7], r;
 
-    uint8_t ret;
-    uint8_t resp;
-    uint8_t dummy = 0xFF;
-    int i;
+	if (!resp || !resp_size)
+		return 0;
 
-    for(i = 0; i < max_r; ++i) {
-        ret = spi_mmc_transfer(ctx, &dummy, &resp, 1);
-        if (resp != 0x00) {
-            break;
-        }
-    }
+	log_trace("cmd%d cmdarg=0x%x resp_type=0x%x "
+	      "resp_size=%d resp_match=%d resp_match_value=0x%x\n",
+	      cmdidx, cmdarg, resp_type,
+	      resp_size, resp_match, resp_match_value);
 
-    if (resp == 0x00) {
-        log_error("%s failed\r\n", __FUNCTION__);
-    }
+	cmdo[0] = 0xff;
+	cmdo[1] = MMC_SPI_CMD(cmdidx);
+	cmdo[2] = cmdarg >> 24;
+	cmdo[3] = cmdarg >> 16;
+	cmdo[4] = cmdarg >> 8;
+	cmdo[5] = cmdarg;
+	cmdo[6] = (crc7(&cmdo[1], 5) << 1) | 0x01;
 
-    // Return success/failure
-    if ((resp > 0x00) && (resp != 0xFF)) {
-        return -EIO;
-    }
+	ret = spi_mmc_transfer(ctx, cmdo, NULL, sizeof(cmdo) * 8, SPI_TRANSFER_FLG_XFER_START);
+	if (ret) {
+		log_error("MMC SPI send failed: %d", ret);
+		return ret;
+	}
 
-    return 0;
+	ret = spi_mmc_transfer(ctx, NULL, &r, 1 * 8, SPI_TRANSFER_FLG_NONE);
+	if (ret) {
+		log_error("MMC SPI receive failed: %d", ret);
+		return ret;
+	}
+	
+	log_debug("%s: cmd%d", __func__, cmdidx);
+
+	if (resp_match)
+		r = ~resp_match_value;
+	i = CMD_TIMEOUT;
+	while (i) {
+		ret = spi_mmc_transfer(ctx, NULL, &r, 1 * 8, SPI_TRANSFER_FLG_NONE);
+		if (ret)
+			return ret;
+		log_debug(" resp%d=0x%x", rpos, r);
+		rpos++;
+		i--;
+
+		if (resp_match) {
+			if (r == resp_match_value)
+				break;
+		} else {
+			if (!(r & 0x80))
+				break;
+		}
+
+		if (!i)
+			return -ETIMEDOUT;
+	}
+
+	resp[0] = r;
+	for (i = 1; i < resp_size; i++) {
+		ret = spi_mmc_transfer(ctx, NULL, &r, 1 * 8, SPI_TRANSFER_FLG_NONE);
+		if (ret)
+			return ret;
+		log_debug(" resp%d=0x%x", rpos, r);
+		rpos++;
+		resp[i] = r;
+	}
+
+	if (r1b == true) {
+		i = R1B_TIMEOUT;
+		while (i) {
+			ret = spi_mmc_transfer(ctx, NULL, &r, 1 * 8, SPI_TRANSFER_FLG_NONE);
+			if (ret)
+				return ret;
+
+			log_debug(" resp%d=0x%x", rpos, r);
+			rpos++;
+			i--;
+
+			if (r)
+				break;
+		}
+		if (!i)
+			return -ETIMEDOUT;
+	}
+
+	return 0;
 }
 
-/*----------------------------------------------------------------------------*/
-
-static int spi_mmc_send_cmd(struct spi_mmc_context *ctx,
-                                struct spi_mmc_message msg, uint8_t *rx,
-                                bool is_acmd)
+/**
+ * mmc_spi_readdata() - read data block(s) from the SD card
+ *
+ * @ctx:	mmc_spi device context
+ * @xbuf:	buffer of the actual data (excluding token and crc) to read
+ * @bcnt:	number of data blocks to transfer
+ * @bsize:	size of the actual data (excluding token and crc) in bytes
+ * Return: 0 if OK, -ECOMM if crc error, -ETIMEDOUT on other errors
+ */
+static int mmc_spi_readdata(struct spi_mmc_context *ctx,
+			    void *xbuf, uint32_t bcnt, uint32_t bsize)
 {
-    log_trace("%s({.cmd = 0x%02lx, .arg = 0x%08lx, .crc7 = 0x%02lx}, 0x%08lx)",
-              __FUNCTION__, msg.cmd, msg.arg, msg.crc7, (uintptr_t)rx);
+	uint8_t crc;
+	uint8_t *buf = xbuf, r1;
+	int i, ret = 0;
 
-    const size_t packet_size = 6;
-    const uint max_retries = 0x10;
-    const size_t resp_size = spi_mmc_resp_size(mmc_cmd_get_resp_type(msg.cmd));
-    const struct spi_mmc_message cmd55 = SPI_MMC_CMD(MMC_CMD_APP_CMD, 0);
-
-    int ret = 0;
-    uint8_t response = 0xff;
-    uint8_t dummy = 0xff;
-    char cmdPacket[packet_size];
-
-    if (is_acmd) {
-        ret = spi_mmc_send_cmd(ctx, cmd55, &response, false);
-        if (ret) {
-            log_error("CMD55 failed: %02x\n", response);
-            return -EIO;
-        }
-        response = 0xff;
-
-        if (spi_mmc_wait_ready(ctx)) {
-            log_error("Waiting for card to be ready failed.\n");
-            return R1_SPI_ERROR;
-        }
-    }
-
-    // Prepare the command packet
-    cmdPacket[0] = (msg.start << 6) | msg.cmd;
-    cmdPacket[1] = (msg.arg >> 24);
-    cmdPacket[2] = (msg.arg >> 16);
-    cmdPacket[3] = (msg.arg >> 8);
-    cmdPacket[4] = (msg.arg >> 0);
-
-#if IS_ENABLED(CONFIG_MMC_CRC_ENABLED)
-    cmdPacket[5] = (crc7(cmdPacket, 5) << 1) | msg.stop;
-#else
-    cmdPacket[5] = (msg.crc7 << 1) | msg.stop;
+	while (bcnt--) {
+		for (i = 0; i < READ_TIMEOUT; i++) {
+			ret = spi_mmc_transfer(ctx, NULL, &r1, 1 * 8, SPI_TRANSFER_FLG_NONE);
+			if (ret)
+				return ret;
+			if (r1 == SPI_TOKEN_SINGLE)
+				break;
+		}
+		log_debug("%s: data tok%d 0x%x\n", __func__, i, r1);
+		if (r1 == SPI_TOKEN_SINGLE) {
+			ret = spi_mmc_transfer(ctx, NULL, buf, bsize * 8, SPI_TRANSFER_FLG_NONE);
+			if (ret)
+				return ret;
+			ret = spi_mmc_transfer(ctx, NULL, &crc, 2 * 8, SPI_TRANSFER_FLG_NONE);
+			if (ret)
+				return ret;
+#if IS_ENABLED(CONFIG_MMC_SPI_CRC_ON)
+			uint8_t crc_ok = crc7(buf, bsize);
+			if (crc_ok != crc) {
+				log_debug("%s: data crc error, expected %02x got %02x\n",
+				      __func__, crc_ok, crc);
+				r1 = R1_SPI_COM_CRC;
+				break;
+			}
 #endif
-    // send a command
-    for (int i = 0; i < packet_size; i++) {
-        spi_mmc_transfer(ctx, &cmdPacket[i], &response, 1);
-    }
+			r1 = 0;
+		} else {
+			r1 = R1_SPI_ERROR;
+			break;
+		}
+		buf += bsize;
+	}
 
-    // The received byte immediataly following CMD12 is a stuff byte,
-    // it should be discarded before receive the response of the CMD12.
-    if (MMC_CMD_STOP_TRANSMISSION == msg.cmd) {
-        spi_mmc_transfer(ctx, &dummy, &response, 1);
-    }
+	if (r1 & R1_SPI_COM_CRC)
+		ret = -EBADMSG;
+	else if (r1) /* other errors */
+		ret = -ETIMEDOUT;
 
-    // Loop for response: Response is sent back within command response time
-    // (NCR), 0 to 8 bytes for SDC
-    memset(rx, 0xff, resp_size);
-    for (int i = 0; i < max_retries; i++) {
-        spi_mmc_transfer(ctx, &dummy, &response, 1);
-        // Got the response
-        if (!(response & R1_SPI_ERROR)) {
-            // parse the rest of the response
-            rx[0] = response;
-            for(int j = 1; j < resp_size; j++) {
-                spi_mmc_transfer(ctx, &dummy, &rx[j], 1);
-            }
-            break;
-        }
-    }
-    // R1 part of response
-    log_debug("%sCMD%u: %02x\n", is_acmd ? "A" : "", msg.cmd, response);
-    return (response & R1_SPI_ERROR) ? -EIO : 0;
+	return ret;
 }
 
-/*----------------------------------------------------------------------------*/
 
-static int spi_mmc_send_msg(struct spi_mmc_context *ctx,
-                            const struct spi_mmc_message msg, uint8_t* resp)
+/**
+ * mmc_spi_writedata() - write data block(s) to the SD card
+ *
+ * @ctx:	mmc_spi device context
+ * @xbuf:	buffer of the actual data (excluding token and crc) to write
+ * @bcnt:	number of data blocks to transfer
+ * @bsize:	size of actual data (excluding token and crc) in bytes
+ * @multi:	indicate a transfer by multiple block write command (CMD25)
+ * Return: 0 if OK, -ECOMM if crc error, -ETIMEDOUT on other errors
+ */
+static int mmc_spi_writedata(struct spi_mmc_context *ctx, const void *xbuf,
+			     uint32_t bcnt, uint32_t bsize, int multi)
 {
-    log_trace("%s({.cmd = 0x%02lx, .arg = 0x%08lx, .crc7 = 0x%02lx}, 0x%08lx)",
-              __FUNCTION__, msg.cmd, msg.arg, msg.crc7, (uintptr_t)resp);
+	const uint8_t *buf = xbuf;
+	uint8_t r1, tok[2];
+	uint8_t crc;
+	int i, ret = 0;
 
-    return spi_mmc_send_cmd(ctx, msg, resp, false);
-}
+	tok[0] = 0xff;
+	tok[1] = multi ? SPI_TOKEN_MULTI_WRITE : SPI_TOKEN_SINGLE;
 
-/*----------------------------------------------------------------------------*/
-
-static uint64_t spi_mmc_sectors(struct mmc_dev *dev)
-{
-    log_trace("%s()\r\n", __FUNCTION__);
-    // CMD9, Response R2 (R1 byte + 16-byte block read)
-    const struct spi_mmc_message cmd9 = SPI_MMC_CMD(MMC_CMD_SEND_CSD, 0);
-    const size_t resp_size = mmc_get_resp_size(
-                                mmc_cmd_get_resp_type(cmd9.cmd));
-    const uint8_t tx_dummy = 0xff;
-
-    struct spi_mmc_context *ctx = (struct spi_mmc_context *)dev->priv;
-    int ret = 0;
-    uint32_t csd_structure;
-    uint32_t c_size, c_size_mult, read_bl_len;
-    uint32_t block_len, mult, blocknr;
-    uint32_t hc_c_size;
-    uint64_t blocks = 0, capacity = 0;
-    uint8_t csd[16] = {0};
-    uint8_t *resp = malloc(resp_size);
-    size_t i;
-
-    memset(resp, 0xff, resp_size);
-
-    /* Send CMD 9 to request 16-byte block of CSD register data */
-    ret = spi_mmc_send_cmd(ctx, cmd9, resp, false);
-    /* resp (R2) has to be valid before reading 16-byte block */
-    if (ret) {
-        log_error("CMD9 failed: %d\n", ret);
-        log_debug("Full CMD9 response:\n", resp[0]);
-        for (i = 0; i < resp_size; i++)
-        log_debug("%u: %02x\n", i, resp[i]);
-        goto free_response;
-    }
-
-    /* Read 16-byte block of CSD register data after R2 from CMD9 */
-    ret = spi_mmc_transfer(ctx, &tx_dummy, csd, sizeof(csd));
-    if (ret) {
-        log_error("Couldn't read CSD response from disk\n");
-        goto free_response;
-    }
-
-    /**
-     * Using ext_bits instead of simple shifting and masking because data
-     * array is too big to fit inside a single type.
-     * This implies big-endian bit layout, but reversed at the byte level.
-     */
-    csd_structure = ext_bits(csd, 126, 127);
-    switch (csd_structure) {
-        case 0:
-            c_size = ext_bits(csd, 73, 62);       // c_size        : csd[73:62]
-            c_size_mult = ext_bits(csd, 49, 47);  // c_size_mult   : csd[49:47]
-            read_bl_len =
-                ext_bits(csd, 83, 80);     // read_bl_len   : csd[83:80] - the
-                                           // *maximum* read block length
-            block_len = 1 << read_bl_len;  // BLOCK_LEN = 2^READ_BL_LEN
-            mult = 1 << (c_size_mult +
-                         2);         // MULT = 2^C_SIZE_MULT+2 (C_SIZE_MULT < 8)
-            blocknr = (c_size + 1) * mult;  // BLOCKNR = (C_SIZE+1) * MULT
-            capacity = (uint64_t)blocknr *
-                       block_len;  // memory capacity = BLOCKNR * BLOCK_LEN
-            blocks = capacity / (uint64_t)dev->blksize;
-            log_debug("Standard Capacity: c_size: %lu\r\n", c_size);
-            log_debug("Sectors: 0x%llx : %llu\r\n", blocks, blocks);
-            log_debug("Capacity: 0x%llx : %llu MB\r\n", capacity,
-                       (uint64_t)(capacity / (1024U * 1024U)));
-            break;
-        case 1:
-            hc_c_size =
-                ext_bits(csd, 69, 48);       // device size : C_SIZE : [69:48]
-            blocks = ((uint64_t)hc_c_size + 1) << 10;
-                                             // block count = C_SIZE+1) * 1K
-                                             // byte (512B is block size)
-            log_debug("SDHC/SDXC Card: hc_c_size: %lu\r\n", hc_c_size);
-            log_debug("Sectors: %16llu\r\n", blocks);
-            log_debug("Capacity: %16llu MB\r\n", (uint64_t)(blocks / (2048U)));
-            break;
-
-        default:
-            log_error("CSD struct unsupported\r\n");
-    };
-
-free_response:
-    free(resp);
-    dev->num_blocks = blocks;
-    return blocks;
-}
-
-/*----------------------------------------------------------------------------*/
-
-static int spi_mmc_wait_token(struct spi_mmc_context *ctx, uint8_t token) {
-    log_trace("%s(0x%02hhx)\r\n", __FUNCTION__, token);
-
-    const uint32_t timeout = SD_COMMAND_TIMEOUT;  // Wait for start token
-    const uint8_t dummy = 0xff;
-    uint8_t resp = 0xff;
-    absolute_time_t timeout_time = make_timeout_time_ms(timeout);
-    int __attribute__((unused)) ret;
-
-    do {
-        ret = spi_mmc_transfer(ctx, &dummy, &resp, 1);
-        if (token == resp) {
-            return 0;
-        }
-    } while (0 < absolute_time_diff_us(get_absolute_time(), timeout_time));
-    log_error("sd_wait_token: timeout\r\n");
-    return -ETIMEDOUT;
-}
-
-/*----------------------------------------------------------------------------*/
-
-static int __spi_mmc_read_block(struct mmc_dev *dev, uint8_t *buf,
-                                const uint32_t len)
-{
-    log_trace("%s(0x%08lx, 0x%016llx)\r\n", __FUNCTION__, (uintptr_t)buf,
-              len);
-    const uint8_t dummy = 0xff;
-    uint8_t resp = 0xff;
-    uint16_t crc;
-    int ret;
-    struct spi_mmc_context *ctx = (struct spi_mmc_context *)dev->priv;
-
-    // read until start byte (0xFE)
-    ret = spi_mmc_wait_token(ctx, SPI_MMC_START_BLOCK);
-    if (ret) {
-        log_error("%s:%d Read timeout\r\n", __FILE__, __LINE__);
-        return ret;
-    }
-    // read data
-    ret = spi_mmc_transfer(ctx, &dummy, buf, (size_t)len);
-    if (ret) {
-        log_error("Reading %ld blocks failed: %d\n", len, ret);
-        return ret;
-    }
-    // Read the CRC16 checksum for the data block
-    ret = spi_mmc_transfer(ctx, &dummy, &resp, 1);
-    crc = resp << 8;
-    ret = spi_mmc_transfer(ctx, &dummy, &resp, 1);
-    crc |= resp;
-
-#if IS_ENABLED(CONFIG_MMC_CRC_ENABLED)
-    uint32_t crc_result;
-    // Compute and verify checksum
-    crc_result = crc16((void *)buf, len);
-    if ((uint16_t)crc_result != crc) {
-        log_error("%s: Invalid CRC received 0x%04x"
-                    " result of computation 0x%04x\r\n",
-                    __FUNCTION__, crc, (uint16_t)crc_result);
-        return -EBADMSG;
-    }
+	while (bcnt--) {
+#if IS_ENABLED(CONFIG_MMC_SPI_CRC_ON)
+		crc = crc7((uint8_t *)buf, bsize);
 #endif
+		spi_mmc_transfer(ctx, tok, NULL, 2 * 8, SPI_TRANSFER_FLG_NONE);
+		spi_mmc_transfer(ctx, buf, NULL, bsize * 8, SPI_TRANSFER_FLG_NONE);
+		spi_mmc_transfer(ctx, &crc, NULL, 2 * 8, SPI_TRANSFER_FLG_NONE);
+		for (i = 0; i < CMD_TIMEOUT; i++) {
+			spi_mmc_transfer(ctx, NULL, &r1, 1 * 8, SPI_TRANSFER_FLG_NONE);
+			if ((r1 & 0x10) == 0) /* response token */
+				break;
+		}
+		log_debug("%s: data tok%d 0x%x\n", __func__, i, r1);
+		if (SPI_MMC_RESPONSE_CODE(r1) == SPI_RESPONSE_ACCEPTED) {
+			log_debug("%s: data accepted\n", __func__);
+			for (i = 0; i < WRITE_TIMEOUT; i++) { /* wait busy */
+				spi_mmc_transfer(ctx, NULL, &r1, 1 * 8, SPI_TRANSFER_FLG_NONE);
+				if (i && r1 == 0xff) {
+					r1 = 0;
+					break;
+				}
+			}
+			if (i == WRITE_TIMEOUT) {
+				log_debug("%s: data write timeout 0x%x\n",
+				      __func__, r1);
+				r1 = R1_SPI_ERROR;
+				break;
+			}
+		} else {
+			log_debug("%s: data error 0x%x\n", __func__, r1);
+			r1 = R1_SPI_COM_CRC;
+			break;
+		}
+		buf += bsize;
+	}
+	if (multi && bcnt == -1) { /* stop multi write */
+		tok[1] = SPI_TOKEN_STOP_TRAN;
+		spi_mmc_transfer(ctx, tok, NULL, 2 * 8, SPI_TRANSFER_FLG_NONE);
+		for (i = 0; i < WRITE_TIMEOUT; i++) { /* wait busy */
+			spi_mmc_transfer(ctx, NULL, &r1, 1 * 8, SPI_TRANSFER_FLG_NONE);
+			if (i && r1 == 0xff) {
+				r1 = 0;
+				break;
+			}
+		}
+		if (i == WRITE_TIMEOUT) {
+			log_debug("%s: data write timeout 0x%x\n", __func__, r1);
+			r1 = R1_SPI_ERROR;
+		}
+	}
 
-    return 0;
+	if (r1 & R1_SPI_COM_CRC)
+		ret = -EBADMSG;
+	else if (r1) /* other errors */
+		ret = -ETIMEDOUT;
+
+	return ret;
+}
+
+/**
+ * @brief mmc_spi_request - Send a command to the card via SPI
+ * 
+ * @param dev: mmc device to send command to
+ * @param cmd: Command to send
+ * @param data: Additional data to send/receive
+ * @r1b:	if true, receive additional bytes for busy signal token
+ * Return: 0 if OK, -ETIMEDOUT if no card response is received, -ve on error
+ */
+static int mmc_spi_request(struct mmc_dev *dev, struct mmc_cmd *cmd,
+						   struct mmc_data *data)
+{
+    log_trace("%s()\r\n", __FUNCTION__);
+
+	int i, multi, ret = 0;
+	uint8_t *resp = NULL;
+	uint32_t resp_size = 0;
+	bool resp_match = false, r1b = false;
+	uint8_t resp8 = 0, resp16[2] = { 0 }, resp40[5] = { 0 }, resp_match_value = 0;
+	struct spi_mmc_context *ctx = (struct spi_mmc_context *)dev->priv;
+
+	if (!spi_lock(ctx->spi)) {
+		log_error("Could not get SPI Bus lock: timeout");
+		return -ETIMEDOUT;
+	}
+
+	for (i = 0; i < 4; i++)
+		cmd->response[i] = 0;
+
+	switch (cmd->cmdidx) {
+	case SD_CMD_APP_SEND_OP_COND:
+	case MMC_CMD_SEND_OP_COND:
+		resp = &resp8;
+		resp_size = sizeof(resp8);
+		cmd->cmdarg = 0x40000000;
+		break;
+	case SD_CMD_SEND_IF_COND:
+		resp = (uint8_t *)&resp40[0];
+		resp_size = sizeof(resp40);
+		resp_match = true;
+		resp_match_value = R1_SPI_IDLE;
+		break;
+	case MMC_CMD_SPI_READ_OCR:
+		resp = (uint8_t *)&resp40[0];
+		resp_size = sizeof(resp40);
+		break;
+	case MMC_CMD_SEND_STATUS:
+		resp = (uint8_t *)&resp16[0];
+		resp_size = sizeof(resp16);
+		break;
+	case MMC_CMD_SET_BLOCKLEN:
+	case MMC_CMD_SPI_CRC_ON_OFF:
+		resp = &resp8;
+		resp_size = sizeof(resp8);
+		resp_match = true;
+		resp_match_value = 0x0;
+		break;
+	case MMC_CMD_STOP_TRANSMISSION:
+	case MMC_CMD_ERASE:
+		resp = &resp8;
+		resp_size = sizeof(resp8);
+		r1b = true;
+		break;
+	case MMC_CMD_SEND_CSD:
+	case MMC_CMD_SEND_CID:
+	case MMC_CMD_READ_SINGLE_BLOCK:
+	case MMC_CMD_READ_MULTIPLE_BLOCK:
+	case MMC_CMD_WRITE_SINGLE_BLOCK:
+	case MMC_CMD_WRITE_MULTIPLE_BLOCK:
+	case MMC_CMD_APP_CMD:
+	case SD_CMD_ERASE_WR_BLK_START:
+	case SD_CMD_ERASE_WR_BLK_END:
+		resp = &resp8;
+		resp_size = sizeof(resp8);
+		break;
+	default:
+		resp = &resp8;
+		resp_size = sizeof(resp8);
+		resp_match = true;
+		resp_match_value = R1_SPI_IDLE;
+		break;
+	};
+
+	ret = mmc_spi_sendcmd(dev->priv, cmd->cmdidx, cmd->cmdarg, cmd->resp_type,
+			      resp, resp_size, resp_match, resp_match_value, r1b);
+	if (ret)
+		goto done;
+
+	switch (cmd->cmdidx) {
+	case SD_CMD_APP_SEND_OP_COND:
+	case MMC_CMD_SEND_OP_COND:
+		cmd->response[0] = (resp8 & R1_SPI_IDLE) ? 0 : OCR_BUSY;
+		break;
+	case SD_CMD_SEND_IF_COND:
+	case MMC_CMD_SPI_READ_OCR:
+		cmd->response[0] = resp40[4];
+		cmd->response[0] |= (uint)resp40[3] << 8;
+		cmd->response[0] |= (uint)resp40[2] << 16;
+		cmd->response[0] |= (uint)resp40[1] << 24;
+		break;
+	case MMC_CMD_SEND_STATUS:
+		if (resp16[0] || resp16[1])
+			cmd->response[0] = MMC_STATUS_ERROR;
+		else
+			cmd->response[0] = MMC_STATUS_RDY_FOR_DATA;
+		break;
+	case MMC_CMD_SEND_CID:
+	case MMC_CMD_SEND_CSD:
+		ret = mmc_spi_readdata(dev->priv, cmd->response, 1, 16);
+		if (ret)
+			return ret;
+		for (i = 0; i < 4; i++)
+			cmd->response[i] =
+				cpu_to_be32(cmd->response[i]);
+		break;
+	default:
+		cmd->response[0] = resp8;
+		break;
+	}
+
+	log_debug("%s: cmd%d resp0=0x%x resp1=0x%x resp2=0x%x resp3=0x%x\n",
+	      __func__, cmd->cmdidx, cmd->response[0], cmd->response[1],
+	      cmd->response[2], cmd->response[3]);
+
+	if (data) {
+		log_debug("%s: data flags=0x%x blocks=%d block_size=%d\n",
+		      __func__, data->flags, data->blocks, data->blocksize);
+		multi = (cmd->cmdidx == MMC_CMD_WRITE_MULTIPLE_BLOCK);
+		if (data->flags == MMC_DATA_READ)
+			ret = mmc_spi_readdata(dev->priv, data->dest,
+					       data->blocks, data->blocksize);
+		else if  (data->flags == MMC_DATA_WRITE)
+			ret = mmc_spi_writedata(dev->priv, data->src,
+						data->blocks, data->blocksize,
+						multi);
+	}
+
+done:
+	spi_mmc_transfer(dev->priv, NULL, NULL, 0, SPI_TRANSFER_FLG_XFER_STOP);
+	spi_unlock(ctx->spi);
+
+	return ret;
 }
 
 /*----------------------------------------------------------------------------*/
 
-static int spi_mmc_read_blocks(struct mmc_dev *dev, uint32_t blk, uint8_t *buf,
-                               const uint32_t len)
+static int mmc_spi_set_ios(struct mmc_dev *dev)
 {
-    log_trace("%s(0x%016llx, 0x%08lx, 0x%016llx)\r\n", __FUNCTION__, blk,
-              (uintptr_t)buf, len);
-    uint32_t blockCnt = (uint32_t)len;  // SPI cmd can only handle 32 bit
-    struct spi_mmc_context *ctx = (struct spi_mmc_context *)dev->priv;
-    struct spi_mmc_message read_cmd = SPI_MMC_CMD(
-        len > 1 ? MMC_CMD_READ_MULTIPLE_BLOCK : MMC_CMD_READ_SINGLE_BLOCK, 0);
-    struct spi_mmc_message cmd12 = SPI_MMC_CMD(MMC_CMD_STOP_TRANSMISSION, 0);
-    uint8_t response = 0xff;
-    int ret;
+	log_trace("%s(clock=%u)", __FUNCTION__, dev->clock);
 
-    if (blk + blockCnt > dev->num_blocks) {
-        log_error("Cannot read %ld blocks from %ld: out of bounds (%ld)\n",
-               blockCnt, blk, dev->num_blocks);
-        return -EINVAL;
-    }
-    if (!ctx->spi->state->initialized || !dev->initialized) {
-        log_error("Cannot read SPI MMC blocks: Driver not initialized.");
-        return -EHOSTDOWN;
-    }
-
-    // SDSC Card (CCS=0) uses byte unit address
-    // SDHC and SDXC Cards (CCS=1) use block unit address (512 Bytes unit)
-    if (dev->version == SD_CARD_TYPE_SDHC) {
-        read_cmd.arg = blk;
-    } else {
-        read_cmd.arg = blk * dev->blksize;
-    }
-    // Write command to receive data
-    ret = spi_mmc_send_cmd(ctx, read_cmd, &response, false);
-    if (ret) {
-        log_error("Got error while reading blocks from SD Card: %02x\n", response);
-        return -EIO;
-    }
-    // receive the data : one block at a time
-    int rd_status = 0;
-    while (blockCnt) {
-        if (__spi_mmc_read_block(dev, buf, dev->blksize)) {
-            rd_status = -EIO;
-            break;
-        }
-        buf += dev->blksize;
-        --blockCnt;
-    }
-    // Send CMD12(0x00000000) to stop the transmission for multi-block transfer
-    if (len > 1) {
-        ret = spi_mmc_send_cmd(ctx, cmd12, &response, false);
-    }
-    return rd_status ? rd_status : ret;
+	struct spi_mmc_context *ctx = dev->priv;
+	ctx->spi->baud_rate = dev->clock;
+	spi_set_baudrate(ctx->spi->hw_spi, dev->clock);
+	return 0;
 }
 
 /*----------------------------------------------------------------------------*/
 
-static int spi_mmc_send_reset(struct spi_mmc_context *ctx)
-{
-    log_trace("%s()\r\n", __FUNCTION__);
-    int ret = 0;
-    int i;
-    const struct spi_mmc_message reset_cmd = SPI_MMC_CMD_CRC(
-                                                MMC_CMD_GO_IDLE_STATE, 0, 0x4A);
-
-    uint8_t resp = 0xff;
-    for (i = 0; i < 10; i++) {
-        ret = spi_mmc_send_msg(ctx, reset_cmd, &resp);
-        if (R1_SPI_IDLE == resp) {
-            break;
-        }
-        for (int j = 0; j < 10000000; j++) {
-            asm volatile("nop \n");
-        }
-    }
-
-    if (resp & R1_SPI_ERROR) {
-        log_error("Sending reset command failed: %d\n", ret);
-        ret = -EIO;
-    } else if (unlikely(!(resp & R1_SPI_IDLE))) {
-        log_error("MMC SPI reset command timed out.\n");
-        ret = -ETIMEDOUT;
-    }
-
-    return ret;
-}
-
-/*----------------------------------------------------------------------------*/
-
-static int spi_mmc_voltage_select(struct mmc_dev *dev)
-{
-    log_trace("%s()\r\n", __FUNCTION__);
-    const uint max_num_retries = 10;
-    uint num_retries = 0;
-    uint8_t response = 0xff;
-    uint8_t *cmd8_resp;
-    uint8_t ret;
-    struct spi_mmc_context *ctx = (struct spi_mmc_context *)dev->priv;
-    struct spi_mmc_message acmd41 = SPI_MMC_CMD(SD_CMD_APP_SEND_OP_COND, 0);
-    const struct spi_mmc_message cmd8 = SPI_MMC_CMD_CRC(
-                                            MMC_CMD_SEND_EXT_CSD, 0x1AA, 0x43);
-    const struct spi_mmc_message cmd58 = SPI_MMC_CMD(MMC_CMD_SPI_READ_OCR, 0);
-
-    cmd8_resp = malloc(spi_mmc_resp_size(mmc_cmd_get_resp_type(cmd8.cmd)));
-    ret = spi_mmc_send_cmd(ctx, cmd8, cmd8_resp, false);
-    if (ret || cmd8_resp[0] & R1_SPI_ILLEGAL_COMMAND) {
-        dev->version = SD_CARD_TYPE_SD1;
-    // only need last byte of r7 response (echo-back)
-    } else if(cmd8_resp[4] & 0xAA) {
-        dev->version = SD_CARD_TYPE_SD2;
-    } else {
-        log_error("Card did not respond to voltage select.\n");
-        return -EIO;
-    }
-
-    // set acmd41 arg depending on version
-    acmd41.arg = dev->version == SD_CARD_TYPE_SD2 ? 0X40000000 : 0;
-
-    response = 0xff;
-    while(response == 0xff) {
-        response = 0xff;
-        ret = spi_mmc_send_cmd(ctx, acmd41, &response, true);
-        if (ret) {
-            log_error("Sending ACMD41 failed.\n");
-            return -EIO;
-        } else if(num_retries++ >= max_num_retries) {
-            log_error("Sending ACMD41 timed out.\n");
-            return -ETIMEDOUT;
-        }
-        sleep_us(10);
-    }
-
-    // if SD2 read OCR register to check for SDHC card
-    if (dev->version == SD_CARD_TYPE_SD2) {
-        if (spi_mmc_send_msg(ctx, cmd58, cmd8_resp)) {
-            log_error("Sending CMD58 failed.\n");
-            return -EIO;
-        }
-        if (!(cmd8_resp[0] & R1_SPI_ERROR) && cmd8_resp[0] & 0XC0) {
-            dev->version = SD_CARD_TYPE_SDHC;
-        }
-        // discard rest of ocr - contains allowed voltage range
-    }
-
-    return ret;
-}
-
-/*----------------------------------------------------------------------------*/
-
-static int spi_mmc_init(struct mmc_dev *dev)
-{
-    log_trace("%s()\r\n", __FUNCTION__);
-    struct spi_mmc_message spi_init_message = { 0 };
-
-    int ret;
-    uint i;
-    uint8_t resp = 0xff;
-    struct spi_mmc_context *ctx = (struct spi_mmc_context *)dev->priv;
-    if (!ctx) {
-        log_error("No SPI MMC ctx available!\n");
-        return -EINVAL;
-    }
-
-    spi_mmc_go_low_frequency(ctx);
-
-    // Wait for at least 74 cycles with MOSI and CS asserted
-    memset(&spi_init_message, 0xff, sizeof(spi_init_message));
-    for (i = 0; i < ((74 / (sizeof(spi_init_message) * 8)) + 1); i++) {
-        spi_mmc_send_msg(ctx, spi_init_message, &resp);
-    }
-
-    /**
-     * First, put the SDCard into SPI mode by sendin CMD0, followed by CMD8.
-     * CMD8 is optional, but it is recommended to send it to check if the card
-     * is compatible with the SD spec.
-     * CMD8 is only supported by SDHC and SDXC cards and not by MMC cards.
-     *
-     * After CMD8, we send ACMD41.
-     * ACMD41 is a synchronization command used to negotiate the operation
-     * voltage range and to poll the cards until they are out of their power-up
-     * sequence.
-     * In case the host system connects multiple cards, the host shall check
-     * that all cards satisfy the supplied voltage.
-     * Otherwise, the host should select one of the cards and initialize.
-     */
-    spi_mmc_send_reset(ctx);
-    ret = spi_mmc_voltage_select(dev);
-    if (ret != 0) {
-        log_error("SPI MMC version check failed.\n");
-    }
-    log_debug("SPI MMC version/type: %s\n", mmc_type_to_str(dev->version));
-
-    spi_mmc_resume_frequency(ctx);
-    return ret;
-}
-
-int spi_mmc_probe(struct mmc_dev *dev)
-{
-    log_trace("%s()\r\n", __FUNCTION__);
-    int ret;
-
-    /* Make sure init is only run once */
-    auto_init_mutex(sd_init_driver_mutex);
-    mutex_enter_blocking(&sd_init_driver_mutex);
-
-    if (dev->initialized == true) {
-        ret = 0;
-        goto out;
-    }
-
-    ret = spi_mmc_init(dev);
-    if (!ret) {
-        dev->initialized = true;
-    }
-
-out:
-    mutex_exit(&sd_init_driver_mutex);
-    return ret;
-}
+static struct mmc_ops drv_ops = {
+	.set_ios  = mmc_spi_set_ios,
+	.send_cmd = mmc_spi_request,
+};
 
 /*----------------------------------------------------------------------------*/
 
 struct mmc_drv *spi_mmc_drv_init(struct spi_config *spi, uint cs_pin)
 {
     log_trace("%s(%u)\r\n", __FUNCTION__, cs_pin);
+
     auto_init_mutex(spi_mmc_drv_init_mutex);
     mutex_enter_blocking(&spi_mmc_drv_init_mutex);
 
@@ -756,31 +558,17 @@ struct mmc_drv *spi_mmc_drv_init(struct spi_config *spi, uint cs_pin)
     dev->blksize = BLOCK_SIZE_SD;
     dev->priv = ctx;
 
-    struct mmc_ops *ops = (struct mmc_ops *)malloc(sizeof(struct mmc_ops));
-    if (!ops) {
-        log_error("Could not allocate SPI MMC ops: %d\n", -ENOMEM);
-        goto free_dev;
-    }
-    ops->probe = &spi_mmc_probe;
-    ops->blk_read = &spi_mmc_read_blocks;
-    ops->blk_write = NULL; // TODO
-    ops->blk_erase = NULL; // TODO
-    ops->generate_info = NULL; // TODO;
-    ops->n_sectors = &spi_mmc_sectors;
-
     struct mmc_drv *drv = calloc(1, sizeof(struct mmc_drv));
     if (!drv) {
         log_error("Could not allocate SPI MMC driver: %d\n", -ENOMEM);
-        goto free_ops;
+        goto free_dev;
     }
     drv->dev = dev;
-    drv->ops = ops;
+    drv->ops = &drv_ops;
 
     mutex_exit(&spi_mmc_drv_init_mutex);
     return drv;
 
-free_ops:
-    free(ops);
 free_dev:
     free(dev);
 free_ctx:
@@ -795,12 +583,15 @@ out:
 void spi_mmc_drv_deinit(struct mmc_drv *drv)
 {
     log_trace("%s()\r\n", __FUNCTION__);
+    auto_init_mutex(spi_mmc_drv_deinit_mutex);
+    mutex_enter_blocking(&spi_mmc_drv_deinit_mutex);
+
     if (!drv) {
-        return;
+        goto out;
     }
 
     if (!drv->dev) {
-        goto free_ops;
+        goto free_drv;
     }
 
     if (drv->dev->priv) {
@@ -810,11 +601,11 @@ void spi_mmc_drv_deinit(struct mmc_drv *drv)
 
     free(drv->dev);
 
-free_ops:
-    if (drv->ops)
-        free(drv->ops);
-
+free_drv:
     free(drv);
+
+out:
+    mutex_exit(&spi_mmc_drv_deinit_mutex);
 }
 
 /* [] END OF FILE */

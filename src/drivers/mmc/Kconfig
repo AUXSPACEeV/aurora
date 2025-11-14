@@ -5,14 +5,75 @@
 
 menu "mmc"
 
+config MMC_WRITE
+	bool "support for MMC/SD write operations"
+	depends on MMC
+	default y
+	help
+	  Enable write access to MMC and SD Cards
+
+config MMC_IO_VOLTAGE
+	bool "Support IO voltage configuration"
+	help
+	  IO voltage configuration allows selecting the voltage level of the IO
+	  lines (not the level of main supply). This is required for UHS
+	  support. For eMMC this not mandatory, but not enabling this option may
+	  prevent the driver of using the faster modes.
+
+config MMC_SUPPORTS_TUNING
+	bool
+
+config MMC_UHS_SUPPORT
+	bool "enable UHS support"
+	depends on MMC_IO_VOLTAGE
+	select MMC_SUPPORTS_TUNING
+	help
+	  The Ultra High Speed (UHS) bus is available on some SDHC and SDXC
+	  cards. The IO voltage must be switchable from 3.3v to 1.8v. The bus
+	  frequency can go up to 208MHz (SDR104)
+
+config MMC_HS400_ES_SUPPORT
+	bool "enable HS400 Enhanced Strobe support"
+	help
+	  The HS400 Enhanced Strobe mode is support by some eMMC. The bus
+	  frequency is up to 200MHz. This mode does not tune the IO.
+
+config MMC_HS400_SUPPORT
+	bool "enable HS400 support"
+	select MMC_HS200_SUPPORT
+	help
+	  The HS400 mode is support by some eMMC. The bus frequency is up to
+	  200MHz. This mode requires tuning the IO.
+
+config MMC_HS200_SUPPORT
+	bool "enable HS200 support"
+	select MMC_SUPPORTS_TUNING
+	help
+	  The HS200 mode is support by some eMMC. The bus frequency is up to
+	  200MHz. This mode requires tuning the IO.
+
+config MMC_QUIRKS
+	bool "Enable quirks"
+	default y
+	help
+	  Some cards and hosts may sometimes behave unexpectedly (quirks).
+	  This option enable workarounds to handle those quirks. Some of them
+	  are enabled by default, other may require additional flags or are
+	  enabled by the host driver.
+
+config MMC_BROKEN_CD
+	bool "Poll for broken card detection case"
+	help
+	  If card  detection feature is broken, just poll to detect.
+
 config SPI_MMC
     bool "Aurora SPI driver for MMC"
     depends on MMC
     help
         Enable the Aurora SPI driver for MMC devices
 
-config MMC_CRC_ENABLED
-    bool "MMC CRC"
+config MMC_SPI_CRC_ON
+    bool "MMC SPI CRC"
     depends on MMC
     help
         Enable CRC checks for MMC devices

@@ -1,7 +1,7 @@
 # Aurora SDCard Drivers
 
 set(AURORA_MMC_SOURCES
-    mmc.c
+    mmc_core.c
 )
 
 set(AURORA_MMC_LIBS
