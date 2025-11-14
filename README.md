@@ -63,7 +63,7 @@ from the Zephyr project.
 First, create a workspace:
 
 ```bash
-mkdir aurora_workspace && cd aurora_workspace
+mkdir zephyr_workspace && cd zephyr_workspace
 ```
 
 And add a python virtualenv to install west and other dependencies:
@@ -78,11 +78,12 @@ python3 -m pip install west
 Also, don't forget the Zephyr SDK (it's big, so ensure you have enough free space):
 
 ```bash
-wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.3/zephyr-sdk-0.17.3_linux-x86_64.tar.xz
-wget -O - https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.3/sha256.sum | shasum --check --ignore-missing
-tar xvf zephyr-sdk-0.17.3_linux-x86_64.tar.xz
-cd zephyr-sdk-0.17.3
+wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/zephyr-sdk-0.17.4_linux-x86_64.tar.xz
+wget -O - https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/sha256.sum | shasum --check --ignore-missing
+tar xvf zephyr-sdk-0.17.4_linux-x86_64.tar.xz
+cd zephyr-sdk-0.17.4
 ./setup.sh -c -h
+cd ..
 
 # Or alternatively only install for the target platform you desire (e.g. aarch64):
 # ./setup.sh -c -h -t aarch64-zephyr-elf
@@ -91,13 +92,24 @@ cd zephyr-sdk-0.17.3
 When all dependencies are setup and ready, fetch the aurora sources:
 
 ```bash
-west init -m https://github.com/AUXSPACEeV/aurora --mr main workspace
-cd workspace
+west init -m https://github.com/AUXSPACEeV/aurora --mr main .
 west update
 west zephyr-export
 
 python3 -m pip install -r ./zephyr/scripts/requirements.txt
 source ./zephyr/zephyr-env.sh
+```
+
+This should leave a directory setup like so:
+
+```bash
+zephyr_workspace
+├── aurora
+├── modules
+├── .venv
+├── .west
+└── zephyr
+└── zephyr-sdk-0.17.4
 ```
 
 </details>
@@ -123,8 +135,9 @@ Create a workspace and add the aurora app to it:
 
 ```bash
 mkdir zephyr_workspace
-git clone -b main git@github.com:AUXSPACEeV/aurora.git zephyr_workspace/aurora
-cd zephyr_workspace/aurora
+cd zephyr_workspace
+git clone -b main git@github.com:AUXSPACEeV/aurora.git aurora
+cd aurora
 ```
 
 **Container and Zephyr Workspace**
@@ -137,23 +150,23 @@ After installing docker, all requirements are met to run the wrapper script:
 ```
 
 The Zephyr workspace is configured to be at *$(pwd)/..*.
-Zephyr itself is then found at *zephyr-workspace/zephyr* and this
-application at *zephyr-workspace/aurora*.
+Zephyr itself is then found at *zephyr_workspace/zephyr* and this
+application at *zephyr_workspace/aurora*.
 
 This should leave a directory setup like so:
 
 ```bash
-zephyr-workspace
+zephyr_workspace
 ├── aurora
 ├── modules
 ├── .west
 └── zephyr
 ```
 
-*zephyr-workspace* is mounted into the container, so changes that you perform
+*zephyr_workspace* is mounted into the container, so changes that you perform
 inside the container will take effect outside and vice-versa.
 
-Run `west update` in *zephyr-workspace/aurora* to update modules.
+Run `west update` in *zephyr_workspace/aurora* to update modules.
 
 </details>
 
@@ -163,14 +176,14 @@ Run `west update` in *zephyr-workspace/aurora* to update modules.
 
 The important directories in this project are
 
-1. **\<zephyr-workspace\>**
+1. **\<zephyr_workspace\>**
 2. **\<aurora\>**
 
 If you ran
-`west init -m https://github.com/AUXSPACEeV/aurora --mr maxist-develop .`
-in **~/aurora-workspace** then **\<zephyr-workspace\>** will be at
-**~/aurora-workspace** and **\<aurora\>** at
-**~/aurora-workspace/aurora**.
+`west init -m https://github.com/AUXSPACEeV/aurora --mr main .`
+in **~/zephyr_workspace** then **\<zephyr_workspace\>** will be at
+**~/zephyr_workspace** and **\<aurora\>** at
+**~/zephyr_workspace/aurora**.
 
 ### Example Build
 
