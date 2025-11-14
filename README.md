@@ -91,7 +91,7 @@ cd zephyr-sdk-0.17.3
 When all dependencies are setup and ready, fetch the aurora sources:
 
 ```bash
-west init -m https://github.com/AUXSPACEeV/aurora --mr maxist-develop workspace
+west init -m https://github.com/AUXSPACEeV/aurora --mr main workspace
 cd workspace
 west update
 west zephyr-export
@@ -123,7 +123,7 @@ Create a workspace and add the aurora app to it:
 
 ```bash
 mkdir zephyr_workspace
-git clone -b maxist-develop git@github.com:AUXSPACEeV/aurora.git zephyr_workspace/aurora
+git clone -b main git@github.com:AUXSPACEeV/aurora.git zephyr_workspace/aurora
 cd zephyr_workspace/aurora
 ```
 
@@ -137,28 +137,23 @@ After installing docker, all requirements are met to run the wrapper script:
 ```
 
 The Zephyr workspace is configured to be at *$(pwd)/..*.
-Zephyr itself is then found at *\<zephyr-workspace\>/zephyr* and this
-application at *\<zephyr-workspace\>/\<aurora\>*.
+Zephyr itself is then found at *zephyr-workspace/zephyr* and this
+application at *zephyr-workspace/aurora*.
 
-*<zephyr-workspace>/<aurora>* is mounted into the container,
-so changes that you perform inside the container will take effect in this
-repository and vice-versa.
-
-Run `west update` in *\<zephyr-workspace\>* to update modules.
-
-**example**:
+This should leave a directory setup like so:
 
 ```bash
-# Set up workspace directories
-mkdir zephyr-workspace && cd zephyr-workspace
-
-# Clone the project into the workspace
-git clone https://github.com/AUXSPACEeV/aurora.git aurora
-cd aurora
-
-# Run the container
-./run.sh -b rpi_pico shell
+zephyr-workspace
+├── aurora
+├── modules
+├── .west
+└── zephyr
 ```
+
+*zephyr-workspace* is mounted into the container, so changes that you perform
+inside the container will take effect outside and vice-versa.
+
+Run `west update` in *zephyr-workspace/aurora* to update modules.
 
 </details>
 
@@ -172,10 +167,10 @@ The important directories in this project are
 2. **\<aurora\>**
 
 If you ran
-`west init -m https://github.com/AUXSPACEeV/aurora --mr maxist-develop workspace`
+`west init -m https://github.com/AUXSPACEeV/aurora --mr maxist-develop .`
 in **~/aurora-workspace** then **\<zephyr-workspace\>** will be at
-**~/aurora-workspace/workspace** and **\<aurora\>** at
-**~/aurora-workspace/workspace/aurora**.
+**~/aurora-workspace** and **\<aurora\>** at
+**~/aurora-workspace/aurora**.
 
 ### Example Build
 
@@ -236,6 +231,9 @@ Copy the files from your drive to the volume like so:
 ```bash
 # Linux example
 cp build/zephyr/zephyr.uf2 /media/${USER}/RPI-RP2
+
+# MACOS example
+cp build/zephyr/zephyr.uf2 /Volumes/RPI-RP2
 ```
 
 The PI should reboot and immediately start running your uploaded
