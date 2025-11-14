@@ -16,11 +16,13 @@ function first_boot_actions() {
   local tmp_dir=$(dirname -- "$FIRST_BOOT_TMP_FLAG")
 
   if [ "${ZEPHYR_WORKSPACE}" != $(dirname "$AURORA_APPLICATION_DIR") ]; then
-    log_warn "${ZEPHYR_WORKSPACE} != $(dirname $AURORA_APPLICATION_DIR)"
+    echo "WARNING: ${ZEPHYR_WORKSPACE} != $(dirname $AURORA_APPLICATION_DIR)"
   fi
 
   cd "${ZEPHYR_WORKSPACE}"
-  west init --local "${AURORA_APPLICATION_DIR}" --mf west.yml
+  if [ ! -d "./modules" ]; then
+    west init --local "${AURORA_APPLICATION_DIR}" --mf west.yml
+  fi
   west update
   west zephyr-export
   pip install -r ./zephyr/scripts/requirements.txt

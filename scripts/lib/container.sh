@@ -21,12 +21,14 @@ if [ -z "$AURORA_CI_BUILD" ]; then
 fi
 
 # global r/w for container config
-declare -x CONTAINER_TAG="local"
+declare -x CONTAINER_TAG_FILE="${THISDIR}/container/version"
+declare -x CONTAINER_TAG="$(cat ${CONTAINER_TAG_FILE})"
 declare -x CONTAINER_DIR="${THISDIR}/container"
 declare -x CONTAINER_ENGINE="docker"
 declare -x CONTAINER_BIN="docker"
 declare -x CONTAINER_BUILD_BIN="${CONTAINER_BIN} buildx"
 declare -x -i REBUILD_CONTAINER_IMAGE=0
+declare -x CONTAINER_PULL_NAME="ghcr.io/auxspaceev/${_CONTAINER_NAME}:${CONTAINER_TAG}"
 
 # Default to interactive flags unless running in CI
 if [ -z "$AURORA_CI_BUILD" ] || ! [[ "$AURORA_CI_BUILD" =~ ^[1-9][0-9]*$ ]]; then
@@ -58,17 +60,33 @@ function set_container_bins() {
     fi
 }
 
+function pull_container() {
+    log_info "Pulling '${CONTAINER_PULL_NAME}' ..."
+    if [ -z "${CONTAINER_BIN}" ]; then
+        log_err "No conainer bin passed."
+    fi
+
+    ${CONTAINER_BIN} pull ${CONTAINER_PULL_NAME}
+}
+
 function check_and_build_container() {
     set_container_bins
 
-    # Check if a container with the specified name exists
     log_info "Checking for existing $CONTAINER_BIN images ..."
-    if ! ${CONTAINER_BIN} images -a --format '{{.Repository}}' \
-        | grep -q "$_CONTAINER_NAME"; then
-        log_warn "Image for container '$_CONTAINER_NAME' not found."
-        build_container
-    elif [ $REBUILD_CONTAINER_IMAGE -eq 1 ]; then
+
+    # Check if a container with the specified name exists
+    if [ $REBUILD_CONTAINER_IMAGE -eq 1 ]; then
         log_info "Force rebuild activated."
+        build_container
+    elif ! ${CONTAINER_BIN} images -a --format '{{.Repository}}' \
+        | grep -q "$_CONTAINER_NAME"; then
+        # Try to pull container from ghcr.io
+        log_info "Searching for container '$CONTAINER_PULL_NAME' ..."
+        
+        pull_container && return
+
+        # Not found: build it locally
+        log_warn "Image for container '$CONTAINER_PULL_NAME' not found. Building ..."
         build_container
     else
         log_info "Image for container '${_CONTAINER_NAME}:$CONTAINER_TAG' already exists."
@@ -86,7 +104,7 @@ function build_container() {
     DOCKER_BUILDKIT=1 ${CONTAINER_BUILD_BIN} build \
         --build-arg PUID=$(id -u) \
         --build-arg PGID=$(id -g) \
-        --tag "${_CONTAINER_NAME}:$CONTAINER_TAG" \
+        --tag "${CONTAINER_PULL_NAME}" \
         --file "$CONTAINER_DIR/Dockerfile" \
         "$CONTAINER_DIR"
 }
@@ -123,7 +141,7 @@ function remove_container_image() {
     # remove image
     if [ -n "$($CONTAINER_BIN images -a | grep ${_CONTAINER_NAME})" ]; then
         log_info "Removing container image ..."
-        $CONTAINER_BIN image rm "${_CONTAINER_NAME}:${CONTAINER_TAG}"
+        $CONTAINER_BIN image rm "${CONTAINER_PULL_NAME}"
         log_info "Container image has been removed."
     else
         log_debug "No container image to remove."
@@ -148,7 +166,7 @@ function run_container_cmd() {
         exec $CONTAINER_BIN run \
             $run_cmd_args \
             $CONTAINER_RUNTIME_ARGS \
-            ${_CONTAINER_NAME}:$CONTAINER_TAG \
+            ${CONTAINER_PULL_NAME} \
             ${run_cmd}
     fi
 

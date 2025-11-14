@@ -142,12 +142,17 @@ cd aurora
 
 **Container and Zephyr Workspace**
 
-After installing docker, all requirements are met to run the wrapper script:
+After installing docker, all requirements are met to run the setup:
 
 ```bash
 # Open a shell in the development container for the rpi_pico board
 ./run.sh -b rpi_pico shell
 ```
+
+**note:** This can take a long time, since the docker container is quite big
+and ghcr.io is rather slow.
+Build the container yourself with the `--rebuild` option or just use `CTRL + C`
+when the container is being pulled.
 
 The Zephyr workspace is configured to be at *$(pwd)/..*.
 Zephyr itself is then found at *zephyr_workspace/zephyr* and this
@@ -167,8 +172,6 @@ zephyr_workspace
 inside the container will take effect outside and vice-versa.
 
 Run `west update` in *zephyr_workspace/aurora* to update modules.
-
-</details>
 
 ## Build
 
