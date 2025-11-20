@@ -62,14 +62,17 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Install zephyr python dependencies + SDK
 RUN python3 -m pip install west
+# Zephyr minimal SDK (no toolchains)
 RUN cd /builder && \
-    wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/zephyr-sdk-0.17.4_linux-x86_64.tar.xz && \
+    wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz && \
     wget -O - https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/sha256.sum | shasum --check --ignore-missing && \
-    tar xvf zephyr-sdk-0.17.4_linux-x86_64.tar.xz && \
-    cd zephyr-sdk-0.17.4 && \
-    ./setup.sh -c -h
-# To install a certain type of sdk:
-# ./setup.sh -c -h -t aarch64-zephyr-elf
+    tar xvf zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz && \
+    rm -f zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz
+# Specific toolchain installation (minimal sdk does not have toolchains)
+RUN cd /builder/zephyr-sdk-0.17.4 && \
+    ./setup.sh -c -h \
+    -t arm-zephyr-eabi \
+    -t riscv64-zephyr-elf
 
 # Change permissions for the builder user
 RUN chown -R ${PUID}:${PGID} /opt/venv
