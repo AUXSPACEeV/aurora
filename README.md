@@ -78,15 +78,23 @@ python3 -m pip install west
 Also, don't forget the Zephyr SDK (it's big, so ensure you have enough free space):
 
 ```bash
-wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/zephyr-sdk-0.17.4_linux-x86_64.tar.xz
+# install zephyr for your host system. This example ist for Linux x86_64.
+# For other platforms, download the right one for your system on
+# https://github.com/zephyrproject-rtos/sdk-ng/releases/tag/v0.17.4
+wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz
 wget -O - https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/sha256.sum | shasum --check --ignore-missing
-tar xvf zephyr-sdk-0.17.4_linux-x86_64.tar.xz
-cd zephyr-sdk-0.17.4
-./setup.sh -c -h
-cd ..
+tar xvf zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz
+rm -f zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz
 
-# Or alternatively only install for the target platform you desire (e.g. aarch64):
-# ./setup.sh -c -h -t aarch64-zephyr-elf
+cd zephyr-sdk-0.17.4
+
+# -h installs the host tools
+# -t arm-zephyr-eabi installs the toolchain for rpi_pico and rpi_pico2/rp2350a/m33
+# -t riscv64-zephyr-elf installs the toolchain for rpi_pico2/rp2350a/hazard3
+./setup.sh -c -h \
+    -t arm-zephyr-eabi \
+    -t riscv64-zephyr-elf
+cd ..
 ```
 
 When all dependencies are setup and ready, fetch the aurora sources:
