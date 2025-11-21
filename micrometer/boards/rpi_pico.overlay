@@ -1,0 +1,97 @@
+/*
+ * Copyright (c) 2025 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+    chosen {
+        zephyr,console = &cdc_acm_uart0;
+    };
+};
+
+&zephyr_udc0 {
+    cdc_acm_uart0: cdc_acm_uart0 {
+        compatible = "zephyr,cdc-acm-uart";
+        label = "CDC_ACM_0";
+    };
+};
+
+&pinctrl {
+        spi0_default: spi0_default {
+                group1 {
+                        pinmux = <SPI0_CSN_P17>, <SPI0_SCK_P18>, <SPI0_TX_P19>;
+                };
+                group2 {
+                        pinmux = <SPI0_RX_P16>;
+                        input-enable;
+                };
+        };
+
+        i2c0_default: i2c0_default {
+                group1 {
+                        pinmux = <I2C0_SDA_P4>, <I2C0_SCL_P5>;
+                        input-enable;
+                        input-schmitt-enable;
+                };
+        };
+        
+        i2c1_default: i2c1_default {
+                group1 {
+                        pinmux = <I2C1_SDA_P6>, <I2C1_SCL_P7>;
+                        input-enable;
+                        input-schmitt-enable;
+                };
+        };
+};
+
+&spi0 {
+    status = "okay";
+    cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+
+	  sdhc0: sdhc@0 {
+		    compatible = "zephyr,sdhc-spi-slot";
+		    reg = <0>;
+		    status = "okay";
+		    mmc {
+			      compatible = "zephyr,sdmmc-disk";
+			      disk-name = "SD";
+			      status = "okay";
+		    };
+		    spi-max-frequency = <25000000>;
+	  };
+};
+
+&i2c0 {
+	  status = "okay";
+	  clock-frequency = <I2C_BITRATE_STANDARD>;
+
+    imu0@68 {
+		  compatible = "invensense,mpu6050";
+		  reg = <0x68>;
+		  smplrt-div = <249>;
+		  status = "okay";
+	  };
+
+    baro0@77 {
+		  compatible = "bosch,bmp180";
+		  reg = <0x77>;
+		  osr-press = <2>;
+		  status = "okay";
+	  };
+};
+
+&i2c1 {
+	  status = "okay";
+	  clock-frequency = <I2C_BITRATE_STANDARD>;
+
+    baro1@77 {
+		  compatible = "bosch,bmp180";
+		  reg = <0x77>;
+		  osr-press = <2>;
+		  status = "okay";
+	  };
+};
+
+&gpio0 {
+	status = "okay";
+};
