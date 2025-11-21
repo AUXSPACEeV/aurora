@@ -26,8 +26,10 @@
  * Function fetches new data from the IMU device.
  *
  * @param dev Pointer to the IMU device
+ *
+ * @retval 0 on success, negative error code on failure.
  */
-void imu_poll(const struct device *dev);
+int imu_poll(const struct device *dev);
 #endif /* CONFIG_LSM6DSO_TRIGGER */
 
 /**

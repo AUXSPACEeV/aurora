@@ -101,7 +101,8 @@ int main(void)
 #if !defined(CONFIG_LSM6DSO_TRIGGER)
 	float imu_hz = strtof(CONFIG_IMU_HZ, NULL);
 	for(;;) {
-		imu_poll(imu);
+		int rc = imu_poll(imu);
+		(void) rc;
 		k_sleep(K_MSEC((int)(1000 / imu_hz)));
 	}
 #endif /* CONFIG_LSM6DSO_TRIGGER */

@@ -95,6 +95,7 @@ static void run_trigger_mode(const struct device *dev)
 void imu_poll(const struct device *dev)
 {
 	fetch_and_display(dev);
+	return 0;
 }
 #endif
 
