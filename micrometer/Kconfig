@@ -1,0 +1,39 @@
+# Copyright (c) 2025 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+#
+# This file is the application Kconfig entry point. All application Kconfig
+# options can be defined here or included via other application Kconfig files.
+# You can browse these options using the west targets menuconfig (terminal) or
+# guiconfig (GUI).
+
+menu "Zephyr"
+
+source "Kconfig.zephyr"
+
+endmenu
+
+module = MICROMETER
+module-str = MICROMETER
+source "subsys/logging/Kconfig.template.log_config"
+
+config STORAGE
+	bool "Support for storage"
+	help
+	  This option enables storage driver options
+
+config IMU
+	bool "Support for IMU"
+	help
+	  This option enables functionality for the Inertial Measurement Unit (IMU).
+
+config IMU_HZ
+    string "IMU sampling rate (Hz)"
+    default "10.0"
+	depends on IMU
+    help
+      Desired IMU sampling rate in Hertz (floating-point allowed).
+
+config USB_SERIAL
+	bool "Support for USB serial console"
+	help
+	  This option enables functionality for a serial console via USB.
