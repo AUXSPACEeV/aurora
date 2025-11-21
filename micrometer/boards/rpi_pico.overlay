@@ -4,6 +4,12 @@
  */
 
 / {
+
+    aliases {
+        baro0 = &bmp180_0;
+        baro1 = &bmp180_1;
+    };
+
     chosen {
         zephyr,console = &cdc_acm_uart0;
     };
@@ -45,53 +51,53 @@
 };
 
 &spi0 {
-    status = "okay";
-    cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+        status = "okay";
+        cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
 
-	  sdhc0: sdhc@0 {
-		    compatible = "zephyr,sdhc-spi-slot";
-		    reg = <0>;
-		    status = "okay";
-		    mmc {
-			      compatible = "zephyr,sdmmc-disk";
-			      disk-name = "SD";
-			      status = "okay";
-		    };
-		    spi-max-frequency = <25000000>;
-	  };
+        sdhc0: sdhc@0 {
+                compatible = "zephyr,sdhc-spi-slot";
+                reg = <0>;
+                status = "okay";
+                mmc {
+                        compatible = "zephyr,sdmmc-disk";
+                        disk-name = "SD";
+                        status = "okay";
+                };
+                spi-max-frequency = <25000000>;
+        };
 };
 
 &i2c0 {
-	  status = "okay";
-	  clock-frequency = <I2C_BITRATE_STANDARD>;
+        status = "okay";
+        clock-frequency = <I2C_BITRATE_STANDARD>;
 
-    imu0@68 {
-		  compatible = "invensense,mpu6050";
-		  reg = <0x68>;
-		  smplrt-div = <249>;
-		  status = "okay";
-	  };
+        imu0@68 {
+                compatible = "invensense,mpu6050";
+                reg = <0x68>;
+                smplrt-div = <249>;
+                status = "okay";
+        };
 
-    baro0@77 {
-		  compatible = "bosch,bmp180";
-		  reg = <0x77>;
-		  osr-press = <2>;
-		  status = "okay";
-	  };
+        bmp180_0: bmp180@77 {
+                compatible = "bosch,bmp180";
+                reg = <0x77>;
+                osr-press = <2>;
+                status = "okay";
+        };
 };
 
 &i2c1 {
-	  status = "okay";
-	  clock-frequency = <I2C_BITRATE_STANDARD>;
+        status = "okay";
+        clock-frequency = <I2C_BITRATE_STANDARD>;
 
-    baro1@77 {
-		  compatible = "bosch,bmp180";
-		  reg = <0x77>;
-		  osr-press = <2>;
-		  status = "okay";
-	  };
+        bmp180_1: bmp180@77 {
+                compatible = "bosch,bmp180";
+                reg = <0x77>;
+                osr-press = <2>;
+                status = "okay";
+        };
 };
 
 &gpio0 {
-	status = "okay";
+        status = "okay";
 };

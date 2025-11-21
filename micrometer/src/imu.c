@@ -6,9 +6,9 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <zephyr/kernel.h>
-#include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
+
+#include <lib/imu.h>
 
 static const char *now_str(void)
 {
@@ -31,7 +31,7 @@ static const char *now_str(void)
 	return buf;
 }
 
-void imu_poll(const struct device *dev)
+int imu_poll(const struct device *dev)
 {
 	struct sensor_value temperature;
 	struct sensor_value accel[3];
@@ -98,6 +98,8 @@ int imu_init(const struct device *mpu6050)
 		return 0;
 	}
 	printk("Configured for triggered sampling.\n");
+
 #endif
+	return 0;
 }
 
