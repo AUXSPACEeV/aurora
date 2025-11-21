@@ -26,6 +26,11 @@ config IMU
 	help
 	  This option enables functionality for the Inertial Measurement Unit (IMU).
 
+config BARO
+	bool "Support for BARO"
+	help
+	  This option enables functionality for the barometric pressure sensor.
+
 config IMU_HZ
     string "IMU sampling rate (Hz)"
     default "10.0"

@@ -27,3 +27,8 @@ endif()
 if(CONFIG_IMU)
     target_sources(app PRIVATE src/imu.c)
 endif()
+
+# Conditionally include baro.c if CONFIG_BARO is enabled
+if(CONFIG_BARO)
+    target_sources(app PRIVATE src/baro.c)
+endif()
