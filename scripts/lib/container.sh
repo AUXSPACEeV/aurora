@@ -13,6 +13,21 @@ if [ -z "$THISDIR" ]; then
     log_warn "THISDIR has not been defined yet. Defaulting to \"$THISDIR\"."
 fi
 
+if [ -z "$DISTRO_ARCH" ]; then
+    case "$(uname -m)" in
+        x86_64)
+            DISTRO_ARCH="x86_64"
+            ;;
+        aarch64 | arm64)
+            DISTRO_ARCH="arm64"
+            ;;
+        *)
+            echo "Unsupported architecture: $(uname -m)" >&2
+            return 1
+            ;;
+    esac
+fi
+
 # local r/o
 declare -r _CONTAINER_NAME="auxspace-avionics-builder"
 
@@ -105,7 +120,7 @@ function build_container() {
         --build-arg PUID=$(id -u) \
         --build-arg PGID=$(id -g) \
         --tag "${CONTAINER_PULL_NAME}" \
-        --file "$CONTAINER_DIR/Dockerfile" \
+        --file "$CONTAINER_DIR/Dockerfile.$DISTRO_ARCH" \
         "$CONTAINER_DIR"
 }
 
