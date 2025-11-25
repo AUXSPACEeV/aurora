@@ -8,6 +8,8 @@
     aliases {
         baro0 = &bmp180_0;
         baro1 = &bmp180_1;
+
+        imu0 = &mpu6050_0;
     };
 
     chosen {
@@ -71,7 +73,7 @@
         status = "okay";
         clock-frequency = <I2C_BITRATE_STANDARD>;
 
-        imu0@68 {
+        mpu6050_0: mpu6050@68 {
                 compatible = "invensense,mpu6050";
                 reg = <0x68>;
                 smplrt-div = <249>;

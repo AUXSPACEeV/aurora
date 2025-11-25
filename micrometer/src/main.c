@@ -39,12 +39,12 @@ LOG_MODULE_REGISTER(main, CONFIG_MICROMETER_LOG_LEVEL);
 
 void imu_task(void *, void *, void *)
 {
-    const struct device *mpu6050 = DEVICE_DT_GET_ONE(invensense_mpu6050);
+    const struct device *imu0 = DEVICE_DT_GET(DT_ALIAS(imu0));
 
-    imu_init(mpu6050);
+    imu_init(imu0);
 
     while (1) {
-        int rc = imu_poll(mpu6050);
+        int rc = imu_poll(imu0);
         if (rc != 0) {
             LOG_ERR("IMU polling failed (%d)", rc);
             break;
@@ -62,7 +62,6 @@ K_THREAD_DEFINE(imu_task_id, 2048, imu_task, NULL, NULL, NULL,
 
 #endif /* CONFIG_IMU */
 
-
 /* ============================================================
  *                     BARO TASK
  * ============================================================ */
@@ -70,8 +69,8 @@ K_THREAD_DEFINE(imu_task_id, 2048, imu_task, NULL, NULL, NULL,
 
 void baro_task(void *, void *, void *)
 {
-    const struct device *bmp0 = DEVICE_DT_GET(DT_NODELABEL(bmp180_0));
-    const struct device *bmp1 = DEVICE_DT_GET(DT_NODELABEL(bmp180_1));
+    const struct device *bmp0 = DEVICE_DT_GET(DT_ALIAS(baro0));
+    const struct device *bmp1 = DEVICE_DT_GET(DT_ALIAS(baro1));
 
     if (!device_is_ready(bmp0) || !device_is_ready(bmp1)) {
         LOG_ERR("One of BMP180 sensors not ready!");
