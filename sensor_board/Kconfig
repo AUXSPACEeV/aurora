@@ -19,37 +19,4 @@ source "subsys/logging/Kconfig.template.log_config"
 config STORAGE
 	bool "Support for storage"
 	help
-	  This option enables storage driver options
-
-choice STORAGE_TYPE
-	bool "Aurora application storage type"
-	depends on STORAGE
-    default SIMPLE_STORAGE
-
-config SIMPLE_STORAGE
-	bool "Simple storage"
-	help
-		Aurora simple storage device.
-		Use this option, if you only have one storage device, like an mmc card.
-
-config MULTI_STORAGE
-	bool "Not implemented yet"
-
-endchoice
-
-config IMU
-	bool "Support for IMU"
-	help
-	  This option enables functionality for the Inertial Measurement Unit (IMU).
-
-config IMU_HZ
-    string "IMU sampling rate (Hz)"
-    default "10.0"
-	depends on IMU
-    help
-      Desired IMU sampling rate in Hertz (floating-point allowed).
-
-config USB_SERIAL
-	bool "Support for USB serial console"
-	help
-	  This option enables functionality for a serial console via USB.
+		This option enables storage driver options

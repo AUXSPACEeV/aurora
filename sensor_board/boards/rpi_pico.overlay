@@ -4,16 +4,20 @@
  */
 
 / {
-    chosen {
-        zephyr,console = &cdc_acm_uart0;
-    };
+	aliases {
+		imu0 = &imu0;
+	};
+
+	chosen {
+		zephyr,console = &cdc_acm_uart0;
+	};
 };
 
 &zephyr_udc0 {
-    cdc_acm_uart0: cdc_acm_uart0 {
-        compatible = "zephyr,cdc-acm-uart";
-        label = "CDC_ACM_0";
-    };
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+		label = "CDC_ACM_0";
+	};
 };
 
 &pinctrl {
@@ -47,10 +51,11 @@
 };
 
 &spi0 {
-    status = "okay";
-    cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+	status = "okay";
+	cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+
 	pinctrl-0 = <&spi0_default>;
-    pinctrl-names = "default";
+	pinctrl-names = "default";
 
 	sdhc0: sdhc@0 {
 		compatible = "zephyr,sdhc-spi-slot";
@@ -58,18 +63,25 @@
 		status = "okay";
 		mmc {
 			compatible = "zephyr,sdmmc-disk";
-			status = "okay";
 			disk-name = "SD";
+			status = "okay";
 		};
-		spi-max-frequency = <17000000>;
+		spi-max-frequency = <25000000>;
 	};
+};
+
+&spi1 {
+	status = "okay";
+	cs-gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi1_default>;
+	pinctrl-names = "default";
 };
 
 &i2c0 {
 	status = "okay";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 	pinctrl-0 = <&i2c0_default>;
-    pinctrl-names = "default";
+	pinctrl-names = "default";
 
 	imu0: lsm6dso32@6b {
 		compatible = "st,lsm6dso32";
@@ -77,13 +89,6 @@
 
 		status = "okay";
 	};
-};
-
-&spi1 {
-    status = "okay";
-    cs-gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
-	pinctrl-0 = <&spi1_default>;
-    pinctrl-names = "default";
 };
 
 &gpio0 {

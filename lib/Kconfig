@@ -1,0 +1,15 @@
+# Copyright (c) 2025 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+menu "Aurora libraries"
+
+config AURORA_CONSOLE
+	bool "Support for serial console"
+	help
+		This option enables functionality for the aurora serial console lib.
+
+rsource "console/Kconfig"
+
+rsource "sensor/Kconfig"
+
+endmenu

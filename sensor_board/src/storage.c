@@ -32,7 +32,7 @@ static const char *disk_mount_pt = DISK_MOUNT_PT;
  * @param path Absolute path to list
  *
  * @return Negative errno code on error, number of listed entries on
- *         success.
+ *		   success.
  */
 static int lsdir(const char *path)
 {
@@ -80,7 +80,7 @@ static int lsdir(const char *path)
 
 int init_sd()
 {
-    /* raw disk i/o */
+	/* raw disk i/o */
 	static const char *disk_pdrv = DISK_DRIVE_NAME;
 	uint64_t memory_size_mb;
 	uint32_t block_count;
@@ -130,5 +130,5 @@ int init_sd()
 
 int storage_init()
 {
-    return init_sd();
+	return init_sd();
 }

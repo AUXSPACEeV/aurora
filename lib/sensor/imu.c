@@ -7,10 +7,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 
 #include <lib/imu.h>
+
+LOG_MODULE_REGISTER(imu, CONFIG_AUXSPACE_SENSORS_LOG_LEVEL);
 
 static inline float out_ev(struct sensor_value *val)
 {
@@ -30,7 +33,7 @@ static void fetch_and_display(const struct device *dev)
 	sensor_channel_get(dev, SENSOR_CHAN_ACCEL_Y, &y);
 	sensor_channel_get(dev, SENSOR_CHAN_ACCEL_Z, &z);
 
-	printf("accel x:%f ms/2 y:%f ms/2 z:%f ms/2\n",
+	LOG_INF("accel x:%f ms/2 y:%f ms/2 z:%f ms/2\n",
 			(double)out_ev(&x), (double)out_ev(&y), (double)out_ev(&z));
 
 	/* lsm6dso gyro */
@@ -39,10 +42,10 @@ static void fetch_and_display(const struct device *dev)
 	sensor_channel_get(dev, SENSOR_CHAN_GYRO_Y, &y);
 	sensor_channel_get(dev, SENSOR_CHAN_GYRO_Z, &z);
 
-	printf("gyro x:%f rad/s y:%f rad/s z:%f rad/s\n",
+	LOG_INF("gyro x:%f rad/s y:%f rad/s z:%f rad/s\n",
 			(double)out_ev(&x), (double)out_ev(&y), (double)out_ev(&z));
 
-	printf("trig_cnt:%d\n\n", trig_cnt);
+	LOG_INF("trig_cnt:%d\n\n", trig_cnt);
 }
 
 int imu_set_sampling_freq(const struct device *dev, float sampling_rate_hz)
@@ -55,16 +58,16 @@ int imu_set_sampling_freq(const struct device *dev, float sampling_rate_hz)
 	odr_attr.val2 = 0;
 
 	ret = sensor_attr_set(dev, SENSOR_CHAN_ACCEL_XYZ,
-			SENSOR_ATTR_SAMPLING_FREQUENCY, &odr_attr);
+						  SENSOR_ATTR_SAMPLING_FREQUENCY, &odr_attr);
 	if (ret != 0) {
-		printf("Cannot set sampling frequency for accelerometer.\n");
+		LOG_ERR("Cannot set sampling frequency for accelerometer.\n");
 		return ret;
 	}
 
 	ret = sensor_attr_set(dev, SENSOR_CHAN_GYRO_XYZ,
-			SENSOR_ATTR_SAMPLING_FREQUENCY, &odr_attr);
+						  SENSOR_ATTR_SAMPLING_FREQUENCY, &odr_attr);
 	if (ret != 0) {
-		printf("Cannot set sampling frequency for gyro.\n");
+		LOG_ERR("Cannot set sampling frequency for gyro.\n");
 		return ret;
 	}
 
@@ -73,7 +76,7 @@ int imu_set_sampling_freq(const struct device *dev, float sampling_rate_hz)
 
 #if defined(CONFIG_LSM6DSO_TRIGGER)
 static void trigger_handler(const struct device *dev,
-			    const struct sensor_trigger *trig)
+							const struct sensor_trigger *trig)
 {
 	fetch_and_display(dev);
 }
@@ -86,13 +89,13 @@ static void run_trigger_mode(const struct device *dev)
 	trig.chan = SENSOR_CHAN_ACCEL_XYZ;
 
 	if (sensor_trigger_set(dev, &trig, trigger_handler) != 0) {
-		printf("Could not set sensor type and channel\n");
+		LOG_ERR("Could not set sensor type and channel\n");
 		return;
 	}
 }
 
 #else
-void imu_poll(const struct device *dev)
+int imu_poll(const struct device *dev)
 {
 	fetch_and_display(dev);
 	return 0;
@@ -101,21 +104,28 @@ void imu_poll(const struct device *dev)
 
 int imu_init(const struct device *dev)
 {
-    float imu_hz;
+	float imu_hz;
+	int ret;
 
 	if (!device_is_ready(dev)) {
-		printk("%s: device not ready.\n", dev->name);
+		LOG_ERR("%s: device not ready.\n", dev->name);
 		return -ENODEV;
 	}
 
-    imu_hz = strtof(CONFIG_IMU_HZ, NULL);
-    if (imu_set_sampling_freq(dev, imu_hz) != 0) {
-		return -EIO;
+	imu_hz = strtof(CONFIG_IMU_HZ, NULL);
+	if (imu_hz && imu_hz > 0.0f) {
+		ret = imu_set_sampling_freq(dev, imu_hz) != 0;
+		if (ret != 0) {
+			LOG_WRN("Could not set IMU sampling frequency to %f Hz.\n", imu_hz);
+		}
+	} else {
+		LOG_WRN("Invalid IMU sampling frequency. Skipping freq setup.\n");
 	}
 
 #ifdef CONFIG_LSM6DSO_TRIGGER
-	printf("Testing LSM6DSO sensor in trigger mode.\n\n");
+	LOG_DBG("Testing LSM6DSO sensor in trigger mode.\n\n");
 	run_trigger_mode(dev);
 #endif
+
 	return 0;
 }

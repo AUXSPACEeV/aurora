@@ -94,14 +94,14 @@ int main(void)
 #endif /* CONFIG_STORAGE */
 
 #if defined(CONFIG_IMU)
-	const struct device *const imu = DEVICE_DT_GET_ONE(st_lsm6dso32);
-	if (imu_init(imu)) {
-		LOG_ERR("Could not initialize IMU: %d", ret);
+	const struct device *const imu0 = DEVICE_DT_GET(DT_ALIAS(imu0));
+	if (imu_init(imu0)) {
+		LOG_ERR("Could not initialize IMU0: %d", ret);
 	}
 #if !defined(CONFIG_LSM6DSO_TRIGGER)
 	float imu_hz = strtof(CONFIG_IMU_HZ, NULL);
 	for(;;) {
-		int rc = imu_poll(imu);
+		int rc = imu_poll(imu0);
 		(void) rc;
 		k_sleep(K_MSEC((int)(1000 / imu_hz)));
 	}

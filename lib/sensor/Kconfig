@@ -1,0 +1,18 @@
+# Copyright (c) 2025 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+module = AUXSPACE_SENSORS
+module-str = AUXSPACE_SENSORS
+source "subsys/logging/Kconfig.template.log_config"
+
+config IMU
+	bool "Support for IMU"
+	help
+		This option enables functionality for the Inertial Measurement Unit (IMU).
+
+config IMU_HZ
+	string "IMU sampling rate (Hz)"
+	default "10.0"
+	depends on IMU
+	help
+		Desired IMU sampling rate in Hertz (floating-point allowed).
