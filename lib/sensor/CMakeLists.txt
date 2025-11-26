@@ -6,3 +6,7 @@ zephyr_library()
 if(CONFIG_IMU)
     zephyr_library_sources(imu.c)
 endif()
+
+if(CONFIG_BARO)
+    zephyr_library_sources(baro.c)
+endif()

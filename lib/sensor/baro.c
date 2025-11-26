@@ -7,10 +7,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/sensor.h>
 
 #include <lib/baro.h>
 
-LOG_MODULE_REGISTER(baro, CONFIG_MICROMETER_LOG_LEVEL);
+LOG_MODULE_REGISTER(baro, CONFIG_AUXSPACE_SENSORS_LOG_LEVEL);
 
 int baro_measure(const struct device *dev, struct sensor_value *temp,
 				 struct sensor_value *press)
