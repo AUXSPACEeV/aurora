@@ -120,7 +120,7 @@ function build_container() {
         --build-arg PUID=$(id -u) \
         --build-arg PGID=$(id -g) \
         --tag "${CONTAINER_PULL_NAME}" \
-        --file "$CONTAINER_DIR/Dockerfile.$DISTRO_ARCH" \
+        --file "$CONTAINER_DIR/Dockerfile_$DISTRO_ARCH" \
         "$CONTAINER_DIR"
 }
 
