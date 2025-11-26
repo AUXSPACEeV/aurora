@@ -22,20 +22,20 @@ tests:
     extra_args:
       - EXTRA_CONF_FILE=boards/rpi_pico.conf
       - DTC_OVERLAY_FILE=boards/rpi_pico.overlay
-  sample.filesystem.fat_fs.rpi_pico2_m33:
+  sample.filesystem.fat_fs.rpi_pico2_hazard3:
     build_only: true
-    platform_allow: rpi_pico2/rp2350a/m33
+    platform_allow: rpi_pico2/rp2350a/hazard3
     extra_args:
-      - EXTRA_CONF_FILE=boards/rpi_pico2_m33.conf
-      - DTC_OVERLAY_FILE=boards/rpi_pico2_m33.overlay
+      - EXTRA_CONF_FILE=boards/rpi_pico2_hazard3.conf
+      - DTC_OVERLAY_FILE=boards/rpi_pico2_hazard3.overlay
   sample.filesystem.fat_fs.has_sdmmc_disk:
     build_only: true
     filter: dt_compat_enabled("zephyr,sdmmc-disk")
     integration_platforms:
-      - rpi_pico2_m33
+      - rpi_pico2_hazard3
 
 tests:
-  weather_station.default: {}
-  weather_station.debug:
+  sensor_board.default: {}
+  sensor_board.debug:
     extra_overlay_confs:
       - debug.conf
