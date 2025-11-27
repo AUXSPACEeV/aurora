@@ -1,18 +1,56 @@
 # Copyright (c) 2025 Auxspace e.V.
 # SPDX-License-Identifier: Apache-2.0
 
-module = AUXSPACE_SENSORS
-module-str = AUXSPACE_SENSORS
+module = AURORA_SENSORS
+module-str = AURORA_SENSORS
 source "subsys/logging/Kconfig.template.log_config"
+
+menu "Inertial Measurement Unit (IMU)"
 
 config IMU
 	bool "Support for IMU"
+	depends on AURORA_SENSORS
 	help
-		This option enables functionality for the Inertial Measurement Unit (IMU).
+		This option enables functionality for the Inertial Measurement
+		Unit (IMU).
 
-config IMU_HZ
-	string "IMU sampling rate (Hz)"
-	default "10.0"
+# Only show frequency options when IMU is enabled
+choice IMU_FREQUENCY
+	prompt "IMU update frequency (Hz)"
 	depends on IMU
+	default IMU_FREQ_10HZ
+
+config IMU_FREQ_10HZ
+	bool "10 Hz"
+
+config IMU_FREQ_50HZ
+	bool "50 Hz"
+
+config IMU_FREQ_100HZ
+	bool "100 Hz"
+
+config IMU_FREQ_200HZ
+	bool "200 Hz"
+
+config IMU_FREQ_400HZ
+	bool "400 Hz"
+
+endchoice
+
+config IMU_FREQUENCY_VALUE
+	int
+	depends on IMU
+	default 10  if IMU_FREQ_10HZ
+	default 50  if IMU_FREQ_50HZ
+	default 100 if IMU_FREQ_100HZ
+	default 200 if IMU_FREQ_200HZ
+	default 400 if IMU_FREQ_400HZ
+
+endmenu
+
+config BARO
+	bool "Support for Baro"
+	depends on AURORA_SENSORS
 	help
-		Desired IMU sampling rate in Hertz (floating-point allowed).
+		This option enables functionality for barometric pressure
+		sensors.

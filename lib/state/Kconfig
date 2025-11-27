@@ -1,0 +1,20 @@
+# Copyright (c) 2025 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+module = STATE_MACHINE
+module-str = STATE_MACHINE
+source "subsys/logging/Kconfig.template.log_config"
+
+choice STATE_MACHINE_TYPE
+	bool "State Machine Type"
+	depends on AURORA_STATE_MACHINE
+	default SIMPLE_STATE
+
+config SIMPLE_STATE
+	bool "Simple State machine"
+	help
+		Simple State machine with apogee detection, single pyro ignition
+		and basic safety features.
+		Ideal for small form factor boards and rockets.
+
+endchoice

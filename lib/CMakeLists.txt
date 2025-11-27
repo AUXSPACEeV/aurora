@@ -5,4 +5,7 @@
 add_subdirectory_ifdef(CONFIG_AURORA_CONSOLE console)
 
 # sensor lib
-add_subdirectory(sensor)
+add_subdirectory_ifdef(CONFIG_AURORA_SENSORS sensor)
+
+# state machine lib
+add_subdirectory_ifdef(CONFIG_AURORA_STATE_MACHINE state)

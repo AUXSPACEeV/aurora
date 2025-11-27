@@ -13,7 +13,7 @@
 
 #include <lib/imu.h>
 
-LOG_MODULE_REGISTER(imu, CONFIG_AUXSPACE_SENSORS_LOG_LEVEL);
+LOG_MODULE_REGISTER(imu, CONFIG_AURORA_SENSORS_LOG_LEVEL);
 
 static inline float out_ev(struct sensor_value *val)
 {
@@ -48,13 +48,13 @@ static void fetch_and_display(const struct device *dev)
 	LOG_INF("trig_cnt:%d\n\n", trig_cnt);
 }
 
-int imu_set_sampling_freq(const struct device *dev, float sampling_rate_hz)
+int imu_set_sampling_freq(const struct device *dev, int sampling_rate_hz)
 {
 	int ret = 0;
 	struct sensor_value odr_attr;
 
 	/* set accel/gyro sampling frequency */
-	odr_attr.val1 = sampling_rate_hz;
+	odr_attr.val1 = (float)sampling_rate_hz;
 	odr_attr.val2 = 0;
 
 	ret = sensor_attr_set(dev, SENSOR_CHAN_ACCEL_XYZ,
@@ -104,7 +104,7 @@ int imu_poll(const struct device *dev)
 
 int imu_init(const struct device *dev)
 {
-	float imu_hz;
+	int imu_hz;
 	int ret;
 
 	if (!device_is_ready(dev)) {
@@ -112,18 +112,14 @@ int imu_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-	imu_hz = strtof(CONFIG_IMU_HZ, NULL);
-	if (imu_hz && imu_hz > 0.0f) {
-		ret = imu_set_sampling_freq(dev, imu_hz) != 0;
-		if (ret != 0) {
-			LOG_WRN("Could not set IMU sampling frequency to %f Hz.\n", imu_hz);
-		}
-	} else {
-		LOG_WRN("Invalid IMU sampling frequency. Skipping freq setup.\n");
+	imu_hz = CONFIG_IMU_FREQUENCY_VALUE;
+	ret = imu_set_sampling_freq(dev, imu_hz) != 0;
+	if (ret != 0) {
+		LOG_WRN("Could not set IMU sampling frequency to %d.0 Hz.\n", imu_hz);
 	}
 
 #ifdef CONFIG_LSM6DSO_TRIGGER
-	LOG_DBG("Testing LSM6DSO sensor in trigger mode.\n\n");
+	LOG_DBG("Testing IMU in trigger mode.\n\n");
 	run_trigger_mode(dev);
 #endif
 

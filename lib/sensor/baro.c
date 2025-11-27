@@ -12,7 +12,7 @@
 
 #include <lib/baro.h>
 
-LOG_MODULE_REGISTER(baro, CONFIG_AUXSPACE_SENSORS_LOG_LEVEL);
+LOG_MODULE_REGISTER(baro, CONFIG_AURORA_SENSORS_LOG_LEVEL);
 
 int baro_measure(const struct device *dev, struct sensor_value *temp,
 				 struct sensor_value *press)
@@ -43,6 +43,6 @@ int baro_measure(const struct device *dev, struct sensor_value *temp,
 			return ret;
 		}
 	}
-		
+
 	return 0;
 }
