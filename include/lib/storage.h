@@ -20,8 +20,6 @@
 *  Note the fatfs library is able to mount only strings inside _VOLUME_STRS
 *  in ffconf.h
 */
-#define DISK_DRIVE_NAME "SD"
-#define DISK_MOUNT_PT "/" DISK_DRIVE_NAME ":"
 
 #define MAX_PATH 256
 

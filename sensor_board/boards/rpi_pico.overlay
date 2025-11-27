@@ -5,11 +5,26 @@
 
 / {
 	chosen {
+		/* Console */
 		zephyr,console = &cdc_acm_uart0;
 
-		/* Auxspace specifics */
+		/* Sensors */
 		auxspace,baro = &ms5607_0;
 		auxspace,imu = &lsm6dso32_0;
+
+		/* Storage */
+		auxspace,mmc = &mmc0;
+		auxspace,ffs = &ffs0;
+	};
+
+	fstab {
+		compatible = "zephyr,fstab";
+		ffs0: ffs0 {
+			compatible = "zephyr,fstab,fatfs";
+			automount;
+			disk-access;
+			mount-point = "/MMC:";
+		};
 	};
 };
 
@@ -61,9 +76,9 @@
 		compatible = "zephyr,sdhc-spi-slot";
 		reg = <0>;
 		status = "okay";
-		mmc {
+		mmc0: mmc {
 			compatible = "zephyr,sdmmc-disk";
-			disk-name = "SD";
+			disk-name = "MMC";
 			status = "okay";
 		};
 		spi-max-frequency = <25000000>;
