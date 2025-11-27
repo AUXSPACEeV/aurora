@@ -3,14 +3,6 @@
 
 menu "Aurora libraries"
 
-config AURORA_CONSOLE
-	bool "Support for serial console"
-	help
-		This option enables functionality for the aurora serial console
-		lib.
-
-rsource "console/Kconfig"
-
 config AURORA_SENSORS
 	bool "Support for sensor HAL"
 	help

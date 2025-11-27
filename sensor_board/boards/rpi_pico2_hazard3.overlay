@@ -5,9 +5,6 @@
 
 / {
 	chosen {
-		/* Console */
-		zephyr,console = &cdc_acm_uart0;
-
 		/* Sensors */
 		auxspace,baro = &ms5607_0;
 		auxspace,imu = &lsm6dso32_0;

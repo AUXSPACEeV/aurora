@@ -18,10 +18,6 @@
 #include <lib/storage.h>
 #endif /* CONFIG_STORAGE */
 
-#if defined(CONFIG_USB_SERIAL)
-#include <lib/usb_serial.h>
-#endif /* CONFIG_USB_SERIAL */
-
 #if defined(CONFIG_IMU)
 #include <lib/imu.h>
 #endif /* CONFIG_IMU */
@@ -188,14 +184,6 @@ K_THREAD_DEFINE(state_machine_task_id, 2048, state_machine_task, NULL, NULL,
 int main(void)
 {
 	int ret;
-
-#if defined(CONFIG_USB_SERIAL)
-	ret = init_usb_serial();
-	if (ret) {
-		LOG_ERR("Could not initialize USB Serial (%d)", ret);
-		return 1;
-	}
-#endif /* CONFIG_USB_SERIAL */
 
 	LOG_INF("Auxspace Micrometer %s", APP_VERSION_STRING);
 
