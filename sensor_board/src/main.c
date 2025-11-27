@@ -73,7 +73,7 @@ static bool sm_active = false;
 
 void imu_task(void *, void *, void *)
 {
-	const struct device *imu0 = DEVICE_DT_GET(DT_ALIAS(imu0));
+	const struct device *imu0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_imu));
 	const int imu_hz = CONFIG_IMU_FREQUENCY_VALUE;
 
 	imu_init(imu0);
@@ -107,7 +107,7 @@ K_THREAD_DEFINE(imu_task_id, 2048, imu_task, NULL, NULL, NULL,
 
 void baro_task(void *, void *, void *)
 {
-	const struct device *baro0 = DEVICE_DT_GET(DT_ALIAS(baro0));
+	const struct device *baro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_baro));
 
 	if (!device_is_ready(baro0)) {
 		LOG_ERR("Baro not ready!");

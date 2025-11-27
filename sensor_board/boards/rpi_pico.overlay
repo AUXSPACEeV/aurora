@@ -4,13 +4,12 @@
  */
 
 / {
-	aliases {
-		imu0 = &lsm6dso32_0;
-		baro0 = &ms5607_0;
-	};
-
 	chosen {
 		zephyr,console = &cdc_acm_uart0;
+
+		/* Auxspace specifics */
+		auxspace,baro = &ms5607_0;
+		auxspace,imu = &lsm6dso32_0;
 	};
 };
 
