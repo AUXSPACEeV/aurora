@@ -6,6 +6,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
@@ -45,4 +46,14 @@ int baro_measure(const struct device *dev, struct sensor_value *temp,
 	}
 
 	return 0;
+}
+
+float baro_altitude(float pressure)
+{
+	const float P0 = 101325.0f; // standard sea-level pressure in Pa
+	float altitude;
+
+	altitude = 44330.0f * (1.0f - powf(pressure / P0, 0.1903f));
+
+	return altitude;
 }

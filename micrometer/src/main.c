@@ -55,6 +55,15 @@ static const struct sm_thresholds state_cfg = (struct sm_thresholds){
 
 LOG_MODULE_REGISTER(main, CONFIG_MICROMETER_LOG_LEVEL);
 
+static float orientation = 0.0f;
+static float acceleration = 0.0f;
+static float height = 0.0f;
+static float previous_height = 0.0f;
+
+static bool baro_active = false;
+static bool imu_active = false;
+static bool sm_active = false;
+
 #if defined(CONFIG_AURORA_SENSORS)
 
 /* ============================================================
@@ -65,17 +74,21 @@ LOG_MODULE_REGISTER(main, CONFIG_MICROMETER_LOG_LEVEL);
 void imu_task(void *, void *, void *)
 {
 	const struct device *imu0 = DEVICE_DT_GET(DT_ALIAS(imu0));
+	const int imu_hz = CONFIG_IMU_FREQUENCY_VALUE;
 
 	imu_init(imu0);
+	imu_active = true;
 
 	while (1) {
-		int rc = imu_poll(imu0);
+		int rc = imu_poll(imu0, &orientation, &acceleration);
 		if (rc != 0) {
 			LOG_ERR("IMU polling failed (%d)", rc);
 			break;
 		}
 
-		k_sleep(K_SECONDS(2));
+		LOG_INF("orientation: %f deg. acc: %f\n", orientation, acceleration);
+
+		k_sleep(K_MSEC(1000 / imu_hz));
 	}
 
 	LOG_INF("IMU task stopped.");
@@ -101,6 +114,7 @@ void baro_task(void *, void *, void *)
 		LOG_ERR("One of BMP180 sensors not ready!");
 		return;
 	}
+	baro_active = true;
 
 	struct sensor_value temp, press;
 
@@ -110,6 +124,9 @@ void baro_task(void *, void *, void *)
 			LOG_ERR("Failed to measure BMP0");
 			continue;
 		}
+
+		// currently only uses baro0 for height measurement
+		height = baro_altitude(sensor_value_to_float(&press));
 
 		LOG_INF("[BMP0] Temp: %.1f C | Press: %.1f kPa",
 				sensor_value_to_double(&temp),
@@ -134,36 +151,7 @@ K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
 
 #endif /* CONFIG_BARO */
 
-#if defined(CONFIG_AURORA_STATE_MACHINE)
-
-static struct sm_inputs read_sensors()
-{
-	float orientation = 0.0f;
-	float acceleration = 0.0f;
-	float height = 0.0f;;
-	float previous_height = 0.0f;;
-
-	// TODO read baro and IMU
-	return (struct sm_inputs){
-		orientation,
-		acceleration,
-		height,
-		previous_height,
-	};
-}
-
-#endif /* CONFIG_AURORA_STATE_MACHINE */
-
 #else  /* CONFIG_AURORA_SENSORS */
-
-#if defined(CONFIG_AURORA_STATE_MACHINE)
-
-static struct sm_inputs read_sensors()
-{
-	return (struct sm_inputs){0};
-}
-
-#endif /* CONFIG_AURORA_STATE_MACHINE */
 
 #endif /* CONFIG_AURORA_SENSORS */
 
@@ -175,9 +163,19 @@ static struct sm_inputs read_sensors()
 void state_machine_task(void *, void *, void *)
 {
 	sm_init(&state_cfg);
+	sm_active = true;
+
+	// TODO: Add idling
+	while(!baro_active && !imu_active);
 
 	while (1) {
-		struct sm_inputs s = read_sensors();
+		previous_height = height;
+		struct sm_inputs s = (struct sm_inputs){
+			orientation,
+			acceleration,
+			height,
+		};
+
 		sm_update(&s);
 
 		LOG_INF("STATE = %d\n", sm_get_state());

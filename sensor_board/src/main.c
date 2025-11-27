@@ -99,9 +99,13 @@ int main(void)
 		LOG_ERR("Could not initialize IMU0: %d", ret);
 	}
 #if !defined(CONFIG_LSM6DSO_TRIGGER)
-	float imu_hz = strtof(CONFIG_IMU_HZ, NULL);
+	const int imu_hz = CONFIG_IMU_FREQUENCY_VALUE;
+	float orientation_deg, acc_avg;
+
 	for(;;) {
-		int rc = imu_poll(imu0);
+		int rc = imu_poll(imu0, &orientation_deg, &acc_avg);
+		LOG_INF("Orientation: %f deg. Acceleration: %f m/s^2\n",
+				orientation_deg, acc_avg);
 		(void) rc;
 		k_sleep(K_MSEC((int)(1000 / imu_hz)));
 	}

@@ -27,9 +27,13 @@
  *
  * @param dev Pointer to the IMU device
  *
+ * @param orientation_deg Orientation in degrees
+ *
+ * @param acc Acceleration in meters per second squared
+ *
  * @retval 0 on success, negative error code on failure.
  */
-int imu_poll(const struct device *dev);
+int imu_poll(const struct device *dev, float *orientation_deg, float *acc);
 #endif /* CONFIG_LSM6DSO_TRIGGER */
 
 /**
