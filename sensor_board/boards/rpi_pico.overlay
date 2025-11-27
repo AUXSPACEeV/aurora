@@ -5,8 +5,9 @@
 
 / {
 	chosen {
-		/* Console */
-		zephyr,console = &cdc_acm_uart0;
+		/* Console and shell over CDC ACM */
+		zephyr,console = &snippet_cdc_acm_console_uart;
+		zephyr,shell-uart = &snippet_cdc_acm_console_uart;
 
 		/* Sensors */
 		auxspace,baro = &ms5607_0;
@@ -29,9 +30,8 @@
 };
 
 &zephyr_udc0 {
-	cdc_acm_uart0: cdc_acm_uart0 {
+	snippet_cdc_acm_console_uart: snippet_cdc_acm_console_uart {
 		compatible = "zephyr,cdc-acm-uart";
-		label = "CDC_ACM_0";
 	};
 };
 
@@ -58,7 +58,7 @@
 
 	i2c0_default: i2c0_default {
 		group1 {
-			pinmux = <I2C0_SDA_P28>, <I2C0_SCL_P29>;
+			pinmux = <I2C0_SDA_P20>, <I2C0_SCL_P21>;
 			input-enable;
 			input-schmitt-enable;
 		};

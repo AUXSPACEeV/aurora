@@ -48,12 +48,32 @@ int baro_measure(const struct device *dev, struct sensor_value *temp,
 	return 0;
 }
 
-float baro_altitude(float pressure)
+float baro_altitude(float pressure_pa)
 {
-	const float P0 = 101325.0f; // standard sea-level pressure in Pa
-	float altitude;
+    return pressure_pa;
+}
 
-	altitude = 44330.0f * (1.0f - powf(pressure / P0, 0.1903f));
+int baro_set_oversampling(const struct device *dev, uint32_t osr)
+{
+	struct sensor_value oversampling_rate = { osr, 0 };
 
-	return altitude;
+	if (sensor_attr_set(dev, SENSOR_CHAN_ALL, SENSOR_ATTR_OVERSAMPLING,
+						&oversampling_rate) != 0) {
+		LOG_ERR("Could not set oversampling rate of %d "
+				"on Baro device, aborting test.",
+				oversampling_rate.val1);
+		return -EIO;
+	}
+	return 0;
+}
+
+int baro_init(const struct device *dev)
+{
+	if (!device_is_ready(dev)) {
+		LOG_ERR("Baro device %s is not ready, aborting test.",
+				dev->name);
+		return -ETIMEDOUT;
+	}
+
+	return baro_set_oversampling(dev, CONFIG_BARO_OVERSAMPLING_VALUE);
 }

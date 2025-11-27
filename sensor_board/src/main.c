@@ -18,10 +18,6 @@
 #include <lib/storage.h>
 #endif /* CONFIG_STORAGE */
 
-#if defined(CONFIG_USB_SERIAL)
-#include <lib/usb_serial.h>
-#endif /* CONFIG_USB_SERIAL */
-
 #if defined(CONFIG_IMU)
 #include <lib/imu.h>
 #endif /* CONFIG_IMU */
@@ -108,8 +104,9 @@ K_THREAD_DEFINE(imu_task_id, 2048, imu_task, NULL, NULL, NULL,
 void baro_task(void *, void *, void *)
 {
 	const struct device *baro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_baro));
+	const int baro_hz = CONFIG_BARO_FREQUENCY_VALUE;
 
-	if (!device_is_ready(baro0)) {
+	if (baro_init(baro0)) {
 		LOG_ERR("Baro not ready!");
 		return;
 	}
@@ -127,12 +124,11 @@ void baro_task(void *, void *, void *)
 		// currently only uses baro0 for height measurement
 		height = baro_altitude(sensor_value_to_float(&press));
 
-		LOG_INF("[baro0] Temp: %.1f C | Press: %.1f kPa | Height: %.1f m\n",
-				sensor_value_to_double(&temp),
-				sensor_value_to_double(&press) / 1000.0,
+		LOG_INF("[baro0] Temperature: %d.%06d | Pressure: %d.%06d\n",
+				temp.val1, temp.val2, press.val1, press.val2,
 				height);
 
-		k_sleep(K_SECONDS(1));
+		k_sleep(K_MSEC(1000 / baro_hz));
 	}
 }
 
@@ -188,14 +184,6 @@ K_THREAD_DEFINE(state_machine_task_id, 2048, state_machine_task, NULL, NULL,
 int main(void)
 {
 	int ret;
-
-#if defined(CONFIG_USB_SERIAL)
-	ret = init_usb_serial();
-	if (ret) {
-		LOG_ERR("Could not initialize USB Serial (%d)", ret);
-		return 1;
-	}
-#endif /* CONFIG_USB_SERIAL */
 
 	LOG_INF("Auxspace Micrometer %s", APP_VERSION_STRING);
 

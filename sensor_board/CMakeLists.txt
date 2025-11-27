@@ -9,11 +9,18 @@ cmake_minimum_required(VERSION 3.20.0)
 find_package(Zephyr)
 project(sensor_board)
 
+# Build cdc-acm-console with snippet
+if(CONFIG_USB_SERIAL)
+	if(NOT cdc-acm-console IN_LIST SNIPPET)
+		set(SNIPPET cdc-acm-console ${SNIPPET} CACHE STRING "" FORCE)
+	endif()
+endif()
+
 target_sources(app PRIVATE
-    src/main.c
-    )
+	src/main.c
+	)
 
 # Conditionally include storage.c if CONFIG_STORAGE is enabled
 if(CONFIG_STORAGE)
-    target_sources(app PRIVATE src/storage.c)
+	target_sources(app PRIVATE src/storage.c)
 endif()

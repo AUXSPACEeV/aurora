@@ -20,3 +20,8 @@ config STORAGE
 	bool "Support for storage"
 	help
 		This option enables storage driver options
+
+config USB_CONSOLE_SHELL
+	bool "Support for USB serial console"
+	help
+		This option enables functionality for the aurora serial console via USB.

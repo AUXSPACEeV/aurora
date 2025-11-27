@@ -48,9 +48,75 @@ config IMU_FREQUENCY_VALUE
 
 endmenu
 
+menu "Barometric Pressure Sensor (BARO)"
+
 config BARO
 	bool "Support for Baro"
 	depends on AURORA_SENSORS
 	help
 		This option enables functionality for barometric pressure
 		sensors.
+
+# Only show frequency options when BARO is enabled
+choice BARO_FREQUENCY
+	prompt "BARO update frequency (Hz)"
+	depends on BARO
+	default BARO_FREQ_10HZ
+
+config BARO_FREQ_10HZ
+	bool "10 Hz"
+
+config BARO_FREQ_50HZ
+	bool "50 Hz"
+
+config BARO_FREQ_100HZ
+	bool "100 Hz"
+
+config BARO_FREQ_200HZ
+	bool "200 Hz"
+
+config BARO_FREQ_400HZ
+	bool "400 Hz"
+
+endchoice
+
+config BARO_FREQUENCY_VALUE
+	int
+	depends on BARO
+	default 10  if BARO_FREQ_10HZ
+	default 50  if BARO_FREQ_50HZ
+	default 100 if BARO_FREQ_100HZ
+	default 200 if BARO_FREQ_200HZ
+	default 400 if BARO_FREQ_400HZ
+
+choice BARO_OVERSAMPLING
+	prompt "BARO Oversampling Rate"
+	depends on BARO
+	default BARO_OS_256X
+
+config BARO_OS_256X
+	bool "256"
+
+config BARO_OS_512X
+	bool "512"
+
+config BARO_OS_1024X
+	bool "1024"
+
+config BARO_OS_2048X
+	bool "2048"
+
+config BARO_OS_4096X
+	bool "4096"
+
+endchoice
+
+config BARO_OVERSAMPLING_VALUE
+	int
+	depends on BARO
+	default 256  if BARO_OS_256X
+	default 512  if BARO_OS_512X
+	default 1024 if BARO_OS_1024X
+	default 2048 if BARO_OS_2048X
+	default 4096 if BARO_OS_4096X
+endmenu
