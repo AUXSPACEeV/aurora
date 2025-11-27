@@ -66,6 +66,20 @@ First, create a workspace:
 mkdir zephyr_workspace && cd zephyr_workspace
 ```
 
+Then, install the system dependencies (example shows how to do it on x86 Debian Linux):
+
+```bash
+sudo apt-get install -y --no-install-recommends \
+    git cmake ninja-build gperf \
+    ccache dfu-util device-tree-compiler wget \
+    python3-dev python3-pip python3-setuptools python3-tk python3-wheel python3-venv \
+    xz-utils file make gcc libsdl2-dev libmagic1
+
+# x86 specific
+sudo apt-get install -y --no-install-recommends \
+    gcc-multilib g++-multilib
+```
+
 And add a python virtualenv to install west and other dependencies:
 
 ```bash
@@ -144,7 +158,7 @@ Create a workspace and add the aurora app to it:
 ```bash
 mkdir zephyr_workspace
 cd zephyr_workspace
-git clone -b main git@github.com:AUXSPACEeV/aurora.git aurora
+git clone -b main https://github.com/AUXSPACEeV/aurora.git aurora
 cd aurora
 ```
 
