@@ -30,7 +30,32 @@
 #include <lib/baro.h>
 #endif /* CONFIG_BARO */
 
+#if defined(CONFIG_AURORA_STATE_MACHINE)
+
+#if defined(CONFIG_SIMPLE_STATE)
+#include <lib/state/simple.h>
+
+static const struct sm_thresholds state_cfg = (struct sm_thresholds){
+	.T_D = 5.0,
+	.T_A = 1.5,
+	.T_H = 2.0,
+	.T_Rd = 100.0,
+	.T_Lh = 1.0,
+	.T_La = 0.3,
+	.T_L = 3,
+	.T_R = 2,
+	.T_R2 = 5,
+};
+
+#else
+#error "Unknown state machine type!"
+#endif /* CONFIG_SIMPLE_STATE */
+
+#endif /* CONFIG_AURORA_STATE_MACHINE */
+
 LOG_MODULE_REGISTER(main, CONFIG_MICROMETER_LOG_LEVEL);
+
+#if defined(CONFIG_AURORA_SENSORS)
 
 /* ============================================================
  *                     IMU TASK
@@ -39,26 +64,26 @@ LOG_MODULE_REGISTER(main, CONFIG_MICROMETER_LOG_LEVEL);
 
 void imu_task(void *, void *, void *)
 {
-    const struct device *imu0 = DEVICE_DT_GET(DT_ALIAS(imu0));
+	const struct device *imu0 = DEVICE_DT_GET(DT_ALIAS(imu0));
 
-    imu_init(imu0);
+	imu_init(imu0);
 
-    while (1) {
-        int rc = imu_poll(imu0);
-        if (rc != 0) {
-            LOG_ERR("IMU polling failed (%d)", rc);
-            break;
-        }
+	while (1) {
+		int rc = imu_poll(imu0);
+		if (rc != 0) {
+			LOG_ERR("IMU polling failed (%d)", rc);
+			break;
+		}
 
-        k_sleep(K_SECONDS(2));
-    }
+		k_sleep(K_SECONDS(2));
+	}
 
-    LOG_INF("IMU task stopped.");
+	LOG_INF("IMU task stopped.");
 }
 
 /* Create the IMU task (inactive unless CONFIG_IMU=y) */
 K_THREAD_DEFINE(imu_task_id, 2048, imu_task, NULL, NULL, NULL,
-                5, 0, 0);
+				5, 0, 0);
 
 #endif /* CONFIG_IMU */
 
@@ -69,78 +94,135 @@ K_THREAD_DEFINE(imu_task_id, 2048, imu_task, NULL, NULL, NULL,
 
 void baro_task(void *, void *, void *)
 {
-    const struct device *bmp0 = DEVICE_DT_GET(DT_ALIAS(baro0));
-    const struct device *bmp1 = DEVICE_DT_GET(DT_ALIAS(baro1));
+	const struct device *bmp0 = DEVICE_DT_GET(DT_ALIAS(baro0));
+	const struct device *bmp1 = DEVICE_DT_GET(DT_ALIAS(baro1));
 
-    if (!device_is_ready(bmp0) || !device_is_ready(bmp1)) {
-        LOG_ERR("One of BMP180 sensors not ready!");
-        return;
-    }
+	if (!device_is_ready(bmp0) || !device_is_ready(bmp1)) {
+		LOG_ERR("One of BMP180 sensors not ready!");
+		return;
+	}
 
-    struct sensor_value temp, press;
+	struct sensor_value temp, press;
 
-    while (1) {
+	while (1) {
 
-        if (baro_measure(bmp0, &temp, &press)) {
-            LOG_ERR("Failed to measure BMP0");
-            continue;
-        }
+		if (baro_measure(bmp0, &temp, &press)) {
+			LOG_ERR("Failed to measure BMP0");
+			continue;
+		}
 
-        LOG_INF("[BMP0] Temp: %.1f C | Press: %.1f kPa",
-                sensor_value_to_double(&temp),
-                sensor_value_to_double(&press) / 1000.0);
+		LOG_INF("[BMP0] Temp: %.1f C | Press: %.1f kPa",
+				sensor_value_to_double(&temp),
+				sensor_value_to_double(&press) / 1000.0);
 
-        if (baro_measure(bmp1, &temp, &press)) {
-            LOG_ERR("Failed to measure BMP1");
-            continue;
-        }
+		if (baro_measure(bmp1, &temp, &press)) {
+			LOG_ERR("Failed to measure BMP1");
+			continue;
+		}
 
-        LOG_INF("[BMP1] Temp: %.1f C | Press: %.1f kPa",
-                sensor_value_to_double(&temp),
-                sensor_value_to_double(&press) / 1000.0);
+		LOG_INF("[BMP1] Temp: %.1f C | Press: %.1f kPa",
+				sensor_value_to_double(&temp),
+				sensor_value_to_double(&press) / 1000.0);
 
-        k_sleep(K_SECONDS(1));
-    }
+		k_sleep(K_SECONDS(1));
+	}
 }
 
 /* Create the BARO task */
 K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
-                5, 0, 0);
+				5, 0, 0);
 
 #endif /* CONFIG_BARO */
 
+#if defined(CONFIG_AURORA_STATE_MACHINE)
+
+static struct sm_inputs read_sensors()
+{
+	float orientation = 0.0f;
+	float acceleration = 0.0f;
+	float height = 0.0f;;
+	float previous_height = 0.0f;;
+
+	// TODO read baro and IMU
+	return (struct sm_inputs){
+		orientation,
+		acceleration,
+		height,
+		previous_height,
+	};
+}
+
+#endif /* CONFIG_AURORA_STATE_MACHINE */
+
+#else  /* CONFIG_AURORA_SENSORS */
+
+#if defined(CONFIG_AURORA_STATE_MACHINE)
+
+static struct sm_inputs read_sensors()
+{
+	return (struct sm_inputs){0};
+}
+
+#endif /* CONFIG_AURORA_STATE_MACHINE */
+
+#endif /* CONFIG_AURORA_SENSORS */
+
+/* ============================================================
+ *                     State machine TASK
+ * ============================================================ */
+#if defined(CONFIG_AURORA_STATE_MACHINE)
+
+void state_machine_task(void *, void *, void *)
+{
+	sm_init(&state_cfg);
+
+	while (1) {
+		struct sm_inputs s = read_sensors();
+		sm_update(&s);
+
+		LOG_INF("STATE = %d\n", sm_get_state());
+
+		/* currently 10Hz. Make this better! */
+		k_sleep(K_MSEC(100));
+	}
+}
+
+/* Create the State machine task */
+K_THREAD_DEFINE(state_machine_task_id, 2048, state_machine_task, NULL, NULL,
+				NULL, 5, 0, 0);
+
+#endif /* CONFIG_AURORA_STATE_MACHINE */
 
 /* ============================================================
  *                     MAIN INITIALIZATION
  * ============================================================ */
 int main(void)
 {
-    int ret;
+	int ret;
 
 #if defined(CONFIG_USB_SERIAL)
-    ret = init_usb_serial();
-    if (ret) {
-        LOG_ERR("Could not initialize USB Serial (%d)", ret);
-        return 1;
-    }
-#endif
+	ret = init_usb_serial();
+	if (ret) {
+		LOG_ERR("Could not initialize USB Serial (%d)", ret);
+		return 1;
+	}
+#endif /* CONFIG_USB_SERIAL */
 
-    LOG_INF("Auxspace Micrometer %s", APP_VERSION_STRING);
+	LOG_INF("Auxspace Micrometer %s", APP_VERSION_STRING);
 
 #if defined(CONFIG_STORAGE)
-    ret = storage_init();
-    if (ret) {
-        LOG_ERR("Could not initialize storage (%d)", ret);
-        return 1;
-    }
+	/* init storage and create directories/files ... */
+	ret = storage_init();
+	if (ret) {
+		LOG_ERR("Could not initialize storage (%d)", ret);
+		return 1;
+	}
 
-    /* init storage and create directories/files ... */
-    /* (your existing code unchanged) */
-#endif
+#endif /* CONFIG_STORAGE */
 
-    LOG_INF("Initialization complete. Starting sensor tasks...");
+	LOG_INF("Initialization complete. Starting tasks...");
 
-    /* Threads start automatically via K_THREAD_DEFINE */
+	/* Threads start automatically via K_THREAD_DEFINE */
 
-    return 0;
+	return 0;
 }
