@@ -41,6 +41,17 @@ int baro_measure(const struct device *dev, struct sensor_value *temp,
  */
 float baro_altitude(float pressure);
 
+/**
+ * @brief Initialize barometric pressure sensor for the AURORA application.
+ *
+ * Function initializes the barometric pressure sensor.
+ *
+ * @param dev Pointer to the device structure for the barometric sensor
+ *
+ * @return 0 on success, negative error code on failure
+ */
+int baro_init(const struct device *dev);
+
 /** @} */
 
 #endif /* APP_LIB_BARO_H_ */
