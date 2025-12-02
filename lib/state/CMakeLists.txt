@@ -3,6 +3,6 @@
 
 zephyr_library()
 
-if(CONFIG_USB_SERIAL)
-    zephyr_library_sources(usb_serial.c)
+if(CONFIG_SIMPLE_STATE)
+    zephyr_library_sources(simple_state.c)
 endif()

@@ -3,13 +3,19 @@
 
 menu "Aurora libraries"
 
-config AURORA_CONSOLE
-	bool "Support for serial console"
+config AURORA_SENSORS
+	bool "Support for sensor HAL"
 	help
-		This option enables functionality for the aurora serial console lib.
-
-rsource "console/Kconfig"
+		This option enables functionality for the aurora sensor HAL.
 
 rsource "sensor/Kconfig"
+
+config AURORA_STATE_MACHINE
+	bool "Support for state machine"
+	help
+		This option enables functionality for the aurora state machine
+		lib.
+
+rsource "state/Kconfig"
 
 endmenu

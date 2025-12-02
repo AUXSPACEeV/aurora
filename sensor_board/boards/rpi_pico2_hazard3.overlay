@@ -4,19 +4,34 @@
  */
 
 / {
-	aliases {
-		imu0 = &imu0;
+	chosen {
+		/* Console and shell over CDC ACM */
+		zephyr,console = &snippet_cdc_acm_console_uart;
+		zephyr,shell-uart = &snippet_cdc_acm_console_uart;
+
+		/* Sensors */
+		auxspace,baro = &ms5607_0;
+		auxspace,imu = &lsm6dso32_0;
+
+		/* Storage */
+		auxspace,mmc = &mmc0;
+		auxspace,ffs = &ffs0;
 	};
 
-	chosen {
-		zephyr,console = &cdc_acm_uart0;
+	fstab {
+		compatible = "zephyr,fstab";
+		ffs0: ffs0 {
+			compatible = "zephyr,fstab,fatfs";
+			automount;
+			disk-access;
+			mount-point = "/MMC:";
+		};
 	};
 };
 
 &zephyr_udc0 {
-	cdc_acm_uart0: cdc_acm_uart0 {
+	snippet_cdc_acm_console_uart: snippet_cdc_acm_console_uart {
 		compatible = "zephyr,cdc-acm-uart";
-		label = "CDC_ACM_0";
 	};
 };
 
@@ -61,9 +76,9 @@
 		compatible = "zephyr,sdhc-spi-slot";
 		reg = <0>;
 		status = "okay";
-		mmc {
+		mmc0: mmc {
 			compatible = "zephyr,sdmmc-disk";
-			disk-name = "SD";
+			disk-name = "MMC";
 			status = "okay";
 		};
 		spi-max-frequency = <25000000>;
@@ -83,10 +98,15 @@
 	pinctrl-0 = <&i2c0_default>;
 	pinctrl-names = "default";
 
-	imu0: lsm6dso32@6b {
+	lsm6dso32_0: lsm6dso32@6b {
 		compatible = "st,lsm6dso32";
 		reg = <0x6b>;
+		status = "okay";
+	};
 
+	ms5607_0: ms5607@77 {
+		compatible = "meas,ms5607";
+		reg = <0x77>;
 		status = "okay";
 	};
 };

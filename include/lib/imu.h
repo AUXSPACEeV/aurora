@@ -22,28 +22,32 @@
 #if !defined(CONFIG_LSM6DSO_TRIGGER)
 /**
  * @brief Poll the IMU for new data.
- * 
+ *
  * Function fetches new data from the IMU device.
  *
  * @param dev Pointer to the IMU device
  *
+ * @param orientation_deg Orientation in degrees
+ *
+ * @param acc Acceleration in meters per second squared
+ *
  * @retval 0 on success, negative error code on failure.
  */
-int imu_poll(const struct device *dev);
+int imu_poll(const struct device *dev, float *orientation_deg, float *acc);
 #endif /* CONFIG_LSM6DSO_TRIGGER */
 
 /**
  * @brief Set the IMU sampling frequency.
- * 
+ *
  * Function sets the sampling frequency of the IMU device.
- * 
+ *
  * @param dev Pointer to the IMU device
- * 
+ *
  * @param sampling_rate_hz The desired sampling rate in Hertz.
- * 
+ *
  * @retval 0 on success, negative error code on failure.
  */
-int imu_set_sampling_freq(const struct device *dev, float sampling_rate_hz);
+int imu_set_sampling_freq(const struct device *dev, int sampling_rate_hz);
 
 /**
 * @brief Initialize the IMU for the AURORA application.
