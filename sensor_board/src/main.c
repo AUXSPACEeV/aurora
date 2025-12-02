@@ -183,21 +183,7 @@ K_THREAD_DEFINE(state_machine_task_id, 2048, state_machine_task, NULL, NULL,
  * ============================================================ */
 int main(void)
 {
-	int ret;
-
 	LOG_INF("Auxspace Micrometer %s", APP_VERSION_STRING);
-
-#if defined(CONFIG_STORAGE)
-	/* init storage and create directories/files ... */
-	ret = storage_init();
-	if (ret) {
-		LOG_ERR("Could not initialize storage (%d)", ret);
-		return 1;
-	}
-
-#endif /* CONFIG_STORAGE */
-
-	LOG_INF("Initialization complete. Starting tasks...");
 
 	/* Threads start automatically via K_THREAD_DEFINE */
 

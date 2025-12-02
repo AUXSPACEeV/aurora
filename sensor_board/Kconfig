@@ -16,11 +16,6 @@ module = SENSOR_BOARD
 module-str = SENSOR_BOARD
 source "subsys/logging/Kconfig.template.log_config"
 
-config STORAGE
-	bool "Support for storage"
-	help
-		This option enables storage driver options
-
 config USB_CONSOLE_SHELL
 	bool "Support for USB serial console"
 	help
