@@ -4,12 +4,14 @@
 manifest:
   remotes:
     - name: zephyr-rtos
-      url-base: https://github.com/zephyrproject-rtos/
+      url-base: https://github.com/zephyrproject-rtos
+    - name: auxspace-forked
+      url-base: https://github.com/AUXSPACEeV
   defaults:
-    remote: zephyr-rtos
+    remote: auxspace-forked
   projects:
     - name: zephyr
-      remote: zephyr-rtos
+      remote: auxspace-forked
       revision: main
       import:
         # By using name-allowlist we can clone only the modules that are
