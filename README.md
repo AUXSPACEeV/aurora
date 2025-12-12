@@ -276,3 +276,31 @@ cp build/zephyr/zephyr.uf2 /Volumes/RPI-RP2
 
 The PI should reboot and immediately start running your uploaded
 application.
+
+## Testing
+
+Zephyr provides a testing environment called `twister`.
+This repo adds twister compliant testcases under `tests/`.
+
+Example for the state machine test:
+
+```bash
+../zephyr/scripts/twister -T tests/lib/state
+```
+
+**note**: Don't forget to source the venv before:
+
+```bash
+# In docker:
+source /opt/venv/bin/activate
+
+# Native:
+source ../.venv/bin/activate
+```
+
+**note:** Make sure to install the necessary toolchain for a given test!
+e.g. the simple state machine test requires `x86_64-zephyr-elf`:
+
+```bash
+{ZEPHYR_SDK}/setup.sh -t x86_64-zephyr-elf
+```

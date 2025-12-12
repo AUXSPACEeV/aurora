@@ -77,6 +77,10 @@ RUN cd /builder/zephyr-sdk-0.17.4 && \
     -t arm-zephyr-eabi \
     -t riscv64-zephyr-elf
 
+# Add x86_64 toolchain for qemu target
+RUN cd /builder/zephyr-sdk-0.17.4 && \
+	./setup.sh -t x86_64-zephyr-elf
+
 # Change permissions for the builder user
 RUN chown -R ${PUID}:${PGID} /opt/venv
 RUN chown -R ${PUID}:${PGID} /builder
