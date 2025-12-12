@@ -31,16 +31,16 @@
 #if defined(CONFIG_SIMPLE_STATE)
 #include <lib/state/simple.h>
 
-static const struct sm_thresholds state_cfg = (struct sm_thresholds){
+static const struct sm_thresholds state_cfg = {
 	.T_D = 5.0,
 	.T_A = 1.5,
 	.T_H = 2.0,
 	.T_Rd = 100.0,
 	.T_Lh = 1.0,
 	.T_La = 0.3,
-	.T_L = 3,
-	.T_R = 2,
-	.T_R2 = 5,
+	.T_L = 3000,
+	.T_R = 2000,
+	.T_R2 = 5000,
 };
 
 #else

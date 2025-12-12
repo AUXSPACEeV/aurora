@@ -27,24 +27,41 @@ static struct k_timer recovery_timer_2;
  *----------------------------------------------------------*/
 #define TIMER_EXPIRED(tmr) (k_timer_status_get(tmr) > 0)
 
-static void start_timers(void)
+static void init_timers(void)
 {
 	k_timer_init(&idle_timer, NULL, NULL);
 	k_timer_init(&recovery_timer_1, NULL, NULL);
 	k_timer_init(&recovery_timer_2, NULL, NULL);
 }
 
+static void stop_timers(void)
+{
+	k_timer_stop(&idle_timer);
+	k_timer_stop(&recovery_timer_2);
+	k_timer_stop(&recovery_timer_1);
+}
+
 /*-----------------------------------------------------------
- * Initialization
+ * Initialization / Deinitialization
  *----------------------------------------------------------*/
 void sm_init(const struct sm_thresholds *cfg)
 {
 	th = *cfg;
-	start_timers();
+	init_timers();
 	current_state = SM_DISARMED;
 
 	LOG_INF("State machine initialized (DISARMED)");
 }
+
+void sm_deinit(void)
+{
+	th = (struct sm_thresholds){0};
+	stop_timers();
+	current_state = SM_DISARMED;
+
+	LOG_INF("State machine reset (DISARMED)");
+}
+
 
 /*-----------------------------------------------------------
  * State Machine Update
@@ -58,7 +75,7 @@ void sm_update(const struct sm_inputs *in)
 	*----------------------------------------------------------*/
 	case SM_DISARMED:
 		current_state = SM_IDLE;
-		k_timer_start(&idle_timer, K_SECONDS(th.T_L), K_NO_WAIT);
+		k_timer_start(&idle_timer, K_MSEC(th.T_L), K_NO_WAIT);
 		LOG_INF("-> IDLE");
 		break;
 
