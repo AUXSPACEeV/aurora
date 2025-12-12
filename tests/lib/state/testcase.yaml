@@ -1,0 +1,7 @@
+tests:
+  aurora.lib.state:
+    integration_platforms:
+      - qemu_x86
+    platform_allow:
+     - qemu_x86
+    tags: test_state_machine

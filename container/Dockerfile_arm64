@@ -74,6 +74,8 @@ RUN cd /builder/zephyr-sdk-0.17.4 && \
     -t arm-zephyr-eabi \
     -t riscv64-zephyr-elf
 
+# TODO: figure out testing target and add qemu toolchain for tests
+
 # Change permissions for the builder user
 RUN chown -R ${PUID}:${PGID} /opt/venv
 RUN chown -R ${PUID}:${PGID} /builder
