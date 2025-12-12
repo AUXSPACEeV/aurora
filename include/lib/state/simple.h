@@ -36,9 +36,9 @@
 	float	T_Rd;	/**< Height threshold for initiating recovery device deployment. */
 	float	T_Lh;	/**< Height threshold to detect landing. */
 	float	T_La;	/**< Acceleration threshold to detect landing shock. */
-	int		T_L;	/**< Time spent in Idle state before checking liftoff. */
-	int		T_R;	/**< Timeout before triggering recovery logic (first timer). */
-	int		T_R2;	/**< Timeout before triggering secondary recovery logic. */
+	int		T_L;	/**< Time spent in Idle state before checking liftoff (ms). */
+	int		T_R;	/**< Timeout before triggering recovery logic (first timer, ms). */
+	int		T_R2;	/**< Timeout before triggering secondary recovery logic (ms). */
 };
 
 /*-----------------------------------------------------------
@@ -73,6 +73,15 @@ struct sm_inputs {
  * @param cfg Pointer to a threshold configuration structure.
  */
 void sm_init(const struct sm_thresholds *cfg);
+
+/**
+ * @brief Deinitialize the rocket state machine.
+ *
+ * This function resets the state machine, unloads the threshold
+ * configuration, stops internal timers, and sets the
+ * initial state to @ref SM_DISARMED.
+ */
+void sm_deinit(void);
 
 /**
  * @brief Update the state machine using current sensor readings.
