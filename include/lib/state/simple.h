@@ -30,15 +30,23 @@
  * acceleration, and timing).
  */
  struct sm_thresholds {
-	float	T_D;	/**< Required orientation threshold to allow liftoff detection. */
-	float	T_A;	/**< Acceleration threshold for detecting active thrust. */
-	float	T_H;	/**< Height threshold to confirm ascent. */
-	float	T_Rd;	/**< Height threshold for initiating recovery device deployment. */
-	float	T_Lh;	/**< Height threshold to detect landing. */
-	float	T_La;	/**< Acceleration threshold to detect landing shock. */
-	int		T_L;	/**< Time spent in Idle state before checking liftoff (ms). */
-	int		T_R;	/**< Timeout before triggering recovery logic (first timer, ms). */
-	int		T_R2;	/**< Timeout before triggering secondary recovery logic (ms). */
+	/* Sensor Metrics */
+	float T_AB;	/**< Acceleration threshhold for ARMED -> BOOST transition */
+	float T_H;	/**< Altitude thresshold for ARMED -> BOOST transition */
+	float T_BB;	/**< Acceleration threshhold for BOOST -> BURNOUT transition */
+	float T_M;	/**< Descent rate threshhold for APOGEE -> MAIN transition */
+	float T_L;	/**< Velocity threshhold for Landing detection */
+	float T_OA;	/**< Orientation threshhold for IDLE -> ARMED transition */
+	float T_OI;	/**< Orientation threshhold for ARMED -> IDLE transition */
+
+	/* Timers */
+	int DT_AB;	/**< Time for T_AB an T_H assertion (ms) */
+	int DT_L;	/**< Time for T_L assertion (ms) */
+
+	/* Timeouts */
+	int TO_A;	/**< Max time allowed in APOGEE state before abort (ms) */
+	int TO_M;	/**< Time between MAIN and REDUNDAND (ms) */
+	int TO_R;	/**< Max time allowed in REDUNDAND state before abort (ms) */
 };
 
 /*-----------------------------------------------------------
@@ -53,10 +61,11 @@
  * state transitions.
  */
 struct sm_inputs {
+	int armed;				/**< System armed status (non-zero = armed). */
 	float orientation;		/**< Current orientation reading. */
 	float acceleration;		/**< Current acceleration reading. */
-	float height;			/**< Current altitude measurement. */
-	float previous_height;	/**< Previous altitude value (for descent detection). */
+	float velocity;			/**< Current vertical velocity. */
+	float altitude;			/**< Current altitude measurement. */
 };
 
 /*-----------------------------------------------------------
