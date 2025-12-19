@@ -280,22 +280,12 @@ application.
 ## Testing
 
 Zephyr provides a testing environment called `twister`.
-This repo adds twister compliant testcases under `tests/`.
+This repo adds twister compliant testcases under `tests/`:
 
-Example for the state machine test:
-
-```bash
-../zephyr/scripts/twister -T tests/lib/state
-```
-
-**note**: Don't forget to source the venv before:
 
 ```bash
 # In docker:
-source /opt/venv/bin/activate
-
-# Native:
-source ../.venv/bin/activate
+west twister -T tests -v --inline-logs
 ```
 
 **note:** Make sure to install the necessary toolchain for a given test!
