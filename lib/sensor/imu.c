@@ -34,15 +34,6 @@ static void fetch_accel(const struct device *dev, struct sensor_value *x,
 	sensor_channel_get(dev, SENSOR_CHAN_ACCEL_Z, z);
 }
 
-static void fetch_gyro(const struct device *dev, struct sensor_value *x,
-						struct sensor_value *y, struct sensor_value *z)
-{
-	sensor_sample_fetch_chan(dev, SENSOR_CHAN_GYRO_XYZ);
-	sensor_channel_get(dev, SENSOR_CHAN_GYRO_X, x);
-	sensor_channel_get(dev, SENSOR_CHAN_GYRO_Y, y);
-	sensor_channel_get(dev, SENSOR_CHAN_GYRO_Z, z);
-}
-
 int imu_set_sampling_freq(const struct device *dev, int sampling_rate_hz)
 {
 	int ret = 0;

@@ -16,6 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, macos-14, windows-2022]
+        toolchain: [x86_64-zephyr-elf, arm-zephyr-eabi, riscv64-zephyr-elf]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -33,8 +34,17 @@ jobs:
         uses: zephyrproject-rtos/action-zephyr-setup@v1
         with:
           app-path: aurora
-          toolchains: x86_64-zephyr-elf
+          toolchains: ${{ matrix.toolchain }}
           ccache-cache-key: ${{ matrix.os }}
+
+      - name: Build firmware
+        working-directory: aurora
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            EXTRA_TWISTER_FLAGS="--short-build-path -O/tmp/twister-out"
+          fi
+          west twister -T sensor_board -v --inline-logs --integration $EXTRA_TWISTER_FLAGS
 
       - name: Twister Tests
         working-directory: aurora
