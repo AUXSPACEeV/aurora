@@ -9,13 +9,13 @@
 
 static const struct sm_thresholds simple_state_cfg = {
 	/* Sensor Metrics */
-	.T_AB = 30.0f,	// 30 m/s^2
-	.T_H = 50.0f,	// 50 m
-	.T_BB = 15.0f,	// 15 m/s^2
-	.T_M = 200.0f,	// 200 m
-	.T_L = 2.0f,	// 2 m/s
-	.T_OA = 85.0f,	// 85 degrees
-	.T_OI = 70.0f,	// 70 degrees
+	.T_AB = 30,	// 30 m/s^2
+	.T_H = 50,	// 50 m
+	.T_BB = 15,	// 15 m/s^2
+	.T_M = 200,	// 200 m
+	.T_L = 2,	// 2 m/s
+	.T_OA = 85,	// 85 degrees
+	.T_OI = 70,	// 70 degrees
 
 	/* Timers */
 	.DT_AB = 100,	// 100 ms
