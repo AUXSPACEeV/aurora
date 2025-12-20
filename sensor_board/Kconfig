@@ -20,3 +20,87 @@ config USB_CONSOLE_SHELL
 	bool "Support for USB serial console"
 	help
 		This option enables functionality for the aurora serial console via USB.
+
+menu "State Machine Configuration"
+
+config BOOST_ACCELERATION
+	int "Boost detection acceleration threshold"
+	default 30
+	help
+		Acceleration threshold in m/s^2 for boost detection.
+
+config BOOST_ALTITUDE
+	int "Boost detection altitude threshold"
+	default 50
+	help
+		Altitude threshold in meters for boost detection.
+
+config BURNOUT_ACCELERATION
+	int "Burnout detection acceleration threshold"
+	default 15
+	help
+		Acceleration threshold in m/s^2 for burnout detection.
+
+config MAIN_DESCENT_HEIGHT
+	int "Main PYRO event height threshold"
+	default 200
+	help
+		Descent height threshold in meters for MAIN Pyro event.
+
+config LANDING_VELOCITY
+	int "Velocity threshold for landing detection"
+	default 2
+	help
+		Velocity threshold in m/s for landing detection.
+
+config ARM_ANGLE
+	int "Angle threshold for arming"
+	default 85
+	help
+		Angle threshold in degrees for arming the system.
+		0 degrees is horizontal, 90 degrees is vertical.
+
+config DISARM_ANGLE
+	int "Angle threshold for disarming"
+	default 70
+	help
+		Angle threshold in degrees for disarming the system.
+		0 degrees is horizontal, 90 degrees is vertical.
+
+config BOOST_TIMER_MS
+	int "Boost timer duration"
+	default 900
+	help
+		Boost timer duration in milliseconds.
+		Both BOOST_ACCELERATION and BOOST_ALTITUDE must be reached and held
+		asserted during this time.
+
+config LANDING_TIMER_MS
+	int "Landing timer duration"
+	default 500
+	help
+		Landing timer duration in milliseconds.
+		LANDING_VELOCITY must be reached and held asserted during this time.
+
+config APOGEE_TIMEOUT_MS
+	int "Apogee timeout duration"
+	default 60000
+	help
+		Time after which the APOGEE state returns to IDLE in milliseconds,
+		if no further state changes occur.
+
+config MAIN_TIMEOUT_MS
+	int "Main to REDUNDAND duration"
+	default 2000
+	help
+		Time after which the redundand pyro channel is fired after MAIN in
+		milliseconds.
+
+config REDUNDAND_TIMEOUT_MS
+	int "Redundant timeout duration"
+	default 900000
+	help
+		Time after which the REDUNDAND state returns to IDLE in milliseconds,
+		if no further state changes occur.
+
+endmenu

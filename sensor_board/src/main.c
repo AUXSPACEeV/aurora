@@ -33,22 +33,21 @@
 
 static const struct sm_thresholds state_cfg = {
 	/* Sensor Metrics */
-	.T_AB = 30.0f,	// 30 m/s^2
-	.T_H = 50.0f,	// 50 m
-	.T_BB = 15.0f,	// 15 m/s^2
-	.T_M = 200.0f,	// 200 m
-	.T_L = 2.0f,	// 2 m/s
-	.T_OA = 85.0f,	// 85 degrees
-	.T_OI = 70.0f,	// 70 degrees
-
+	.T_AB = CONFIG_BOOST_ACCELERATION,
+	.T_H = CONFIG_BOOST_ALTITUDE,
+	.T_BB = CONFIG_BURNOUT_ACCELERATION,
+	.T_M = CONFIG_MAIN_DESCENT_HEIGHT,
+	.T_L = CONFIG_LANDING_VELOCITY,
+	.T_OA = CONFIG_ARM_ANGLE,
+	.T_OI = CONFIG_DISARM_ANGLE,
 	/* Timers */
-	.DT_AB = 900,	// 900 ms
-	.DT_L = 500,	// 500 ms
+	.DT_AB = CONFIG_BOOST_TIMER_MS,
+	.DT_L = CONFIG_LANDING_TIMER_MS,
 
 	/* Timeouts */
-	.TO_A = 60000,	// 1 min
-	.TO_M = 2000,	// 2 sec
-	.TO_R = 90000,	// 1 min 30 sec
+	.TO_A = CONFIG_APOGEE_TIMEOUT_MS,
+	.TO_M = CONFIG_MAIN_TIMEOUT_MS,
+	.TO_R = CONFIG_REDUNDAND_TIMEOUT_MS,
 };
 
 #else

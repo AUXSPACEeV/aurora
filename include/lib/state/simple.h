@@ -31,13 +31,13 @@
  */
  struct sm_thresholds {
 	/* Sensor Metrics */
-	float T_AB;	/**< Acceleration threshhold for ARMED -> BOOST transition */
-	float T_H;	/**< Altitude thresshold for ARMED -> BOOST transition */
-	float T_BB;	/**< Acceleration threshhold for BOOST -> BURNOUT transition */
-	float T_M;	/**< Descent rate threshhold for APOGEE -> MAIN transition */
-	float T_L;	/**< Velocity threshhold for Landing detection */
-	float T_OA;	/**< Orientation threshhold for IDLE -> ARMED transition */
-	float T_OI;	/**< Orientation threshhold for ARMED -> IDLE transition */
+	int T_AB;	/**< Acceleration threshhold for ARMED -> BOOST transition */
+	int T_H;	/**< Altitude thresshold for ARMED -> BOOST transition */
+	int T_BB;	/**< Acceleration threshhold for BOOST -> BURNOUT transition */
+	int T_M;	/**< Descent rate threshhold for APOGEE -> MAIN transition */
+	int T_L;	/**< Velocity threshhold for Landing detection */
+	int T_OA;	/**< Orientation threshhold for IDLE -> ARMED transition */
+	int T_OI;	/**< Orientation threshhold for ARMED -> IDLE transition */
 
 	/* Timers */
 	int DT_AB;	/**< Time for T_AB an T_H assertion (ms) */
