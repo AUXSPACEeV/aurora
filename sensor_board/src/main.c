@@ -61,7 +61,6 @@ LOG_MODULE_REGISTER(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 
 static float orientation = 0.0f;
 static float acceleration = 0.0f;
-static float height = 0.0f;
 static float velocity = 0.0f;
 static float altitude = 0.0f;
 
@@ -91,7 +90,7 @@ void imu_task(void *, void *, void *)
 			break;
 		}
 
-		LOG_INF("orientation: %f deg. acc: %f\n", orientation, acceleration);
+		LOG_INF("orientation: %f deg. acc: %f\n", (double)orientation, (double)acceleration);
 
 		k_sleep(K_MSEC(1000 / imu_hz));
 	}
@@ -130,12 +129,11 @@ void baro_task(void *, void *, void *)
 			continue;
 		}
 
-		// currently only uses baro0 for height measurement
+		// currently only uses baro0 for altitude measurement
 		altitude = baro_altitude(sensor_value_to_float(&press));
 
-		LOG_INF("[baro0] Temperature: %d.%06d | Pressure: %d.%06d\n",
-				temp.val1, temp.val2, press.val1, press.val2,
-				height);
+		LOG_INF("[baro0] Temperature: %d.%06d | Pressure: %d.%06d | Altitude: %.2f\n",
+				temp.val1, temp.val2, press.val1, press.val2, (double)altitude);
 
 		k_sleep(K_MSEC(1000 / baro_hz));
 	}
