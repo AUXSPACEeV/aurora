@@ -9,8 +9,15 @@ cmake_minimum_required(VERSION 3.20.0)
 # TODO: Exclude zephyr from SCA since it produces false positives
 # set(ZEPHYR_SCA_VARIANT gcc)
 
-find_package(Zephyr)
-project(sensor_board)
+find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+
+# For some reason, when using west twister, the app target is not created
+# automatically, so we need to create it manually here.
+# Building locally and without the zephyr github action, naming this
+# "sensor_board" works fine, but as soon as we use west twister inside a
+# github-runner context, the target must be named "app":
+# > Cannot specify sources for target "app" which is not built by this project.
+project(app LANGUAGES C)
 
 # Build cdc-acm-console with snippet
 if(CONFIG_USB_SERIAL)
