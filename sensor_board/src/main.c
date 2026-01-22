@@ -27,9 +27,7 @@
 #endif /* CONFIG_BARO */
 
 #if defined(CONFIG_AURORA_STATE_MACHINE)
-
-#if defined(CONFIG_SIMPLE_STATE)
-#include <lib/state/simple.h>
+#include <lib/state/state.h>
 
 static const struct sm_thresholds state_cfg = {
 	/* Sensor Metrics */
@@ -49,11 +47,6 @@ static const struct sm_thresholds state_cfg = {
 	.TO_M = CONFIG_MAIN_TIMEOUT_MS,
 	.TO_R = CONFIG_REDUNDAND_TIMEOUT_MS,
 };
-
-#else
-#error "Unknown state machine type!"
-#endif /* CONFIG_SIMPLE_STATE */
-
 #endif /* CONFIG_AURORA_STATE_MACHINE */
 
 LOG_MODULE_REGISTER(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
@@ -68,12 +61,10 @@ static bool imu_active = false;
 static bool sm_active = false;
 
 #if defined(CONFIG_AURORA_SENSORS)
-
 /* ============================================================
  *                     IMU TASK
  * ============================================================ */
 #if defined(CONFIG_IMU)
-
 void imu_task(void *, void *, void *)
 {
 	const struct device *imu0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_imu));
@@ -107,7 +98,6 @@ K_THREAD_DEFINE(imu_task_id, 2048, imu_task, NULL, NULL, NULL,
  *                     BARO TASK
  * ============================================================ */
 #if defined(CONFIG_BARO)
-
 void baro_task(void *, void *, void *)
 {
 	const struct device *baro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_baro));
@@ -141,18 +131,13 @@ void baro_task(void *, void *, void *)
 /* Create the BARO task */
 K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
 				5, 0, 0);
-
 #endif /* CONFIG_BARO */
-
-#else  /* CONFIG_AURORA_SENSORS */
-
 #endif /* CONFIG_AURORA_SENSORS */
 
 /* ============================================================
  *                     State machine TASK
  * ============================================================ */
 #if defined(CONFIG_AURORA_STATE_MACHINE)
-
 void state_machine_task(void *, void *, void *)
 {
 	struct sm_inputs inputs = (struct sm_inputs){
@@ -189,7 +174,6 @@ void state_machine_task(void *, void *, void *)
 /* Create the State machine task */
 K_THREAD_DEFINE(state_machine_task_id, 2048, state_machine_task, NULL, NULL,
 				NULL, 5, 0, 0);
-
 #endif /* CONFIG_AURORA_STATE_MACHINE */
 
 /* ============================================================

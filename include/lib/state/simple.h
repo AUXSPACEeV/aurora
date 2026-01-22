@@ -6,7 +6,26 @@
 #ifndef APP_LIB_STATE_SIMPLE_H_
 #define APP_LIB_STATE_SIMPLE_H_
 
-#include "common.h"
+/*-----------------------------------------------------------
+ * States
+ *----------------------------------------------------------*/
+
+/**
+ * @brief State identifiers for the rocket state machine.
+ *
+ * These represent the discrete system states from power-on through
+ * flight, recovery, and landing detection.
+ */
+enum sm_state {
+	SM_IDLE = 0,	/**< System unarmed armed, awaiting liftoff conditions. */
+	SM_ARMED,		/**< Monitoring acceleration and altitude for liftoff start. */
+	SM_BOOST,		/**< Acceleration confirmed. */
+	SM_BURNOUT,		/**< Motor burnout. */
+	SM_APOGEE,		/**< Apogee detected. */
+	SM_MAIN,		/**< Main descent phase. */
+	SM_REDUNDAND,	/**< Recovery devices are or should be deployed. */
+	SM_LANDED,		/**< Rocket is confirmed landed. */
+};
 
 /**
 * @defgroup lib_state Simple State Machine library
@@ -67,48 +86,6 @@ struct sm_inputs {
 	float velocity;			/**< Current vertical velocity. */
 	float altitude;			/**< Current altitude measurement. */
 };
-
-/*-----------------------------------------------------------
- * API
- *----------------------------------------------------------*/
-
-/**
- * @brief Initialize the rocket state machine.
- *
- * This function prepares the state machine, loads the threshold
- * configuration, initializes internal timers, and sets the
- * initial state to @ref SM_DISARMED.
- *
- * @param cfg Pointer to a threshold configuration structure.
- */
-void sm_init(const struct sm_thresholds *cfg);
-
-/**
- * @brief Deinitialize the rocket state machine.
- *
- * This function resets the state machine, unloads the threshold
- * configuration, stops internal timers, and sets the
- * initial state to @ref SM_DISARMED.
- */
-void sm_deinit(void);
-
-/**
- * @brief Update the state machine using current sensor readings.
- *
- * Function evaluates sensor data and executes state transitions
- * according to the flight logic diagram. Must be called regularly
- * (e.g. at sensor update rate).
- *
- * @param inputs Pointer to populated sensor readings.
- */
-void sm_update(const struct sm_inputs *inputs);
-
-/**
- * @brief Retrieve the current state of the state machine.
- *
- * @return Current state (see @ref enum sm_state).
- */
-enum sm_state sm_get_state(void);
 
 /** @} */
 
