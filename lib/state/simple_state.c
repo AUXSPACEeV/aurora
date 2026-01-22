@@ -8,7 +8,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-#include <lib/state/simple.h>
+#include <lib/state/state.h>
 
 LOG_MODULE_REGISTER(simple_state, CONFIG_STATE_MACHINE_LOG_LEVEL);
 
@@ -67,7 +67,7 @@ static void stop_timers(void)
  *----------------------------------------------------------*/
 void sm_init(const struct sm_thresholds *cfg)
 {
-	th = *cfg;
+	th = *(struct sm_thresholds *)cfg;
 	init_timers();
 	current_state = SM_IDLE;
 
@@ -76,7 +76,7 @@ void sm_init(const struct sm_thresholds *cfg)
 
 void sm_deinit(void)
 {
-	th = (struct sm_thresholds){0};
+	memset(&th, 0, sizeof(th));
 	stop_timers();
 	current_state = SM_IDLE;
 
@@ -267,12 +267,12 @@ _check_timeout:
 	}
 }
 
-void sm_update(const struct sm_inputs *in)
+void sm_update(const struct sm_inputs *inputs)
 {
 	static float previous_altitude = 0.0f;
 
-	_sm_update(in, previous_altitude);
-	previous_altitude = in->altitude;
+	_sm_update(inputs, previous_altitude);
+	previous_altitude = inputs->altitude;
 }
 
 /*-----------------------------------------------------------
