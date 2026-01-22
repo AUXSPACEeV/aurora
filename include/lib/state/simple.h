@@ -25,6 +25,7 @@ enum sm_state {
 	SM_MAIN,		/**< Main descent phase. */
 	SM_REDUNDAND,	/**< Recovery devices are or should be deployed. */
 	SM_LANDED,		/**< Rocket is confirmed landed. */
+	SM_ERROR,		/**< State machine error occurred. */
 };
 
 /**

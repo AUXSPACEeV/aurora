@@ -23,6 +23,27 @@
 */
 
 /*-----------------------------------------------------------
+ * Types
+ *----------------------------------------------------------*/
+
+/**
+ * @brief Callback when the state machine encounters an error.
+ *
+ * This function is called when the state machine encounters an error and
+ * tries to recover. The implementation can define specific recovery.
+ *
+ * @param args Pointer to an implementation specific config structure.
+ * 
+ * @return Status code (0 = error could be mitigated, other = error code)
+ */
+typedef int (*sm_error_cb_t) (void *args);
+
+struct sm_error_handling_args {
+    sm_error_cb_t cb;
+    void *args;
+};
+
+/*-----------------------------------------------------------
  * API
  *----------------------------------------------------------*/
 
@@ -34,8 +55,10 @@
  * initial state to @ref SM_DISARMED.
  *
  * @param cfg Pointer to a threshold configuration structure.
+ * @param sm_error_cb Pointer to an error callback function.
  */
-void sm_init(const struct sm_thresholds *cfg);
+void sm_init(const struct sm_thresholds *cfg,
+             struct sm_error_handling_args *err_hdl);
 
 /**
  * @brief Deinitialize the rocket state machine.

@@ -5,18 +5,42 @@
  */
 
 #include <stdlib.h>
+#include <errno.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/spinlock.h>
 
 #include <lib/state/state.h>
 
 LOG_MODULE_REGISTER(simple_state, CONFIG_STATE_MACHINE_LOG_LEVEL);
 
 /*-----------------------------------------------------------
+ * Prototypes
+ *----------------------------------------------------------*/
+
+static void init_timers(void);
+
+static void stop_timers(void);
+
+static int fallback_sm_error_handler(void *args);
+
+static void sm_do_error_handling(void);
+
+static inline bool arm_to_boost_conditions_met(const struct sm_inputs *in);
+
+static inline void _sm_update(const struct sm_inputs *in, float previous_altitude);
+
+/*-----------------------------------------------------------
  * Internal State
  *----------------------------------------------------------*/
 static enum sm_state current_state = SM_IDLE;
 static struct sm_thresholds th;
+
+static struct k_spinlock err_lock;
+static struct sm_error_handling_args err_hdl = {
+	.cb = &fallback_sm_error_handler,
+	.args = NULL,
+};
 
 static struct k_timer dt_ab;
 static struct k_timer dt_l;
@@ -62,14 +86,44 @@ static void stop_timers(void)
 	memset(running_timers, 0, sizeof(running_timers));
 }
 
+static int fallback_sm_error_handler(void *args)
+{
+	LOG_ERR("State Machine encountered an unrecoverable error.\n");
+
+	return -EIO;
+}
+
+static void sm_do_error_handling(void)
+{
+	int ret;
+	k_spinlock_key_t key = k_spin_lock(&err_lock);
+
+	current_state = SM_ERROR;
+	if (err_hdl.cb != NULL) {
+		ret = err_hdl.cb(err_hdl.args);
+		if (ret != 0)
+			LOG_ERR("State Machine error handler failed with code %d\n", ret);
+	} else {
+		LOG_ERR("No fallback handler defined for state machine errors!\n");
+	}
+
+	k_spin_unlock(&err_lock, key);
+}
+
 /*-----------------------------------------------------------
  * Initialization / Deinitialization
  *----------------------------------------------------------*/
-void sm_init(const struct sm_thresholds *cfg)
+void sm_init(const struct sm_thresholds *cfg,
+			 struct sm_error_handling_args *sm_err_hdl)
 {
 	th = *(struct sm_thresholds *)cfg;
 	init_timers();
 	current_state = SM_IDLE;
+
+	if (sm_err_hdl != NULL) {
+		err_hdl.cb = sm_err_hdl->cb;
+		err_hdl.args = sm_err_hdl->args;
+	}
 
 	LOG_INF("State machine initialized (DISARMED, IDLE)");
 }
@@ -192,11 +246,11 @@ static inline void _sm_update(const struct sm_inputs *in,
 			current_state = SM_MAIN;
 			LOG_INF("-> MAIN");
 		} else if (TIMER_EXPIRED(&to_a)) {
-			/* Timeout expired, abort to IDLE */
+			/* Timeout expired, abort to ERROR */
 			k_timer_stop(&to_a);
 			k_timer_start(&to_m, K_MSEC(th.TO_M), K_NO_WAIT);
-			current_state = SM_IDLE;
-			LOG_INF("-[TIMEOUT]-> IDLE");
+			LOG_INF("-[TIMEOUT]-> ERROR");
+			sm_do_error_handling();
 		}
 		break;
 
@@ -253,9 +307,16 @@ _check_timeout:
 			k_timer_stop(&dt_l);
 			running_timers[TIMER_DT_L] = 0;
 			k_timer_stop(&to_r);
-			current_state = SM_IDLE;
-			LOG_INF("-[TIMEOUT]-> IDLE");
+			LOG_INF("-[TIMEOUT]-> ERROR");
+			sm_do_error_handling();
 		}
+		break;
+	/*-----------------------------------------------------------
+	* ERROR state
+	*----------------------------------------------------------*/
+	case SM_ERROR:
+		/* Try to fix the error */
+		sm_do_error_handling();
 		break;
 
 	/*-----------------------------------------------------------

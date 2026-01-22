@@ -148,7 +148,7 @@ void state_machine_task(void *, void *, void *)
 		.altitude = altitude,
 	};
 
-	sm_init(&state_cfg);
+	sm_init(&state_cfg, NULL);
 	sm_active = true;
 
 	// TODO: Add idling

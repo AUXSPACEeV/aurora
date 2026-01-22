@@ -5,7 +5,7 @@
  */
 
 #include <zephyr/ztest.h>
-#include <lib/state/simple.h>
+#include <lib/state/state.h>
 
 static const struct sm_thresholds simple_state_cfg = {
 	/* Sensor Metrics */
@@ -29,7 +29,7 @@ static const struct sm_thresholds simple_state_cfg = {
 
 static void simple_state_machine_mock_before(void *fixture)
 {
-	sm_init(&simple_state_cfg);
+	sm_init(&simple_state_cfg, NULL);  // TODO: error handling tests
 }
 
 static void simple_state_machine_mock_after(void *fixture)
