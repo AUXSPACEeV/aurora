@@ -104,3 +104,8 @@ config REDUNDAND_TIMEOUT_MS
 		if no further state changes occur.
 
 endmenu
+
+config SERVO
+	bool "Enable servo control"
+	help
+		Enables servo control.
