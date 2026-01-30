@@ -12,11 +12,9 @@
 
 #include <app_version.h>
 
-#if defined(CONFIG_STORAGE)
-#include <ff.h>
-#include <zephyr/fs/fs.h>
-#include <lib/storage.h>
-#endif /* CONFIG_STORAGE */
+#if defined(CONFIG_SERVO)
+#include <zephyr/drivers/pwm.h>
+#endif /* CONFIG_SERVO */
 
 #if defined(CONFIG_IMU)
 #include <lib/imu.h>
@@ -197,7 +195,7 @@ K_THREAD_DEFINE(state_machine_task_id, 2048, state_machine_task, NULL, NULL,
  * ============================================================ */
 int main(void)
 {
-	LOG_INF("Auxspace Micrometer %s", APP_VERSION_STRING);
+	LOG_INF("Auxspace AURORA %s", APP_VERSION_STRING);
 
 	/* Threads start automatically via K_THREAD_DEFINE */
 
