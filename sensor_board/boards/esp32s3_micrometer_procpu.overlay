@@ -1,0 +1,57 @@
+/*
+ * Copyright (c) 2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	chosen {
+		auxspace,ffs = &ffs0;
+	};
+
+	fstab {
+		compatible = "zephyr,fstab";
+
+		ffs0: ffs_0 {
+			compatible = "zephyr,fstab,fatfs";
+			automount;
+			disk-access;
+			mount-point = "/MMC:";
+		};
+	};
+};
+
+&usb_serial {
+	status = "okay";
+};
+
+&sdhc2 {
+	status = "okay";
+};
+
+&mmc0 {
+	status = "okay";
+};
+
+&spi2 {
+	status = "okay";
+};
+
+&spi3 {
+	status = "okay";
+};
+
+&i2c0 {
+	status = "okay";
+};
+
+&i2c1 {
+	status = "okay";
+};
+
+&lps22hh0 {
+	status = "okay";
+};
+
+&lsm6dso320 {
+	status = "okay";
+};

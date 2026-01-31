@@ -9,9 +9,11 @@ common:
   integration_platforms:
     - rpi_pico
     - rpi_pico2/rp2350a/hazard3
+    - esp32s3_micrometer/esp32s3/procpu
   platform_allow:
     - rpi_pico
     - rpi_pico2/rp2350a/hazard3
+    - esp32s3_micrometer/esp32s3/procpu
   modules:
     - fatfs
 tests:
