@@ -75,7 +75,8 @@ RUN cd /builder && \
 RUN cd /builder/zephyr-sdk-0.17.4 && \
     ./setup.sh -c -h \
     -t arm-zephyr-eabi \
-    -t riscv64-zephyr-elf
+    -t riscv64-zephyr-elf \
+	-t xtensa-espressif_esp32s3_zephyr-elf
 
 # Add x86_64 toolchain for qemu target
 RUN cd /builder/zephyr-sdk-0.17.4 && \

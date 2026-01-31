@@ -220,6 +220,9 @@ Start the command from the **\<aurora\>** dir, as explained in
 ```bash
 # Build the sensor_board project for the rpi pico
 west build -b rpi_pico sensor_board
+
+# Another example: Micrometer on custom esp32s3 board
+west build -b esp32s3_micrometer/esp32s3/procpu sensor_board/ -- -DBOARD_ROOT="$(pwd)"
 ```
 
 The output from the build will be at
