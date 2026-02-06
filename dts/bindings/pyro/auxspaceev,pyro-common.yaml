@@ -1,0 +1,14 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+description: Common device helper for auxspaceev pyros.
+
+include: base.yaml
+
+properties:
+  "#triggers":
+    type: int
+    default: 0x1
+    description: |
+      Number of pyro triggers. This property specifies how many
+      triggers this pyro element can handle.

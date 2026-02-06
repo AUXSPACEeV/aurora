@@ -1,0 +1,8 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+description: I2C-activated Pyro channel.
+
+compatible: "auxspaceev,i2c-pyro"
+
+include: ["i2c-device.yaml", "auxspaceev,pyro-common.yaml"]

@@ -1,0 +1,34 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+description: GPIO-activated Pyro channel.
+
+compatible: "auxspaceev,gpio-pyro"
+
+include: "auxspaceev,pyro-common.yaml"
+
+properties:
+  trigger-gpios:
+    type: phandle-array
+    description: |
+      An array of trigger GPIOs to use. Each element
+      in the array specifies a GPIO.
+      All trigger GPIOs are iterated and asserted when
+      state machine goes into apogee state.
+
+  redundand-gpios:
+    type: phandle-array
+    description: |
+      An array of redundand GPIOs to use. Each element
+      in the array specifies a GPIO.
+      All redundand GPIOs are iterated and asserted
+      when state machine goes into secondary fire
+      state.
+
+  arm-gpios:
+    type: phandle-array
+    description: |
+      An array of ARM GPIOs to use. Each element
+      in the array specifies a GPIO.
+      All ARM GPIOs are iterated and asserted when
+      state machine goes into armed state.
