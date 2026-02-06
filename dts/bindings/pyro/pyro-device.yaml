@@ -1,0 +1,45 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+description: Common device helper for pyros.
+
+include: base.yaml
+
+properties:
+  trigger-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      An array of trigger GPIOs to use. Each element
+      in the array specifies a GPIO.
+
+  arm-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      An array of ARM GPIOs to use. Each element
+      in the array specifies a GPIO.
+      Usually, every channel can be armed on its
+      own, but on smaller hardware, a single arm
+      gpio is used to arm all trigger-gpios.
+      The number of arm-gpios can either be the
+      same as trigger-gpios or 1.
+
+  short-gpios:
+    type: phandle-array
+    description: |
+      An array of short GPIOs to use. Each element
+      in the array specifies a GPIO.
+
+  cap-gpios:
+    type: phandle-array
+    description: |
+      An array of GPIOs that charge the pyro capacitor.
+      Each element in the array specifies a GPIO.
+
+  adcs:
+    type: phandle-array
+    description: |
+      An array of ADCs to read a pyro channel's value.
+      If sense-adcs are defined, every entry in the
+      array corresponds to an entry in trigger-gpios.

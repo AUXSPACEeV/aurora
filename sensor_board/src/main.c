@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <stdlib.h>
-#include <stdio.h>
+#include "aurora/lib/state/simple.h"
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/devicetree.h>
@@ -12,20 +11,18 @@
 
 #include <app_version.h>
 
-#if defined(CONFIG_SERVO)
-#include <zephyr/drivers/pwm.h>
-#endif /* CONFIG_SERVO */
+#include <aurora/drivers/pyro.h>
 
 #if defined(CONFIG_IMU)
-#include <lib/imu.h>
+#include <aurora/lib/imu.h>
 #endif /* CONFIG_IMU */
 
 #if defined(CONFIG_BARO)
-#include <lib/baro.h>
+#include <aurora/lib/baro.h>
 #endif /* CONFIG_BARO */
 
 #if defined(CONFIG_AURORA_STATE_MACHINE)
-#include <lib/state/state.h>
+#include <aurora/lib/state/state.h>
 
 static const struct sm_thresholds state_cfg = {
 	/* Sensor Metrics */
@@ -138,6 +135,9 @@ K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
 #if defined(CONFIG_AURORA_STATE_MACHINE)
 void state_machine_task(void *, void *, void *)
 {
+	const struct device *pyro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_pyro));
+	enum sm_state state;
+	int ret;
 	struct sm_inputs inputs = (struct sm_inputs){
 		.armed = 1,
 		.orientation = orientation,
@@ -145,6 +145,12 @@ void state_machine_task(void *, void *, void *)
 		.velocity = velocity,
 		.altitude = altitude,
 	};
+
+	while (!device_is_ready(pyro0)) {
+		LOG_ERR("Pyro device %s is not ready, trying again ...\n",
+				pyro0->name);
+		k_sleep(K_SECONDS(1));
+	}
 
 	sm_init(&state_cfg, NULL);
 	sm_active = true;
@@ -161,8 +167,30 @@ void state_machine_task(void *, void *, void *)
 		};
 
 		sm_update(&inputs);
+		state = sm_get_state();
+		LOG_INF("STATE = %d\n", state);
 
-		LOG_INF("STATE = %d\n", sm_get_state());
+		switch (state) {
+		case SM_IDLE:
+			break;
+		case SM_ARMED:
+			ret = pyro_arm(pyro0, 0);
+			if (ret)
+				LOG_ERR("Failed to arm pyro module.\n");
+			break;
+		case SM_MAIN:
+			ret = pyro_trigger_channel(pyro0, 0);
+			if (ret)
+				LOG_ERR("Failed to trigger pyro channel 0.\n");
+			break;
+		case SM_REDUNDAND:
+			ret = pyro_trigger_channel(pyro0, 1);
+			if (ret)
+				LOG_ERR("Failed to trigger pyro channel 1.\n");
+			break;
+		default:
+			break;
+		}
 
 		/* currently 10Hz. TODO: JUST FOR TESTING! */
 		k_sleep(K_MSEC(100));

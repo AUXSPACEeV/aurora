@@ -55,3 +55,7 @@
 &lsm6dso320 {
 	status = "okay";
 };
+
+&pyro0 {
+	status = "okay";
+};
