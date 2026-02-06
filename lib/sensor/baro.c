@@ -11,7 +11,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 
-#include <lib/baro.h>
+#include <aurora/lib/baro.h>
 
 LOG_MODULE_REGISTER(baro, CONFIG_AURORA_SENSORS_LOG_LEVEL);
 

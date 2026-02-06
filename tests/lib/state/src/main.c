@@ -5,7 +5,7 @@
  */
 
 #include <zephyr/ztest.h>
-#include <lib/state/state.h>
+#include <aurora/lib/state/state.h>
 
 static const struct sm_thresholds simple_state_cfg = {
 	/* Sensor Metrics */

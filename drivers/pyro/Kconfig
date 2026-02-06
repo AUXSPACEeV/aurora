@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig PYRO
+	bool "Pyro drivers"
+	default n
+	help
+	  Enable driver for pyro modules.
+
+if PYRO
+
+module = PYRO
+module-str = pyro
+source "subsys/logging/Kconfig.template.log_config"
+
+config PYRO_INIT_PRIORITY
+	int "Pyro init priority"
+	default 80
+	depends on PYRO
+
+menu "Auxspace Pyro Drivers"
+rsource "auxspaceev/Kconfig"
+endmenu
+
+endif # PYRO

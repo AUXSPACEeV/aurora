@@ -1,0 +1,11 @@
+# Capacitive pyro module configuration options
+#
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig CAP_PYRO
+	bool "Capacitive pyro module."
+	default y
+	depends on DT_HAS_AUXSPACEEV_CAP_PYRO_ENABLED
+	help
+	  Enable driver for the capacitive pyro module.

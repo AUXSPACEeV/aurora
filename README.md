@@ -66,9 +66,10 @@ First, create a workspace:
 mkdir zephyr_workspace && cd zephyr_workspace
 ```
 
-Then, install the system dependencies (example shows how to do it on x86 Debian Linux):
+Then, install the system dependencies:
 
 ```bash
+# x86 Debian Linux
 sudo apt-get install -y --no-install-recommends \
     git cmake ninja-build gperf \
     ccache dfu-util device-tree-compiler wget \
@@ -78,6 +79,14 @@ sudo apt-get install -y --no-install-recommends \
 # x86 specific
 sudo apt-get install -y --no-install-recommends \
     gcc-multilib g++-multilib
+```
+
+```bash
+# or if you are on fedora:
+sudo dnf install -y \
+    git cmake ninja gperf systemd-devel ccache dfu-util dtc wget libusb1-devel \
+    python3-devel python3-pip python3-setuptools python3-tkinter python3-wheel \
+    xz xz-devel file make gcc SDL2-devel file-libs 
 ```
 
 And add a python virtualenv to install west and other dependencies:
@@ -107,7 +116,8 @@ cd zephyr-sdk-0.17.4
 # -t riscv64-zephyr-elf installs the toolchain for rpi_pico2/rp2350a/hazard3
 ./setup.sh -c -h \
     -t arm-zephyr-eabi \
-    -t riscv64-zephyr-elf
+    -t riscv64-zephyr-elf \
+    -t xtensa-espressif_esp32s3_zephyr-elf
 cd ..
 ```
 

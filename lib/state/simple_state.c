@@ -10,7 +10,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/spinlock.h>
 
-#include <lib/state/state.h>
+#include <aurora/lib/state/state.h>
 
 LOG_MODULE_REGISTER(simple_state, CONFIG_STATE_MACHINE_LOG_LEVEL);
 

@@ -12,7 +12,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 
-#include <lib/imu.h>
+#include <aurora/lib/imu.h>
 
 #ifndef M_PI
 #define M_PI ((float)3.1415926535)

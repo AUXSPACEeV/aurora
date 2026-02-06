@@ -20,4 +20,5 @@ supported:
   - crypto
   - retained_mem
   - sensors
+  - pyro
 vendor: auxspaceev
