@@ -1,6 +1,14 @@
 # Copyright (c) 2025 Auxspace e.V.
 # SPDX-License-Identifier: Apache-2.0
 
+config AURORA_STATE_MACHINE
+	bool "Support for state machine"
+	help
+		This option enables functionality for the aurora state machine
+		lib.
+
+if AURORA_STATE_MACHINE
+
 module = STATE_MACHINE
 module-str = STATE_MACHINE
 source "subsys/logging/Kconfig.template.log_config"
@@ -18,3 +26,5 @@ config SIMPLE_STATE
 		Ideal for small form factor boards and rockets.
 
 endchoice
+
+endif

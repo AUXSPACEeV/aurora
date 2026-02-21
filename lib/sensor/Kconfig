@@ -5,6 +5,11 @@ module = AURORA_SENSORS
 module-str = AURORA_SENSORS
 source "subsys/logging/Kconfig.template.log_config"
 
+config AURORA_SENSORS
+	bool "Support for sensor HAL"
+	help
+		This option enables functionality for the aurora sensor HAL.
+
 menu "Inertial Measurement Unit (IMU)"
 
 config IMU

@@ -1,0 +1,59 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+module = AURORA_APOGEE_DETECTION
+module-str = AURORA_APOGEE_DETECTION
+source "subsys/logging/Kconfig.template.log_config"
+
+menu "Apogee Detection"
+
+config APOGEE_DETECTION
+	bool "Support for apogee detection"
+	help
+		This option enables apogee detection algorithms.
+
+if APOGEE_DETECTION
+
+module = APOGEE_DETECTION
+module-str = APOGEE_DETECTION
+source "subsys/logging/Kconfig.template.log_config"
+
+choice APOGEE_FILTER
+	bool "Apogee filter technique"
+	default FILTER_KALMAN
+
+config FILTER_KALMAN
+	bool "Kalman filter for apogee detection"
+	help
+		Use a kalman filter for apogee detection.
+
+endchoice
+
+config FILTER_Q_ALT_MILLISCALE
+    int "Process noise altitude (x1000)"
+    default 100
+    range 0 100000
+    help
+      Process noise covariance for altitude state scaled by 1000.
+      Increase if altitude estimate lags.
+      Real value = FILTER_Q_ALT_MILLISCALE / 1000.0
+
+config FILTER_Q_VEL_MILLISCALE
+    int "Process noise velocity (x1000)"
+    default 500
+    range 0 100000
+    help
+      Process noise covariance for velocity state scaled by 1000.
+      Increase for more aggressive response during boost.
+      Real value = FILTER_Q_VEL_MILLISCALE / 1000.0
+
+config FILTER_R_MILLISCALE
+    int "Measurement noise variance (x1000)"
+    default 4000       # 4.000
+    range 1 1000000
+    help
+      Measurement noise variance scaled by 1000.
+      Real value = FILTER_R_MILLISCALE / 1000.0
+endif
+
+endmenu
