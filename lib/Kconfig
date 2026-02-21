@@ -3,19 +3,16 @@
 
 menu "Aurora libraries"
 
-config AURORA_SENSORS
-	bool "Support for sensor HAL"
-	help
-		This option enables functionality for the aurora sensor HAL.
-
+menu "Aurora Sensors"
 rsource "sensor/Kconfig"
+endmenu
 
-config AURORA_STATE_MACHINE
-	bool "Support for state machine"
-	help
-		This option enables functionality for the aurora state machine
-		lib.
+menu "Apogee Detection"
+rsource "apogee/Kconfig"
+endmenu
 
+menu "State Machine"
 rsource "state/Kconfig"
+endmenu
 
 endmenu

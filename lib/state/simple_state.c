@@ -12,6 +12,11 @@
 
 #include <aurora/lib/state/state.h>
 
+#if defined(CONFIG_APOGEE_DETECTION)
+#include <aurora/lib/filter.h>
+static struct filter filter;
+#endif /* CONFIG_APOGEE_DETECTION */
+
 LOG_MODULE_REGISTER(simple_state, CONFIG_STATE_MACHINE_LOG_LEVEL);
 
 /*-----------------------------------------------------------
@@ -116,6 +121,14 @@ static void sm_do_error_handling(void)
 void sm_init(const struct sm_thresholds *cfg,
 			 struct sm_error_handling_args *sm_err_hdl)
 {
+#if defined(CONFIG_APOGEE_DETECTION)
+	int ret = filter_init(&filter);
+	if (ret) {
+		LOG_ERR("Could not initialize filter (%d).\n", ret);
+		return;
+	}
+#endif /* CONFIG_APOGEE_DETECTION */
+
 	th = *(struct sm_thresholds *)cfg;
 	init_timers();
 	current_state = SM_IDLE;
@@ -330,9 +343,19 @@ _check_timeout:
 
 void sm_update(const struct sm_inputs *inputs)
 {
+	static int64_t last_time_ns = 0;
 	static float previous_altitude = 0.0f;
 
+	int current_time_ns = (k_uptime_ticks() * NSEC_PER_SEC) / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
+
 	_sm_update(inputs, previous_altitude);
+#if defined(CONFIG_APOGEE_DETECTION)
+	if (last_time_ns != 0) {
+		filter_predict(&filter, current_time_ns - last_time_ns);
+		filter_update(&filter, inputs->altitude);
+	}
+#endif /* CONFIG_APOGEE_DETECTION */
+
 	previous_altitude = inputs->altitude;
 }
 

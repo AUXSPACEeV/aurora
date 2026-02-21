@@ -11,8 +11,6 @@
 
 #include <app_version.h>
 
-#include <aurora/drivers/pyro.h>
-
 #if defined(CONFIG_IMU)
 #include <aurora/lib/imu.h>
 #endif /* CONFIG_IMU */
@@ -20,6 +18,10 @@
 #if defined(CONFIG_BARO)
 #include <aurora/lib/baro.h>
 #endif /* CONFIG_BARO */
+
+#if defined(CONFIG_PYRO)
+#include <aurora/drivers/pyro.h>
+#endif /* CONFIG_PYRO */
 
 #if defined(CONFIG_AURORA_STATE_MACHINE)
 #include <aurora/lib/state/state.h>
@@ -55,7 +57,6 @@ static bool baro_active = false;
 static bool imu_active = false;
 static bool sm_active = false;
 
-#if defined(CONFIG_AURORA_SENSORS)
 /* ============================================================
  *                     IMU TASK
  * ============================================================ */
@@ -127,7 +128,6 @@ void baro_task(void *, void *, void *)
 K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
 				5, 0, 0);
 #endif /* CONFIG_BARO */
-#endif /* CONFIG_AURORA_SENSORS */
 
 /* ============================================================
  *                     State machine TASK
@@ -135,9 +135,13 @@ K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
 #if defined(CONFIG_AURORA_STATE_MACHINE)
 void state_machine_task(void *, void *, void *)
 {
-	const struct device *pyro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_pyro));
 	enum sm_state state;
+	
+#if defined(CONFIG_PYRO)
+	const struct device *pyro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_pyro));
 	int ret;
+#endif /* CONFIG_PYRO */
+
 	struct sm_inputs inputs = (struct sm_inputs){
 		.armed = 1,
 		.orientation = orientation,
@@ -146,11 +150,13 @@ void state_machine_task(void *, void *, void *)
 		.altitude = altitude,
 	};
 
+#if defined(CONFIG_PYRO)
 	while (!device_is_ready(pyro0)) {
 		LOG_ERR("Pyro device %s is not ready, trying again ...\n",
 				pyro0->name);
 		k_sleep(K_SECONDS(1));
 	}
+#endif /*.CONFIG_PYRO */
 
 	sm_init(&state_cfg, NULL);
 	sm_active = true;
@@ -170,6 +176,7 @@ void state_machine_task(void *, void *, void *)
 		state = sm_get_state();
 		LOG_INF("STATE = %d\n", state);
 
+#if defined(CONFIG_PYRO)
 		switch (state) {
 		case SM_IDLE:
 			break;
@@ -191,6 +198,7 @@ void state_machine_task(void *, void *, void *)
 		default:
 			break;
 		}
+#endif /* CONFIG_PYRO */
 
 		/* currently 10Hz. TODO: JUST FOR TESTING! */
 		k_sleep(K_MSEC(100));
