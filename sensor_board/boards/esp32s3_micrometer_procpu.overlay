@@ -5,6 +5,11 @@
 
 / {
 	chosen {
+		/* Auxspace specific */
+		auxspace,baro = &lps22hh0;
+		auxspace,imu = &lsm6dso320;
+		auxspace,mmc = &mmc0;
+		auxspace,pyro = &pyro0;
 		auxspace,ffs = &ffs0;
 	};
 
