@@ -75,14 +75,26 @@ static int auxspaceev_mini_pyro_charge_channel(const struct device *dev,
 	return -ENOTSUP;
 }
 
-static int auxspaceev_mini_pyro_read_channel(const struct device *dev,
+static int auxspaceev_mini_pyro_sense_channel(const struct device *dev,
+					      uint32_t channel, uint32_t *val)
+{
+	(void) dev;
+	(void) channel;
+	(void) val;
+
+	LOG_WRN("auxspaceev_mini_pyro_sense_channel unimplemented.\n");
+
+	return -ENOTSUP;
+}
+
+static int auxspaceev_mini_pyro_read_cap_channel(const struct device *dev,
 					uint32_t channel, uint32_t *val)
 {
 	(void) dev;
 	(void) channel;
 	(void) val;
 
-	LOG_WRN("auxspaceev_mini_pyro_read_channel unimplemented.\n");
+	LOG_WRN("auxspaceev_mini_pyro_read_cap_channel unimplemented.\n");
 
 	return -ENOTSUP;
 }
@@ -101,7 +113,8 @@ static DEVICE_API(pyro, pyro_api_funcs) = {
 	.disarm = auxspaceev_mini_pyro_disarm_channel,
 	.trigger = auxspaceev_mini_pyro_trigger_channel,
 	.charge = auxspaceev_mini_pyro_charge_channel,
-	.read = auxspaceev_mini_pyro_read_channel,
+	.sense = auxspaceev_mini_pyro_sense_channel,
+	.read_cap = auxspaceev_mini_pyro_read_cap_channel,
 	.get_nchannels = auxspaceev_mini_pyro_get_nchannels,
 };
 

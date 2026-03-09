@@ -37,9 +37,11 @@
 __subsystem struct pyro_driver_api {
 	int (*arm)(const struct device *dev, uint32_t channel);
 	int (*disarm)(const struct device *dev, uint32_t channel);
+	int (*secure)(const struct device *dev, uint32_t channel);
 	int (*trigger)(const struct device *dev, uint32_t channel);
 	int (*charge)(const struct device *dev, uint32_t channel);
-	int (*read)(const struct device *dev, uint32_t channel, uint32_t *val);
+	int (*sense)(const struct device *dev, uint32_t channel, uint32_t *val);
+	int (*read_cap)(const struct device *dev, uint32_t channel, uint32_t *val);
 	int (*get_nchannels)(const struct device *dev);
 };
 
@@ -88,10 +90,10 @@ __subsystem struct pyro_driver_api {
 	PYRO_DEVICE_DT_DEFINE(DT_DRV_INST(inst), __VA_ARGS__)
 
 /**
- * @brief Arm the pyro module.
+ * @brief Arm a pyro channel.
  *
  * @param dev Pyro device instance.
- * @param channel Number of the channel to sarm.
+ * @param channel Number of the channel to arm.
  *
  * @retval 0 if successful.
  * @retval -errno Other negative errno code on failure.
@@ -106,7 +108,7 @@ return DEVICE_API_GET(pyro, dev)->arm(dev, channel);
 }
 
 /**
- * @brief Disarm the pyro module.
+ * @brief Disarm a pyro channel.
  *
  * @param dev Pyro device instance.
  * @param channel Number of the channel to disarm.
@@ -122,6 +124,24 @@ __ASSERT_NO_MSG(DEVICE_API_IS(pyro, dev));
 
 return DEVICE_API_GET(pyro, dev)->disarm(dev, channel);
 }
+
+/**
+ * @brief Secure a pyro channel.
+ *
+ * @param dev Pyro device instance.
+ * @param channel Number of the channel to secure.
+ *
+ * @retval 0 if successful.
+ * @retval -errno Other negative errno code on failure.
+ */
+ __syscall int pyro_secure(const struct device *dev, uint32_t channel);
+
+ static inline int z_impl_pyro_secure(const struct device *dev, uint32_t channel)
+ {
+ __ASSERT_NO_MSG(DEVICE_API_IS(pyro, dev));
+ 
+ return DEVICE_API_GET(pyro, dev)->secure(dev, channel);
+ }
 
 /**
  * @brief Trigger a pyro channel.
@@ -165,25 +185,47 @@ return DEVICE_API_GET(pyro, dev)->charge(dev, channel);
 }
 
 /**
- * @brief Read a pyro channel's output.
+ * @brief Read a pyro channel's "health".
  *
  * @param dev Pyro device instance.
- * @param channel Number of the channel to read.
+ * @param channel Number of the channel to read the "sense".
  * @param val [out] read value.
  *
  * @retval 0 if successful.
  * @retval -EINVAL if @p channel can not be set.
  * @retval -errno Other negative errno code on failure.
  */
-__syscall int pyro_read_channel(const struct device *dev, uint32_t channel,
+__syscall int pyro_sense_channel(const struct device *dev, uint32_t channel,
 				uint32_t *val);
 
-static inline int z_impl_pyro_read_channel(const struct device *dev,
+static inline int z_impl_pyro_sense_channel(const struct device *dev,
 					   uint32_t channel, uint32_t *val)
 {
 __ASSERT_NO_MSG(DEVICE_API_IS(pyro, dev));
 
-return DEVICE_API_GET(pyro, dev)->read(dev, channel, val);
+return DEVICE_API_GET(pyro, dev)->sense(dev, channel, val);
+}
+
+/**
+ * @brief Read a pyro channel's capacitor charge.
+ *
+ * @param dev Pyro device instance.
+ * @param channel Number of the channel to read the cap_v of.
+ * @param val [out] read value.
+ *
+ * @retval 0 if successful.
+ * @retval -EINVAL if @p channel can not be set.
+ * @retval -errno Other negative errno code on failure.
+ */
+ __syscall int pyro_read_cap_channel(const struct device *dev, uint32_t channel,
+	uint32_t *val);
+
+static inline int z_impl_pyro_read_cap_channel(const struct device *dev,
+		   uint32_t channel, uint32_t *val)
+{
+__ASSERT_NO_MSG(DEVICE_API_IS(pyro, dev));
+
+return DEVICE_API_GET(pyro, dev)->read_cap(dev, channel, val);
 }
 
 /**
