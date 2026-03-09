@@ -23,11 +23,26 @@ LOG_MODULE_REGISTER(cap_pyro);
 
 static int auxspaceev_cap_pyro_init(const struct device *dev)
 {
-	(void) dev;
+	const struct pyro_config *config = dev->config;
+	int ret;
 
-	LOG_WRN("auxspaceev_cap_pyro_init unimplemented.\n");
+	if (config->capv != NULL) {
+		for (uint32_t i = 0; i < config->n_channels; i++) {
+			struct adc_channel_cfg cfg = {
+				.gain = ADC_GAIN_1_4,
+				.reference = ADC_REF_INTERNAL,
+				.acquisition_time = ADC_ACQ_TIME_DEFAULT,
+				.channel_id = config->capv[i].channel_id,
+			};
 
-	return -ENOTSUP;
+			ret = adc_channel_setup(config->capv[i].dev, &cfg);
+			if (ret < 0) {
+				return ret;
+			}
+		}
+	}
+
+	return 0;
 }
 
 static int auxspaceev_cap_pyro_arm_channel(const struct device *dev,
@@ -52,6 +67,17 @@ static int auxspaceev_cap_pyro_disarm_channel(const struct device *dev,
 	return -ENOTSUP;
 }
 
+static int auxspaceev_cap_pyro_secure_channel(const struct device *dev,
+					      uint32_t channel)
+{
+	(void) dev;
+	(void) channel;
+
+	LOG_WRN("auxspaceev_cap_pyro_secure_channel unimplemented.\n");
+
+	return -ENOTSUP;
+}
+
 static int auxspaceev_cap_pyro_trigger_channel(const struct device *dev,
 					uint32_t channel)
 {
@@ -62,7 +88,6 @@ static int auxspaceev_cap_pyro_trigger_channel(const struct device *dev,
 
 	return -ENOTSUP;
 }
-
 
 static int auxspaceev_cap_pyro_charge_channel(const struct device *dev,
 					uint32_t channel)
@@ -75,14 +100,26 @@ static int auxspaceev_cap_pyro_charge_channel(const struct device *dev,
 	return -ENOTSUP;
 }
 
-static int auxspaceev_cap_pyro_read_channel(const struct device *dev,
-					uint32_t channel, uint32_t *val)
+static int auxspaceev_cap_pyro_sense_channel(const struct device *dev,
+					     uint32_t channel, uint32_t *val)
 {
 	(void) dev;
 	(void) channel;
 	(void) val;
 
-	LOG_WRN("auxspaceev_cap_pyro_read_channel unimplemented.\n");
+	LOG_WRN("auxspaceev_cap_pyro_sense_channel unimplemented.\n");
+
+	return -ENOTSUP;
+}
+
+static int auxspaceev_cap_pyro_read_cap_channel(const struct device *dev,
+						uint32_t channel, uint32_t *val)
+{
+	(void) dev;
+	(void) channel;
+	(void) val;
+
+	LOG_WRN("auxspaceev_cap_pyro_read_cap_channel unimplemented.\n");
 
 	return -ENOTSUP;
 }
@@ -99,22 +136,48 @@ static int auxspaceev_cap_pyro_get_nchannels(const struct device *dev)
 static DEVICE_API(pyro, pyro_api_funcs) = {
 	.arm = auxspaceev_cap_pyro_arm_channel,
 	.disarm = auxspaceev_cap_pyro_disarm_channel,
+	.secure = auxspaceev_cap_pyro_secure_channel,
 	.trigger = auxspaceev_cap_pyro_trigger_channel,
 	.charge = auxspaceev_cap_pyro_charge_channel,
-	.read = auxspaceev_cap_pyro_read_channel,
+	.sense = auxspaceev_cap_pyro_sense_channel,
+	.read_cap = auxspaceev_cap_pyro_read_cap_channel,
 	.get_nchannels = auxspaceev_cap_pyro_get_nchannels,
 };
 
+/* Builds an adc_dt_spec from a custom phandle-array property by index */
+#define CAP_PYRO_ADC_SPEC(node_id, prop, idx)				\
+	ADC_DT_SPEC_STRUCT(DT_PHANDLE_BY_IDX(node_id, prop, idx),	\
+			   DT_PHA_BY_IDX(node_id, prop, idx, input))
+
+/* Declares a static adc_dt_spec array for a custom phandle-array property */
+#define CAP_PYRO_ADC_ARRAY(inst, prop)						\
+	static const struct adc_dt_spec pyro_##prop##_##inst[] = {		\
+		DT_FOREACH_PROP_ELEM_SEP(DT_DRV_INST(inst), prop,		\
+					 CAP_PYRO_ADC_SPEC, (,))		\
+	}
+
+/* Declares a static uint32_t array for an 'array' type DT property */
+#define CAP_PYRO_U32_ARRAY(inst, prop)						\
+	static const uint32_t pyro_##prop##_##inst[] =				\
+		DT_PROP(DT_DRV_INST(inst), prop)
+
 /* Initializes a struct pyro_config for an instance using GPIOs */
-#define PYRO_CONFIG(inst)							\
-	{									\
-		.n_channels = DT_PROP_LEN(DT_DRV_INST(inst), trigger_gpios),	\
-		.single_arm = DT_PROP_LEN(DT_DRV_INST(inst), arm_gpios) == 1,	\
-		.trigger_gpios = GPIO_DT_SPEC_INST_GET(inst, trigger_gpios),	\
-		.arm_gpios = GPIO_DT_SPEC_INST_GET(inst, arm_gpios),		\
-		.charge_gpios = GPIO_DT_SPEC_INST_GET(inst, charge_gpios),	\
-		.short_gpios = GPIO_DT_SPEC_INST_GET(inst, short_gpios),	\
-		.adcs = ADC_DT_SPEC_INST_GET(DT_DRV_INST(inst))			\
+#define PYRO_CONFIG(inst)								\
+	{										\
+		.n_channels = DT_PROP_LEN(DT_DRV_INST(inst), trigger_gpios),		\
+		.single_arm = DT_PROP_LEN(DT_DRV_INST(inst), arm_gpios) == 1,		\
+		.sense_max = COND_CODE_1(DT_NODE_HAS_PROP(DT_DRV_INST(inst), sense_max),\
+				(pyro_sense_max_##inst), (NULL)),			\
+		.capv_max = COND_CODE_1(DT_NODE_HAS_PROP(DT_DRV_INST(inst), capv_max),	\
+				(pyro_capv_max_##inst), (NULL)),			\
+		.trigger_gpios = GPIO_DT_SPEC_INST_GET(inst, trigger_gpios),		\
+		.arm_gpios = GPIO_DT_SPEC_INST_GET(inst, arm_gpios),			\
+		.charge_gpios = GPIO_DT_SPEC_INST_GET(inst, charge_gpios),		\
+		.short_gpios = GPIO_DT_SPEC_INST_GET(inst, short_gpios),		\
+		.senses = COND_CODE_1(DT_NODE_HAS_PROP(DT_DRV_INST(inst), sense_adcs),	\
+				(pyro_sense_adcs_##inst), (NULL)),			\
+		.capv = COND_CODE_1(DT_NODE_HAS_PROP(DT_DRV_INST(inst), capv_adcs),	\
+				(pyro_capv_adcs_##inst), (NULL)),			\
 	}
 
 /*
@@ -122,6 +185,14 @@ static DEVICE_API(pyro, pyro_api_funcs) = {
 * instantiation macros for the instance.
 */
 #define CAP_PYRO_DEFINE(inst)						\
+	IF_ENABLED(DT_NODE_HAS_PROP(DT_DRV_INST(inst), capv_adcs),	\
+		   (CAP_PYRO_ADC_ARRAY(inst, capv_adcs);))		\
+	IF_ENABLED(DT_NODE_HAS_PROP(DT_DRV_INST(inst), sense_adcs),	\
+		   (CAP_PYRO_ADC_ARRAY(inst, sense_adcs);))		\
+	IF_ENABLED(DT_NODE_HAS_PROP(DT_DRV_INST(inst), capv_max),	\
+		   (CAP_PYRO_U32_ARRAY(inst, capv_max);))		\
+	IF_ENABLED(DT_NODE_HAS_PROP(DT_DRV_INST(inst), sense_max),	\
+		   (CAP_PYRO_U32_ARRAY(inst, sense_max);))		\
 	static struct pyro_data pyro_data_##inst;			\
 	static const struct pyro_config pyro_config_##inst =		\
 		PYRO_CONFIG(inst);					\

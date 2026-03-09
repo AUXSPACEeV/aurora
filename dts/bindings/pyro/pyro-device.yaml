@@ -28,18 +28,46 @@ properties:
   short-gpios:
     type: phandle-array
     description: |
-      An array of short GPIOs to use. Each element
-      in the array specifies a GPIO.
+      An array of short GPIOs to use. If short-gpios
+      are defined, every entry in the array corresponds
+      to an entry in trigger-gpios.
 
   cap-gpios:
     type: phandle-array
     description: |
       An array of GPIOs that charge the pyro capacitor.
-      Each element in the array specifies a GPIO.
+      If cap-gpios are defined, every entry in the
+      array corresponds to an entry in trigger-gpios.
 
-  adcs:
+  capv-adcs:
     type: phandle-array
+    specifier-space: io-channel
     description: |
-      An array of ADCs to read a pyro channel's value.
+      An array of ADCs to get the charge of a capacitor
+      of a pyro channel.
+      If capv-adcs are defined, every entry in the
+      array corresponds to an entry in trigger-gpios.
+
+  capv-max:
+    type: array
+    description: |
+      An array of voltages that define the max charge
+      that is set to be on capv-adcs.
+      A single voltage means, every adc in capv-adcs
+      awaits the same target level.
+
+  sense-adcs:
+    type: phandle-array
+    specifier-space: io-channel
+    description: |
+      An array of ADCs to get a pyro channel's health.
       If sense-adcs are defined, every entry in the
       array corresponds to an entry in trigger-gpios.
+
+  sense-max:
+    type: array
+    description: |
+      An array of voltages that define the max voltage
+      to be awaited on sense-adcs.
+      A single voltage means, every adc in sense-adcs
+      awaits the same target level.

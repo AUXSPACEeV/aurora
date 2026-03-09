@@ -14,11 +14,14 @@
 struct pyro_config {
 	const uint32_t n_channels;
 	const uint32_t single_arm;
+	const uint32_t *sense_max;
+	const uint32_t *capv_max;
 	struct gpio_dt_spec trigger_gpios;
 	struct gpio_dt_spec arm_gpios;
 	struct gpio_dt_spec short_gpios;
 	struct gpio_dt_spec charge_gpios;
-	struct adc_dt_spec adcs;
+	const struct adc_dt_spec *senses;
+	const struct adc_dt_spec *capv;
 };
 
 struct pyro_data {

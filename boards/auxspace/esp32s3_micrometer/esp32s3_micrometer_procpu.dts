@@ -54,9 +54,10 @@
 	pyro0: pyro_0 {
 		compatible = "auxspaceev,mini-pyro";
 
-		trigger-gpios = <&gpio0 4 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>,
-				<&gpio0 15 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>; // TODO
-		arm-gpios = <&gpio0 5 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+		trigger-gpios = <&gpio1 13 GPIO_ACTIVE_HIGH>,
+				<&gpio1 16 GPIO_ACTIVE_HIGH>;
+		arm-gpios = <&gpio0 21 GPIO_ACTIVE_HIGH>;
+		capv-adcs = <&adc1 3>;
 	};
 };
 
@@ -76,6 +77,10 @@
 };
 
 &gpio1 {
+	status = "okay";
+};
+
+&adc1 {
 	status = "okay";
 };
 
