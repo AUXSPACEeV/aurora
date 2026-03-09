@@ -1,4 +1,4 @@
-identifier: micrometer/esp32s3/procpu
+identifier: esp32s3_micrometer/esp32s3/procpu
 name: ESP32-S3 Micrometer
 type: mcu
 arch: xtensa
