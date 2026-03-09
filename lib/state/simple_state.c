@@ -343,10 +343,13 @@ _check_timeout:
 
 void sm_update(const struct sm_inputs *inputs)
 {
-	static int64_t last_time_ns = 0;
 	static float previous_altitude = 0.0f;
 
+#if defined(CONFIG_APOGEE_DETECTION)
+	static int64_t last_time_ns = 0;
+
 	int current_time_ns = (k_uptime_ticks() * NSEC_PER_SEC) / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
+#endif /* CONFIG_APOGEE_DETECTION */
 
 	_sm_update(inputs, previous_altitude);
 #if defined(CONFIG_APOGEE_DETECTION)
@@ -354,6 +357,7 @@ void sm_update(const struct sm_inputs *inputs)
 		filter_predict(&filter, current_time_ns - last_time_ns);
 		filter_update(&filter, inputs->altitude);
 	}
+	last_time_ns = current_time_ns;
 #endif /* CONFIG_APOGEE_DETECTION */
 
 	previous_altitude = inputs->altitude;
