@@ -52,10 +52,10 @@ struct sm_error_handling_args {
  *
  * This function prepares the state machine, loads the threshold
  * configuration, initializes internal timers, and sets the
- * initial state to @ref SM_DISARMED.
+ * initial state to `SM_IDLE`.
  *
  * @param cfg Pointer to a threshold configuration structure.
- * @param sm_error_cb Pointer to an error callback function.
+ * @param err_hdl Pointer to an error handling configuration (callback + args), or NULL.
  */
 void sm_init(const struct sm_thresholds *cfg,
              struct sm_error_handling_args *err_hdl);

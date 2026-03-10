@@ -29,13 +29,8 @@ enum sm_state {
 };
 
 /**
-* @defgroup lib_state Simple State Machine library
-* @ingroup lib
+* @addtogroup lib_state
 * @{
-*
-* @brief AURORA Simple State Machine library for avionics.
-*
-* This library contains State Machine functions for the Simple State Machine.
 */
 
 /*-----------------------------------------------------------
