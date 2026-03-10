@@ -27,6 +27,7 @@ function first_boot_actions() {
   west zephyr-export
   pip install -r ./zephyr/scripts/requirements.txt
   source ./zephyr/zephyr-env.sh
+  west packages pip --install
 
   # Setup tmp_dir if not already done
   sudo mkdir -p "$tmp_dir"
