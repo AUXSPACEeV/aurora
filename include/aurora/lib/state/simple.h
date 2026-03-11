@@ -17,7 +17,7 @@
  * flight, recovery, and landing detection.
  */
 enum sm_state {
-	SM_IDLE = 0,	/**< System unarmed armed, awaiting liftoff conditions. */
+	SM_IDLE = 0,	/**< System idle and unarmed, awaiting arm conditions. */
 	SM_ARMED,		/**< Monitoring acceleration and altitude for liftoff start. */
 	SM_BOOST,		/**< Acceleration confirmed. */
 	SM_BURNOUT,		/**< Motor burnout. */
@@ -34,34 +34,33 @@ enum sm_state {
 */
 
 /*-----------------------------------------------------------
- * Threshold definitions – replace with real values
+ * Threshold definitions
  *----------------------------------------------------------*/
 
 /**
  * @brief Threshold configuration for the rocket state machine.
  *
- * These values define the various thresholds used for determining
- * transitions between states (battery level, orientation, altitude,
- * acceleration, and timing).
+ * Defines thresholds for state transitions based on orientation,
+ * altitude, acceleration, and timing.
  */
  struct sm_thresholds {
 	/* Sensor Metrics */
-	int T_AB;	/**< Acceleration threshhold for ARMED -> BOOST transition */
-	int T_H;	/**< Altitude thresshold for ARMED -> BOOST transition */
-	int T_BB;	/**< Acceleration threshhold for BOOST -> BURNOUT transition */
-	int T_M;	/**< Descent rate threshhold for APOGEE -> MAIN transition */
-	int T_L;	/**< Velocity threshhold for Landing detection */
-	int T_OA;	/**< Orientation threshhold for IDLE -> ARMED transition */
-	int T_OI;	/**< Orientation threshhold for ARMED -> IDLE transition */
+	int T_AB;	/**< Acceleration threshold for ARMED -> BOOST transition. */
+	int T_H;	/**< Altitude threshold for ARMED -> BOOST transition. */
+	int T_BB;	/**< Acceleration threshold for BOOST -> BURNOUT transition. */
+	int T_M;	/**< Descent height threshold for APOGEE -> MAIN transition. */
+	int T_L;	/**< Velocity threshold for landing detection. */
+	int T_OA;	/**< Orientation threshold for IDLE -> ARMED transition. */
+	int T_OI;	/**< Orientation threshold for ARMED -> IDLE transition. */
 
 	/* Timers */
-	int DT_AB;	/**< Time for T_AB an T_H assertion (ms) */
-	int DT_L;	/**< Time for T_L assertion (ms) */
+	int DT_AB;	/**< Time for T_AB and T_H assertion (ms). */
+	int DT_L;	/**< Time for T_L assertion (ms). */
 
 	/* Timeouts */
-	int TO_A;	/**< Max time allowed in APOGEE state before abort (ms) */
-	int TO_M;	/**< Time between MAIN and REDUNDAND (ms) */
-	int TO_R;	/**< Max time allowed in REDUNDAND state before abort (ms) */
+	int TO_A;	/**< Max time allowed in APOGEE state before abort (ms). */
+	int TO_M;	/**< Time between MAIN and REDUNDAND (ms). */
+	int TO_R;	/**< Max time allowed in REDUNDAND state before abort (ms). */
 };
 
 /*-----------------------------------------------------------

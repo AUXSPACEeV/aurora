@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'AURORA'
-copyright = '2024, Auxspace e.V.'
+copyright = '2025, Auxspace e.V.'
 author = 'Auxspace e.V.'
 release = '1.1.0'
 
@@ -25,14 +25,47 @@ exclude_patterns = ['_build_sphinx', '_build_doxygen', 'Thumbs.db', '.DS_Store']
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'alabaster'
-html_logo = 'img/logo.jpeg'
+html_theme = 'furo'
+html_logo = 'img/logo.png'
+html_title = 'Auxspace e.V. AURORA'
+
 html_theme_options = {
-    'description': 'A Zephyr-based avionics stack for the METER-2 rocket',
-    'github_user': 'AUXSPACEeV',
-    'github_repo': 'aurora',
-    'github_button': True,
+    # White and blue colour scheme
+    "light_css_variables": {
+        "color-brand-primary": "#1a5fb4",
+        "color-brand-content": "#1a5fb4",
+        "color-sidebar-brand-text": "#1a5fb4",
+        "color-sidebar-link-text--top-level": "#1a5fb4",
+        "color-sidebar-link-text": "#333333",
+        "color-sidebar-background": "#f8f9fa",
+        "color-sidebar-background-border": "#dce0e5",
+        "color-admonition-title--note": "#1a5fb4",
+        "color-admonition-title-background--note": "#e8f0fe",
+    },
+    "dark_css_variables": {
+        "color-brand-primary": "#6ea8fe",
+        "color-brand-content": "#6ea8fe",
+        # Lighter dark background for main content
+        "color-background-primary": "#1e2028",
+        "color-background-secondary": "#252830",
+        "color-background-border": "#3a3d46",
+        "color-foreground-primary": "#dcdee3",
+        "color-foreground-border": "#505460",
+        # Dark sidebar
+        "color-sidebar-background": "#111318",
+        "color-sidebar-background-border": "#1a1d24",
+        "color-sidebar-brand-text": "#6ea8fe",
+        "color-sidebar-link-text--top-level": "#6ea8fe",
+        "color-sidebar-link-text": "#b0b4be",
+        "color-sidebar-caption-text": "#8890a0",
+    },
+    "sidebar_hide_name": False,
+    "navigation_with_keys": True,
+    "top_of_page_buttons": ["view"],
 }
+
+html_static_path = ['_static']
+html_css_files = ['custom.css']
 
 # -- Options for Intersphinx -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/intersphinx.html

@@ -1,4 +1,7 @@
-/*
+/**
+ * @file main.c
+ * @brief Unit tests for the simple state machine.
+ *
  * Copyright (c) 2025 Auxspace e.V.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -7,6 +10,7 @@
 #include <zephyr/ztest.h>
 #include <aurora/lib/state/state.h>
 
+/** @brief Test threshold configuration with fast timers for unit testing. */
 static const struct sm_thresholds simple_state_cfg = {
 	/* Sensor Metrics */
 	.T_AB = 30,	// 30 m/s^2
@@ -27,16 +31,19 @@ static const struct sm_thresholds simple_state_cfg = {
 	.TO_R = 250,	// 250 ms
 };
 
+/** @brief Test fixture setup — initialize state machine before each test. */
 static void simple_state_machine_mock_before(void *fixture)
 {
 	sm_init(&simple_state_cfg, NULL);  // TODO: error handling tests
 }
 
+/** @brief Test fixture teardown — deinitialize state machine after each test. */
 static void simple_state_machine_mock_after(void *fixture)
 {
 	sm_deinit();
 }
 
+/** @brief Helper to transition the state machine from IDLE to ARMED. */
 static inline void put_state_armed(struct sm_inputs *in)
 {
 	in->armed = 0;

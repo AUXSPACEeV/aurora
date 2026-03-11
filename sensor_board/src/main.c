@@ -1,4 +1,10 @@
-/*
+/**
+ * @file main.c
+ * @brief Sensor board application entry point.
+ *
+ * Defines three Zephyr threads (IMU, barometer, state machine) that run
+ * concurrently to collect sensor data and drive the flight state machine.
+ *
  * Copyright (c) 2025 Auxspace e.V.
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -26,6 +32,7 @@
 #if defined(CONFIG_AURORA_STATE_MACHINE)
 #include <aurora/lib/state/state.h>
 
+/** @brief Flight state machine thresholds loaded from Kconfig. */
 static const struct sm_thresholds state_cfg = {
 	/* Sensor Metrics */
 	.T_AB = CONFIG_BOOST_ACCELERATION,
@@ -48,19 +55,24 @@ static const struct sm_thresholds state_cfg = {
 
 LOG_MODULE_REGISTER(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 
-static float orientation = 0.0f;
-static float acceleration = 0.0f;
-static float velocity = 0.0f;
-static float altitude = 0.0f;
+static float orientation = 0.0f;  /**< Latest orientation angle from IMU (degrees). */
+static float acceleration = 0.0f; /**< Latest acceleration magnitude from IMU (m/s^2). */
+static float velocity = 0.0f;     /**< Latest vertical velocity estimate (m/s). */
 
-static bool baro_active = false;
-static bool imu_active = false;
-static bool sm_active = false;
+static bool baro_active = false; /**< True once the barometer thread has initialized. */
+static bool imu_active = false;  /**< True once the IMU thread has initialized. */
+static bool sm_active = false;   /**< True once the state machine thread has initialized. */
 
 /* ============================================================
  *                     IMU TASK
  * ============================================================ */
 #if defined(CONFIG_IMU)
+/**
+ * @brief IMU polling thread.
+ *
+ * Initializes the IMU and continuously polls orientation and acceleration
+ * at the configured frequency, updating the global sensor variables.
+ */
 void imu_task(void *, void *, void *)
 {
 	const struct device *imu0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_imu));
@@ -94,6 +106,12 @@ K_THREAD_DEFINE(imu_task_id, 2048, imu_task, NULL, NULL, NULL,
  *                     BARO TASK
  * ============================================================ */
 #if defined(CONFIG_BARO)
+/**
+ * @brief Barometer polling thread.
+ *
+ * Initializes the barometric sensor and continuously measures temperature,
+ * pressure at the configured frequency.
+ */
 void baro_task(void *, void *, void *)
 {
 	const struct device *baro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_baro));
@@ -114,11 +132,8 @@ void baro_task(void *, void *, void *)
 			continue;
 		}
 
-		// currently only uses baro0 for altitude measurement
-		altitude = baro_altitude(sensor_value_to_float(&press));
-
-		LOG_INF("[baro0] Temperature: %d.%06d | Pressure: %d.%06d | Altitude: %.2f\n",
-				temp.val1, temp.val2, press.val1, press.val2, (double)altitude);
+		LOG_INF("[baro0] Temperature: %d.%06d | Pressure: %d.%06d\n",
+				temp.val1, temp.val2, press.val1, press.val2);
 
 		k_sleep(K_MSEC(1000 / baro_hz));
 	}
@@ -133,6 +148,12 @@ K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
  *                     State machine TASK
  * ============================================================ */
 #if defined(CONFIG_AURORA_STATE_MACHINE)
+/**
+ * @brief State machine thread.
+ *
+ * Waits for IMU and barometer readiness, then runs the flight state machine
+ * at 10 Hz. Fires pyro channels on the appropriate state transitions.
+ */
 void state_machine_task(void *, void *, void *)
 {
 	enum sm_state state;
@@ -147,7 +168,6 @@ void state_machine_task(void *, void *, void *)
 		.orientation = orientation,
 		.acceleration = acceleration,
 		.velocity = velocity,
-		.altitude = altitude,
 	};
 
 #if defined(CONFIG_PYRO)
@@ -169,7 +189,6 @@ void state_machine_task(void *, void *, void *)
 			.orientation = orientation,
 			.acceleration = acceleration,
 			.velocity = velocity,
-			.altitude = altitude,
 		};
 
 		sm_update(&inputs);
@@ -213,6 +232,12 @@ K_THREAD_DEFINE(state_machine_task_id, 2048, state_machine_task, NULL, NULL,
 /* ============================================================
  *                     MAIN INITIALIZATION
  * ============================================================ */
+/**
+ * @brief Application entry point.
+ *
+ * Logs the firmware version. All work is performed by threads started
+ * automatically via K_THREAD_DEFINE.
+ */
 int main(void)
 {
 	LOG_INF("Auxspace AURORA %s", APP_VERSION_STRING);
