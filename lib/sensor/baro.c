@@ -1,4 +1,10 @@
-/*
+/**
+ * @file baro.c
+ * @brief Barometric pressure sensor library implementation.
+ *
+ * Wraps the Zephyr sensor API for the MS5607 barometric sensor, providing
+ * measurement, altitude computation, and initialization helpers.
+ *
  * Copyright (c) 2025, Auxspace e.V.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -15,6 +21,7 @@
 
 LOG_MODULE_REGISTER(baro, CONFIG_AURORA_SENSORS_LOG_LEVEL);
 
+/* baro_measure – see baro.h */
 int baro_measure(const struct device *dev, struct sensor_value *temp,
 				 struct sensor_value *press)
 {
@@ -48,11 +55,13 @@ int baro_measure(const struct device *dev, struct sensor_value *temp,
 	return 0;
 }
 
-float baro_altitude(float pressure_pa)
-{
-    return pressure_pa;
-}
-
+/**
+ * @brief Set the barometric sensor oversampling rate.
+ *
+ * @param dev Pointer to the barometric sensor device.
+ * @param osr Oversampling rate value.
+ * @return 0 on success, -EIO on failure.
+ */
 int baro_set_oversampling(const struct device *dev, uint32_t osr)
 {
 	struct sensor_value oversampling_rate = { osr, 0 };
@@ -67,6 +76,7 @@ int baro_set_oversampling(const struct device *dev, uint32_t osr)
 	return 0;
 }
 
+/* baro_init – see baro.h */
 int baro_init(const struct device *dev)
 {
 	if (!device_is_ready(dev)) {

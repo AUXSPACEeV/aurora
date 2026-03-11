@@ -1,4 +1,10 @@
-/*
+/**
+ * @file imu.c
+ * @brief IMU (LSM6DSO32) sensor library implementation.
+ *
+ * Provides polling and trigger-based interfaces for acceleration and
+ * gyroscope data, plus initialization and sampling frequency configuration.
+ *
  * Copyright (c) 2025, Auxspace e.V.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -20,11 +26,25 @@
 
 LOG_MODULE_REGISTER(imu, CONFIG_AURORA_SENSORS_LOG_LEVEL);
 
+/**
+ * @brief Convert a Zephyr sensor_value to a float.
+ *
+ * @param val Pointer to the sensor value.
+ * @return Floating-point representation.
+ */
 static inline float out_ev(struct sensor_value *val)
 {
 	return (val->val1 + (float)val->val2 / 1000000);
 }
 
+/**
+ * @brief Fetch XYZ accelerometer channels from the IMU.
+ *
+ * @param dev Pointer to the IMU device.
+ * @param x   Output for X-axis acceleration.
+ * @param y   Output for Y-axis acceleration.
+ * @param z   Output for Z-axis acceleration.
+ */
 static void fetch_accel(const struct device *dev, struct sensor_value *x,
 						struct sensor_value *y, struct sensor_value *z)
 {
@@ -34,6 +54,7 @@ static void fetch_accel(const struct device *dev, struct sensor_value *x,
 	sensor_channel_get(dev, SENSOR_CHAN_ACCEL_Z, z);
 }
 
+/* imu_set_sampling_freq – see imu.h */
 int imu_set_sampling_freq(const struct device *dev, int sampling_rate_hz)
 {
 	int ret = 0;
@@ -61,6 +82,11 @@ int imu_set_sampling_freq(const struct device *dev, int sampling_rate_hz)
 }
 
 #if defined(CONFIG_LSM6DSO_TRIGGER)
+/**
+ * @brief Fetch and log accelerometer and gyroscope readings.
+ *
+ * @param dev Pointer to the IMU device.
+ */
 static void fetch_and_display(const struct device *dev)
 {
 	struct sensor_value x, y, z;
@@ -83,12 +109,23 @@ static void fetch_and_display(const struct device *dev)
 	LOG_INF("trig_cnt:%d\n\n", trig_cnt);
 }
 
+/**
+ * @brief Data-ready trigger callback for the IMU.
+ *
+ * @param dev  Pointer to the IMU device.
+ * @param trig Pointer to the sensor trigger descriptor.
+ */
 static void trigger_handler(const struct device *dev,
 							const struct sensor_trigger *trig)
 {
 	fetch_and_display(dev);
 }
 
+/**
+ * @brief Configure the IMU to run in data-ready trigger mode.
+ *
+ * @param dev Pointer to the IMU device.
+ */
 static void run_trigger_mode(const struct device *dev)
 {
 	struct sensor_trigger trig;
@@ -103,6 +140,7 @@ static void run_trigger_mode(const struct device *dev)
 }
 
 #else
+/* imu_poll – see imu.h */
 int imu_poll(const struct device *dev, float *orientation_deg, float *acc_avg)
 {
 	struct sensor_value ax, ay, az;
@@ -132,6 +170,7 @@ int imu_poll(const struct device *dev, float *orientation_deg, float *acc_avg)
 }
 #endif
 
+/* imu_init – see imu.h */
 int imu_init(const struct device *dev)
 {
 	const int imu_hz = CONFIG_IMU_FREQUENCY_VALUE;

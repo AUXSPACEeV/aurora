@@ -10,45 +10,37 @@
 #include <zephyr/drivers/sensor.h>
 
 /**
-* @defgroup lib_baro library
-* @ingroup lib
-* @{
-*
-* @brief AURORA barometer library for avionics telemetry.
-*
-* This library contains baro functions.
-*/
+ * @defgroup lib_baro Barometer library
+ * @ingroup lib
+ * @{
+ *
+ * @brief AURORA barometer library for avionics telemetry.
+ */
 
 /**
-* @brief Measure temperature and pressure using the baro for the AURORA application.
-*
-* Function measures the baro and returns 0 on success.
-*
-* @retval 0 on success, negative error code on failure.
-*/
+ * @brief Measure temperature and pressure from the barometric sensor.
+ *
+ * @param dev   Pointer to the barometric sensor device.
+ * @param temp  Output for temperature, or NULL to skip.
+ * @param press Output for pressure, or NULL to skip.
+ *
+ * @retval 0 on success.
+ * @retval -EINVAL if @p dev is NULL and both outputs are NULL.
+ * @retval -errno Other negative errno on failure.
+ */
 int baro_measure(const struct device *dev, struct sensor_value *temp,
 				 struct sensor_value *press);
 
 /**
- * @brief Compute altitude from barometric pressure for the AURORA application.
+ * @brief Initialize the barometric pressure sensor.
  *
- * Function computes the approximate altitude (in meters) using the
- * standard barometric formula based on the measured pressure.
+ * Checks device readiness and configures the oversampling rate.
  *
- * @param pressure Measured barometric pressure in Pascals (Pa)
+ * @param dev Pointer to the barometric sensor device.
  *
- * @return Altitude in meters above sea level
- */
-float baro_altitude(float pressure);
-
-/**
- * @brief Initialize barometric pressure sensor for the AURORA application.
- *
- * Function initializes the barometric pressure sensor.
- *
- * @param dev Pointer to the device structure for the barometric sensor
- *
- * @return 0 on success, negative error code on failure
+ * @retval 0 on success.
+ * @retval -ETIMEDOUT if the device is not ready.
+ * @retval -EIO if oversampling configuration fails.
  */
 int baro_init(const struct device *dev);
 

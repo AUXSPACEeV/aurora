@@ -6,41 +6,41 @@
 #ifndef APP_LIB_STATE_H_
 #define APP_LIB_STATE_H_
 
+/**
+ * @defgroup lib_state State Machine library
+ * @ingroup lib
+ * @{
+ *
+ * @brief AURORA common state machine library for avionics.
+ */
+
 #if defined(CONFIG_SIMPLE_STATE)
 #include <aurora/lib/state/simple.h>
 #else
 #error "Unknown state machine type! Make sure CONFIG_STATE_MACHINE_TYPE is set."
 #endif /* CONFIG_SIMPLE_STATE */
 
-/**
-* @defgroup lib_state Common State Machine library
-* @ingroup lib
-* @{
-*
-* @brief AURORA Common State Machine library for avionics.
-*
-* This library contains common State Machine functions.
-*/
-
 /*-----------------------------------------------------------
  * Types
  *----------------------------------------------------------*/
 
 /**
- * @brief Callback when the state machine encounters an error.
+ * @brief Callback invoked when the state machine encounters an error.
  *
- * This function is called when the state machine encounters an error and
- * tries to recover. The implementation can define specific recovery.
+ * The implementation can define specific recovery logic.
  *
- * @param args Pointer to an implementation specific config structure.
- * 
- * @return Status code (0 = error could be mitigated, other = error code)
+ * @param args Pointer to an implementation-specific config structure.
+ *
+ * @return 0 if the error was mitigated, negative errno otherwise.
  */
 typedef int (*sm_error_cb_t) (void *args);
 
+/**
+ * @brief Error handling configuration for the state machine.
+ */
 struct sm_error_handling_args {
-    sm_error_cb_t cb;
-    void *args;
+    sm_error_cb_t cb;   /**< Error callback function. */
+    void *args;         /**< Opaque argument passed to @ref cb. */
 };
 
 /*-----------------------------------------------------------

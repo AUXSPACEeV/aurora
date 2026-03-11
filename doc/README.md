@@ -25,3 +25,4 @@ make html
 ```
 
 The output will be in `_build_sphinx/html/`. Open `index.html` to browse.
+

@@ -33,16 +33,16 @@
  * @brief Operations of the pyro driver class.
  */
 
-/** @brief Pyro driver class operations */
+/** @brief Pyro driver class operations. */
 __subsystem struct pyro_driver_api {
-	int (*arm)(const struct device *dev, uint32_t channel);
-	int (*disarm)(const struct device *dev, uint32_t channel);
-	int (*secure)(const struct device *dev, uint32_t channel);
-	int (*trigger)(const struct device *dev, uint32_t channel);
-	int (*charge)(const struct device *dev, uint32_t channel);
-	int (*sense)(const struct device *dev, uint32_t channel, uint32_t *val);
-	int (*read_cap)(const struct device *dev, uint32_t channel, uint32_t *val);
-	int (*get_nchannels)(const struct device *dev);
+	int (*arm)(const struct device *dev, uint32_t channel);          /**< Arm channel. */
+	int (*disarm)(const struct device *dev, uint32_t channel);       /**< Disarm channel. */
+	int (*secure)(const struct device *dev, uint32_t channel);       /**< Secure channel. */
+	int (*trigger)(const struct device *dev, uint32_t channel);      /**< Trigger channel. */
+	int (*charge)(const struct device *dev, uint32_t channel);       /**< Charge channel. */
+	int (*sense)(const struct device *dev, uint32_t channel, uint32_t *val);    /**< Read sense. */
+	int (*read_cap)(const struct device *dev, uint32_t channel, uint32_t *val); /**< Read cap voltage. */
+	int (*get_nchannels)(const struct device *dev);                  /**< Get channel count. */
 };
 
 /**
@@ -146,7 +146,6 @@ return DEVICE_API_GET(pyro, dev)->disarm(dev, channel);
 /**
  * @brief Trigger a pyro channel.
  *
- *
  * @param dev Pyro device instance.
  * @param channel Number of the channel to trigger.
  *
@@ -165,7 +164,7 @@ return DEVICE_API_GET(pyro, dev)->trigger(dev, channel);
 }
 
 /**
- * @brief Read a pyro channel's output.
+ * @brief Charge a pyro channel's capacitor.
  *
  * @param dev Pyro device instance.
  * @param channel Number of the channel to charge.
@@ -189,10 +188,10 @@ return DEVICE_API_GET(pyro, dev)->charge(dev, channel);
  *
  * @param dev Pyro device instance.
  * @param channel Number of the channel to read the "sense".
- * @param val [out] read value.
+ * @param[out] val Read value.
  *
  * @retval 0 if successful.
- * @retval -EINVAL if @p channel can not be set.
+ * @retval -EINVAL if @p channel is invalid.
  * @retval -errno Other negative errno code on failure.
  */
 __syscall int pyro_sense_channel(const struct device *dev, uint32_t channel,
@@ -210,11 +209,11 @@ return DEVICE_API_GET(pyro, dev)->sense(dev, channel, val);
  * @brief Read a pyro channel's capacitor charge.
  *
  * @param dev Pyro device instance.
- * @param channel Number of the channel to read the cap_v of.
- * @param val [out] read value.
+ * @param channel Number of the channel to read the capacitor voltage of.
+ * @param[out] val Read value.
  *
  * @retval 0 if successful.
- * @retval -EINVAL if @p channel can not be set.
+ * @retval -EINVAL if @p channel is invalid.
  * @retval -errno Other negative errno code on failure.
  */
  __syscall int pyro_read_cap_channel(const struct device *dev, uint32_t channel,
@@ -229,13 +228,12 @@ return DEVICE_API_GET(pyro, dev)->read_cap(dev, channel, val);
 }
 
 /**
- * @brief Get the number of total pyro channels on this module.
+ * @brief Get the number of pyro channels on this module.
  *
  * @param dev Pyro device instance.
  *
- * @retval 0 if successful.
- * @retval -EINVAL if @p channel can not be set.
- * @retval -errno Other negative errno code on failure.
+ * @return Number of channels on success.
+ * @retval -errno Negative errno code on failure.
  */
  __syscall int pyro_get_nchannels(const struct device *dev);
 

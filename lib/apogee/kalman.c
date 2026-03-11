@@ -1,4 +1,10 @@
-/*
+/**
+ * @file kalman.c
+ * @brief Kalman filter for apogee detection.
+ *
+ * Implements a 2-state (altitude, vertical velocity) Kalman filter that
+ * tracks barometric altitude and detects apogee via a velocity zero-crossing.
+ *
  * Copyright (c) 2026, Auxspace e.V.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -14,6 +20,7 @@
 
 LOG_MODULE_REGISTER(kalman, CONFIG_AURORA_APOGEE_DETECTION_LOG_LEVEL);
 
+/* filter_init – see filter.h */
 int filter_init(struct filter *filter)
 {
     if (filter == NULL)
@@ -46,6 +53,7 @@ int filter_init(struct filter *filter)
     return 0;
 }
 
+/* filter_predict – see filter.h */
 int filter_predict(struct filter *filter, int64_t dt)
 {
     if (filter == NULL || dt <= 0)
@@ -82,6 +90,7 @@ int filter_predict(struct filter *filter, int64_t dt)
     return 0;
 }
 
+/* filter_update – see filter.h */
 int filter_update(struct filter *filter, float z)
 {
     if (filter == NULL)
@@ -115,6 +124,7 @@ int filter_update(struct filter *filter, float z)
     return 0;
 }
 
+/* filter_detect_apogee – see filter.h */
 int filter_detect_apogee(struct filter *filter)
 {
     if (filter == NULL)

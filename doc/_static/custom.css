@@ -1,0 +1,19 @@
+/* Push sidebar to the far left and widen content area */
+.sidebar-drawer {
+    left: 0;
+}
+
+/* Remove the centering gap that pushes sidebar inward */
+body {
+    --sidebar-width: 17rem;
+}
+
+/* Make the content area fill available width instead of centering */
+.main {
+    margin-left: 0 !important;
+    max-width: none;
+}
+
+.content {
+    max-width: 52rem;
+}

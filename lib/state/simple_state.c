@@ -1,4 +1,13 @@
-/*
+/**
+ * @file simple_state.c
+ * @brief Simple 9-state flight state machine implementation.
+ *
+ * Implements the flight state sequence:
+ * IDLE -> ARMED -> BOOST -> BURNOUT -> APOGEE -> MAIN -> REDUNDAND -> LANDED / ERROR
+ *
+ * State transitions are driven by sensor thresholds and timers.
+ * Optionally integrates with the Kalman filter for apogee detection.
+ *
  * Copyright (c) 2025, Auxspace e.V.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -23,48 +32,86 @@ LOG_MODULE_REGISTER(simple_state, CONFIG_STATE_MACHINE_LOG_LEVEL);
  * Prototypes
  *----------------------------------------------------------*/
 
+/** @brief Initialize all internal Zephyr timers used by the state machine. */
 static void init_timers(void);
 
+/** @brief Stop all running timers and clear the @ref running_timers flags. */
 static void stop_timers(void);
 
+/**
+ * @brief Default error handler when no user callback is registered.
+ *
+ * @param args Unused opaque argument (always NULL).
+ * @return Always returns -EIO.
+ */
 static int fallback_sm_error_handler(void *args);
 
+/**
+ * @brief Transition to SM_ERROR and invoke the error callback.
+ *
+ * Acquires @ref err_lock, sets state to SM_ERROR, and calls the
+ * registered error callback (or the fallback).
+ */
 static void sm_do_error_handling(void);
 
+/**
+ * @brief Check if acceleration and altitude meet ARMED->BOOST thresholds.
+ *
+ * @param in Pointer to the current sensor input values.
+ * @retval true  Both acceleration >= T_AB and altitude >= T_H.
+ * @retval false One or both thresholds are not met.
+ */
 static inline bool arm_to_boost_conditions_met(const struct sm_inputs *in);
 
+/**
+ * @brief Core state machine update logic.
+ *
+ * Evaluates sensor inputs against thresholds and timers to determine
+ * state transitions.  Called by sm_update() with additional bookkeeping.
+ *
+ * @param in                Pointer to the current sensor input values.
+ * @param previous_altitude Altitude from the previous update cycle (m).
+ */
 static inline void _sm_update(const struct sm_inputs *in, float previous_altitude);
 
 /*-----------------------------------------------------------
  * Internal State
  *----------------------------------------------------------*/
-static enum sm_state current_state = SM_IDLE;
-static struct sm_thresholds th;
+static enum sm_state current_state = SM_IDLE; /**< Active flight state. */
+static struct sm_thresholds th; /**< Loaded threshold configuration. */
 
-static struct k_spinlock err_lock;
+static struct k_spinlock err_lock; /**< Spinlock protecting error callback invocation. */
 static struct sm_error_handling_args err_hdl = {
 	.cb = &fallback_sm_error_handler,
 	.args = NULL,
 };
 
-static struct k_timer dt_ab;
-static struct k_timer dt_l;
+static struct k_timer dt_ab; /**< Duration timer for ARMED->BOOST assertion. */
+static struct k_timer dt_l;  /**< Duration timer for landing velocity assertion. */
 
-static struct k_timer to_a;
-static struct k_timer to_m;
-static struct k_timer to_r;
+static struct k_timer to_a; /**< Timeout timer for APOGEE state. */
+static struct k_timer to_m; /**< Timeout timer for MAIN state. */
+static struct k_timer to_r; /**< Timeout timer for REDUNDAND state. */
 
+/** @brief Indices into the @ref running_timers array. */
 enum timers {
-	TIMER_DT_AB = 0,
-	TIMER_DT_L,
-	NUM_TIMERS
+	TIMER_DT_AB = 0, /**< Index for the ARMED->BOOST duration timer. */
+	TIMER_DT_L,      /**< Index for the landing duration timer. */
+	NUM_TIMERS        /**< Number of tracked timers. */
 };
 
-static int running_timers[NUM_TIMERS] = {0};
+static int running_timers[NUM_TIMERS] = {0}; /**< Per-timer running flag. */
 
 /*-----------------------------------------------------------
  * Local Helpers
  *----------------------------------------------------------*/
+
+/**
+ * @brief Check whether a Zephyr timer has expired.
+ *
+ * @param tmr Pointer to a @c k_timer instance.
+ * @return Non-zero if the timer has expired.
+ */
 #define TIMER_EXPIRED(tmr) (k_timer_status_get(tmr) > 0)
 
 static void init_timers(void)
@@ -118,6 +165,8 @@ static void sm_do_error_handling(void)
 /*-----------------------------------------------------------
  * Initialization / Deinitialization
  *----------------------------------------------------------*/
+
+/* sm_init – see state.h */
 void sm_init(const struct sm_thresholds *cfg,
 			 struct sm_error_handling_args *sm_err_hdl)
 {
@@ -141,6 +190,7 @@ void sm_init(const struct sm_thresholds *cfg,
 	LOG_INF("State machine initialized (DISARMED, IDLE)");
 }
 
+/* sm_deinit – see state.h */
 void sm_deinit(void)
 {
 	memset(&th, 0, sizeof(th));
@@ -341,6 +391,7 @@ _check_timeout:
 	}
 }
 
+/* sm_update – see state.h */
 void sm_update(const struct sm_inputs *inputs)
 {
 	static float previous_altitude = 0.0f;
@@ -366,6 +417,8 @@ void sm_update(const struct sm_inputs *inputs)
 /*-----------------------------------------------------------
  * Getter
  *----------------------------------------------------------*/
+
+/* sm_get_state – see state.h */
 enum sm_state sm_get_state(void)
 {
 	return current_state;
