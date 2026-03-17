@@ -50,12 +50,12 @@ Supported Boards
    * - Board
      - MCU
      - Notes
-   * - ``rpi_pico``
+   * - ``sensor_board_v2/rp2040``
      - RP2040 (Cortex-M0+)
      - Primary target
-   * - ``rpi_pico2_hazard3``
+   * - ``sensor_board_v2/rp2350a/hazard3``
      - RP2350 (RISC-V Hazard3)
      -
-   * - ``esp32s3_micrometer``
+   * - ``esp32s3_micrometer/esp32s3/procpu``
      - ESP32-S3
      - Custom Auxspace board

@@ -92,7 +92,7 @@ AURORA_APPLICATION_DIR=${AURORA_APPLICATION_DIR:-"${THISDIR}"}
 ZEPHYR_SOURCE_SW_VERSION=${ZEPHYR_SOURCE_SW_VERSION:-"main"}
 ZEPHYR_APPLICATION=${ZEPHYR_APPLICATION:-"sensor_board"}
 ZEPHYR_WORKSPACE=${ZEPHYR_WORKSPACE:-"$(dirname ${THISDIR})"}
-ZEPHYR_BOARD=${ZEPHYR_BOARD:-"rpi_pico"}
+ZEPHYR_BOARD=${ZEPHYR_BOARD:-"sensor_board_v2/rp2040"}
 
 ################################################################################
 # Commandline arg parser                                                       #

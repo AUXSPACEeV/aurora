@@ -114,8 +114,9 @@ rm -f zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz
 cd zephyr-sdk-0.17.4
 
 # -h installs the host tools
-# -t arm-zephyr-eabi installs the toolchain for rpi_pico and rpi_pico2/rp2350a/m33
-# -t riscv64-zephyr-elf installs the toolchain for rpi_pico2/rp2350a/hazard3
+# -t arm-zephyr-eabi installs the toolchain for sensor_board_v2/rp2040
+# -t riscv64-zephyr-elf installs the toolchain for sensor_board_v2/rp2350a/hazard3
+# -t xtensa-espressif_esp32s3_zephyr-elf installs the toolchain for esp32s3_micrometer/esp32s3/*
 ./setup.sh -c -h \
     -t arm-zephyr-eabi \
     -t riscv64-zephyr-elf \
@@ -180,8 +181,8 @@ cd aurora
 After installing docker, all requirements are met to run the setup:
 
 ```bash
-# Open a shell in the development container for the rpi_pico board
-./run.sh -b rpi_pico shell
+# Open a shell in the development container for the sensor_board_v2/rp2040 board
+./run.sh -b sensor_board_v2/rp2040 shell
 ```
 
 **note:** This can take a long time, since the docker container is quite big
@@ -231,8 +232,8 @@ Start the command from the **\<aurora\>** dir, as explained in
 [Important Directories](#important-directories).
 
 ```bash
-# Build the sensor_board project for the rpi pico
-west build -b rpi_pico sensor_board
+# Build the sensor_board project for the sensor_board_v2/rp2040
+west build -b sensor_board_v2/rp2040 sensor_board
 
 # Another example: Micrometer on custom esp32s3 board
 west build -b esp32s3_micrometer/esp32s3/procpu sensor_board/

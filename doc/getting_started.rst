@@ -22,12 +22,12 @@ Build the primary ``sensor_board`` application for one of the supported boards:
 .. code-block:: shell
 
    # RP2040 (primary target)
-   west build -b rpi_pico sensor_board
+   west build -b sensor_board_v2/rp2040 sensor_board
 
    # RP2350 RISC-V
-   west build -b rpi_pico2_hazard3 sensor_board
+   west build -b sensor_board_v2/rp2350a/hazard3 sensor_board
 
-   # ESP32-S3 custom board (Micrometer)
+   # ESP32-S3 Micrometer board
    west build -b esp32s3_micrometer/esp32s3/procpu sensor_board/
 
 Build output is located at ``build/zephyr/zephyr.uf2`` and
@@ -38,7 +38,7 @@ Interactive Kconfig
 
 .. code-block:: shell
 
-   ./run.sh -b rpi_pico menuconfig
+   ./run.sh -b sensor_board_v2/rp2040 menuconfig
 
 Docker Container
 ^^^^^^^^^^^^^^^^
@@ -46,7 +46,7 @@ Docker Container
 .. code-block:: shell
 
    # Open a shell inside the dev container
-   ./run.sh -b rpi_pico shell
+   ./run.sh -b sensor_board_v2/rp2040 shell
 
    # Clean build artefacts
    ./run.sh clean
