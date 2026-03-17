@@ -104,13 +104,20 @@ static int influx_write_datapoint(struct data_logger *logger,
 	struct influx_ctx *ctx = logger->ctx;
 	char buf[256];
 	int offset = 0;
+	int n;
 	ssize_t wr;
 
 	/* measurement,type=<name> */
-	offset += snprintf(buf + offset, sizeof(buf) - offset,
-			   "%s,type=%s ",
-			   CONFIG_DATA_LOGGER_INFLUX_MEASUREMENT,
-			   data_logger_type_name(dp->type));
+	n = snprintf(buf + offset, sizeof(buf) - offset,
+		     "%s,type=%s ",
+		     CONFIG_DATA_LOGGER_INFLUX_MEASUREMENT,
+		     data_logger_type_name(dp->type));
+	if (n < 0 || n >= (int)(sizeof(buf) - offset)) {
+		LOG_WRN("influx line truncated for type %s",
+			data_logger_type_name(dp->type));
+		return -ENOMEM;
+	}
+	offset += n;
 
 	/* fields: name=val1.val2 (comma-separated, six decimal places) */
 	for (int i = 0; i < dp->channel_count && i < DP_MAX_CHANNELS; i++) {
@@ -120,21 +127,34 @@ static int influx_write_datapoint(struct data_logger *logger,
 		int32_t v2 = sv->val2;
 
 		if (v1 < 0 || v2 < 0) {
-			offset += snprintf(buf + offset, sizeof(buf) - offset,
-					   "%s%s=-%d.%06d",
-					   i > 0 ? "," : "",
-					   fname, -v1, -v2);
+			n = snprintf(buf + offset, sizeof(buf) - offset,
+				     "%s%s=-%d.%06d",
+				     i > 0 ? "," : "",
+				     fname, -v1, -v2);
 		} else {
-			offset += snprintf(buf + offset, sizeof(buf) - offset,
-					   "%s%s=%d.%06d",
-					   i > 0 ? "," : "",
-					   fname, v1, v2);
+			n = snprintf(buf + offset, sizeof(buf) - offset,
+				     "%s%s=%d.%06d",
+				     i > 0 ? "," : "",
+				     fname, v1, v2);
 		}
+
+		if (n < 0 || n >= (int)(sizeof(buf) - offset)) {
+			LOG_WRN("influx line truncated for type %s",
+				data_logger_type_name(dp->type));
+			return -ENOMEM;
+		}
+		offset += n;
 	}
 
 	/* timestamp in milliseconds */
-	offset += snprintf(buf + offset, sizeof(buf) - offset,
-			   " %" PRId64 "\n", dp->timestamp_ms);
+	n = snprintf(buf + offset, sizeof(buf) - offset,
+		     " %" PRId64 "\n", dp->timestamp_ms);
+	if (n < 0 || n >= (int)(sizeof(buf) - offset)) {
+		LOG_WRN("influx line truncated for type %s",
+			data_logger_type_name(dp->type));
+		return -ENOMEM;
+	}
+	offset += n;
 
 	if (offset >= (int)sizeof(buf)) {
 		LOG_WRN("influx line truncated for type %s",
