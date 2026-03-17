@@ -1,0 +1,46 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+config DATA_LOGGER
+	bool "Generic telemetry data logger"
+	depends on FILE_SYSTEM
+	help
+	  Enable the format-agnostic data logger for flight telemetry.
+	  Sensor readings are captured as datapoints and serialised through
+	  a pluggable formatter backend (CSV, InfluxDB line protocol, ...).
+
+if DATA_LOGGER
+
+module = DATA_LOGGER
+module-str = data_logger
+source "subsys/logging/Kconfig.template.log_config"
+
+choice DATA_LOGGER_TYPE
+	bool "Type of the data logger"
+	default DATA_LOGGER_CSV
+
+config DATA_LOGGER_CSV
+	bool "CSV formatter"
+	help
+	  Include the CSV formatter backend.  Produces a UTF-8 file with one
+	  header row followed by one row per datapoint.
+
+config DATA_LOGGER_INFLUX
+	bool "InfluxDB Line Protocol formatter"
+	help
+	  Include the InfluxDB Line Protocol formatter backend.  Produces one
+	  line per datapoint; no header row.
+
+endchoice
+
+if DATA_LOGGER_INFLUX
+
+config DATA_LOGGER_INFLUX_MEASUREMENT
+	string "InfluxDB measurement name"
+	default "telemetry"
+	help
+	  The measurement name embedded in every InfluxDB line protocol record.
+
+endif # DATA_LOGGER_INFLUX
+
+endif # DATA_LOGGER
