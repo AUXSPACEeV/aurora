@@ -1,0 +1,122 @@
+/*
+ * Copyright (c) 2025 Andrew Featherstone
+ * Copyright (c) 2026 Auxspace e.V.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+
+#include <raspberrypi/rpi_pico/rp2350a.dtsi>
+#include <riscv/raspberrypi/hazard3.dtsi>
+#include "sensor_board_v2_rp2350a-pinctrl.dtsi"
+#include <zephyr/dt-bindings/i2c/i2c.h>
+#include <freq.h>
+
+/ {
+	model = "Auxspace e.V. Sensor Board V2";
+	compatible = "auxspaceev,sensor-board-v2";
+
+	chosen {
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,flash-controller = &qmi;
+		zephyr,console = &cdc_acm_uart;
+		zephyr,shell-uart = &cdc_acm_uart;
+		zephyr,code-partition = &code_partition;
+	};
+
+	aliases {
+		watchdog0 = &wdt0;
+	};
+};
+
+&flash0 {
+	reg = <0x10000000 DT_SIZE_M(4)>;
+
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		code_partition: partition@0 {
+			label = "code-partition";
+			reg = <0x00000000 DT_SIZE_M(4)>;
+			read-only;
+		};
+	};
+};
+
+zephyr_udc0: &usbd {
+	status = "okay";
+
+	cdc_acm_uart: cdc_acm_uart {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+&uart0 {
+	current-speed = <115200>;
+	status = "okay";
+	pinctrl-0 = <&uart0_default>;
+	pinctrl-names = "default";
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+&spi0 {
+	status = "okay";
+	clock-frequency = <DT_FREQ_M(25)>;
+	cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi0_default>;
+	pinctrl-names = "default";
+
+	sdhc0: sdhc@0 {
+		compatible = "zephyr,sdhc-spi-slot";
+		reg = <0>;
+		status = "okay";
+		mmc0: mmc {
+			compatible = "zephyr,sdmmc-disk";
+			disk-name = "MMC";
+			status = "okay";
+		};
+		spi-max-frequency = <25000000>;
+	};
+};
+
+&spi1 {
+	status = "okay";
+	clock-frequency = <DT_FREQ_M(8)>;
+	cs-gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi1_default>;
+	pinctrl-names = "default";
+};
+
+&i2c0 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&i2c0_default>;
+	pinctrl-names = "default";
+
+	lsm6dso32_0: lsm6dso32@6b {
+		compatible = "st,lsm6dso32";
+		reg = <0x6b>;
+		status = "okay";
+	};
+
+	ms5607_0: ms5607@77 {
+		compatible = "meas,ms5607";
+		reg = <0x77>;
+		status = "okay";
+	};
+};
+
+&timer0 {
+	status = "okay";
+};
+
+&wdt0 {
+	status = "okay";
+};

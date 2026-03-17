@@ -1,0 +1,9 @@
+# Copyright (c) 2021 Yonatan Schachter
+# Copyright (c) 2024 Andrew Featherstone
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD_SENSOR_BOARD_V2
+	select SOC_RP2040 if BOARD_SENSOR_BOARD_V2_RP2040
+	select RP2_FLASH_W25Q080 if BOARD_SENSOR_BOARD_V2_RP2040
+	select SOC_RP2350A_HAZARD3 if BOARD_SENSOR_BOARD_V2_RP2350A_HAZARD3

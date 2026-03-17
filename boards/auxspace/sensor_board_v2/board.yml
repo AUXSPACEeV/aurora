@@ -1,0 +1,7 @@
+board:
+  name: sensor_board_v2
+  full_name: Auxspace Sensor Board V2
+  vendor: auxspaceev
+  socs:
+    - name: rp2040
+    - name: rp2350a
