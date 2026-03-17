@@ -11,6 +11,10 @@ menu "Apogee Detection"
 rsource "apogee/Kconfig"
 endmenu
 
+menu "Data Storing"
+rsource "data/Kconfig"
+endmenu
+
 menu "State Machine"
 rsource "state/Kconfig"
 endmenu

@@ -1,0 +1,22 @@
+common:
+  modules:
+    - fatfs
+
+tests:
+  aurora.lib.data.csv:
+    integration_platforms:
+      - qemu_x86
+    platform_allow:
+      - qemu_x86
+    tags: test_data_logger
+    extra_configs:
+      - CONFIG_DATA_LOGGER_CSV=y
+
+  aurora.lib.data.influx:
+    integration_platforms:
+      - qemu_x86
+    platform_allow:
+      - qemu_x86
+    tags: test_data_logger
+    extra_configs:
+      - CONFIG_DATA_LOGGER_INFLUX=y
