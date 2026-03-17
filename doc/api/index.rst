@@ -7,6 +7,7 @@ The API reference is generated from in-source Doxygen comments using
 .. toctree::
    :maxdepth: 2
 
+   data
    drivers
    sensors
    state
