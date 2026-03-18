@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'AURORA'
-copyright = '2025, Auxspace e.V.'
+copyright = '2025-2026, Auxspace e.V.'
 author = 'Auxspace e.V.'
 release = '1.1.0'
 

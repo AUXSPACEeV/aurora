@@ -5,7 +5,7 @@
  * Provides polling and trigger-based interfaces for acceleration and
  * gyroscope data, plus initialization and sampling frequency configuration.
  *
- * Copyright (c) 2025, Auxspace e.V.
+ * Copyright (c) 2025-2026, Auxspace e.V.
  *
  * SPDX-License-Identifier: Apache-2.0
  */

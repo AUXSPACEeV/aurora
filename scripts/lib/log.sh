@@ -5,7 +5,7 @@
 # Just a simple lib for logging
 #
 # Author: Maximilian Stephan @ Auxspace e.V.
-# Copyright (c) 2025 Auxspace e.V.
+# Copyright (c) 2025-2026 Auxspace e.V.
 #
 
 declare -x -i LOG_LEVEL_ERR=0

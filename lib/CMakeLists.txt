@@ -1,4 +1,4 @@
-# Copyright (c) 2025 Auxspace e.V.
+# Copyright (c) 2025-2026 Auxspace e.V.
 # SPDX-License-Identifier: Apache-2.0
 
 # apogee detection lib

@@ -5,7 +5,7 @@
 # note: make sure logging is included before sourcing this script
 #
 # Author: Maximilian Stephan @ Auxspace e.V.
-# Copyright (c) 2025 Auxspace e.V.
+# Copyright (c) 2025-2026 Auxspace e.V.
 #
 
 if [ -z "$THISDIR" ]; then

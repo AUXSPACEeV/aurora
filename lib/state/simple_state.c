@@ -8,7 +8,7 @@
  * State transitions are driven by sensor thresholds and timers.
  * Optionally integrates with the Kalman filter for apogee detection.
  *
- * Copyright (c) 2025, Auxspace e.V.
+ * Copyright (c) 2025-2026, Auxspace e.V.
  *
  * SPDX-License-Identifier: Apache-2.0
  */

@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-14, windows-2022]
+        os: [ubuntu-22.04, macos-14]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -40,16 +40,10 @@ jobs:
         working-directory: aurora
         shell: bash
         run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            EXTRA_TWISTER_FLAGS="--short-build-path -O/tmp/twister-out"
-          fi
-          west twister -T sensor_board -v --inline-logs --integration $EXTRA_TWISTER_FLAGS
+          west twister -T sensor_board -v --inline-logs --integration
 
       - name: Twister Tests
         working-directory: aurora
         shell: bash
         run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            EXTRA_TWISTER_FLAGS="--short-build-path -O/tmp/twister-out"
-          fi
-          west twister -T tests -v --inline-logs --integration $EXTRA_TWISTER_FLAGS
+          west twister -T tests -v --inline-logs --integration

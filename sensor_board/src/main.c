@@ -5,7 +5,7 @@
  * Defines three Zephyr threads (IMU, barometer, state machine) that run
  * concurrently to collect sensor data and drive the flight state machine.
  *
- * Copyright (c) 2025 Auxspace e.V.
+ * Copyright (c) 2025-2026 Auxspace e.V.
  * SPDX-License-Identifier: Apache-2.0
  */
 
