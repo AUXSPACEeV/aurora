@@ -32,6 +32,7 @@ struct filter {
     float covariance[2][2]; /**< State covariance matrix P. */
     float noise_p[2][2];    /**< Process noise covariance Q. */
     float noise_m;          /**< Measurement noise variance R. */
+    float prev_velocity;    /**< Previous velocity for apogee detection. */
 };
 
 /**

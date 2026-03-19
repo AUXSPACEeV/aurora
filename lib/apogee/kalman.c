@@ -49,6 +49,7 @@ int filter_init(struct filter *filter)
     filter->noise_p[1][1] = q_vel;
 
     filter->noise_m = r_meas;
+    filter->prev_velocity = 0.0f;
 
     return 0;
 }
@@ -59,22 +60,22 @@ int filter_predict(struct filter *filter, int64_t dt)
     if (filter == NULL || dt <= 0)
         return -EINVAL;
 
-    float dt_ms = dt / 1000000;
+    const float dt_s = (float)dt / 1e9f;
 
     /* Clamp dt to prevent filter explosion */
-    if (dt_ms > 1)
-        dt_ms = 1;
+    if (dt_s > 1.0f)
+        return -EINVAL;
 
     /* State prediction */
     const float altitude = filter->state[0];
     const float velocity = filter->state[1];
 
-    filter->state[0] = altitude + velocity * dt_ms;
+    filter->state[0] = altitude + velocity * dt_s;
     filter->state[1] = velocity;
 
     /* Scale process noise with dt */
-    const float Q00 = filter->noise_p[0][0] * dt_ms;
-    const float Q11 = filter->noise_p[1][1] * dt_ms;
+    const float Q00 = filter->noise_p[0][0] * dt_s;
+    const float Q11 = filter->noise_p[1][1] * dt_s;
 
     /* Covariance prediction */
     const float P00 = filter->covariance[0][0];
@@ -82,9 +83,9 @@ int filter_predict(struct filter *filter, int64_t dt)
     const float P10 = filter->covariance[1][0];
     const float P11 = filter->covariance[1][1];
 
-    filter->covariance[0][0] = P00 + dt_ms*(P10 + P01) + dt_ms*dt_ms*P11 + Q00;
-    filter->covariance[0][1] = P01 + dt_ms*P11;
-    filter->covariance[1][0] = P10 + dt_ms*P11;
+    filter->covariance[0][0] = P00 + dt_s*(P10 + P01) + dt_s*dt_s*P11 + Q00;
+    filter->covariance[0][1] = P01 + dt_s*P11;
+    filter->covariance[1][0] = P10 + dt_s*P11;
     filter->covariance[1][1] = P11 + Q11;
 
     return 0;
@@ -100,21 +101,24 @@ int filter_update(struct filter *filter, float z)
     float y = z - filter->state[0];
 
     /* Innovation covariance */
-    float S = filter->covariance[0][0] + filter->noise_m;
+    const float S = filter->covariance[0][0] + filter->noise_m;
+
+    if (fabsf(S) < 1e-12f)
+        return -EDOM;
 
     /* Kalman gain */
-    float K0 = filter->covariance[0][0] / S;
-    float K1 = filter->covariance[1][0] / S;
+    const float K0 = filter->covariance[0][0] / S;
+    const float K1 = filter->covariance[1][0] / S;
 
     /* State update */
     filter->state[0] += K0 * y;
     filter->state[1] += K1 * y;
 
     /* Covariance update */
-    float P00 = filter->covariance[0][0];
-    float P01 = filter->covariance[0][1];
-    float P10 = filter->covariance[1][0];
-    float P11 = filter->covariance[1][1];
+    const float P00 = filter->covariance[0][0];
+    const float P01 = filter->covariance[0][1];
+    const float P10 = filter->covariance[1][0];
+    const float P11 = filter->covariance[1][1];
 
     filter->covariance[0][0] = P00 - K0 * P00;
     filter->covariance[0][1] = P01 - K0 * P01;
@@ -130,15 +134,11 @@ int filter_detect_apogee(struct filter *filter)
     if (filter == NULL)
         return -EINVAL;
 
-    static float prev_velocity = 0.0f;
-    float current_velocity = filter->state[1];
+    const float current_velocity = filter->state[1];
+    const int apogee = filter->prev_velocity > 0.0f &&
+                       current_velocity <= 0.0f;
 
-    if (prev_velocity > 0.0f && current_velocity <= 0.0f)
-    {
-        prev_velocity = current_velocity;
-        return 1;
-    }
+    filter->prev_velocity = current_velocity;
 
-    prev_velocity = current_velocity;
-    return 0;
+    return apogee;
 }
