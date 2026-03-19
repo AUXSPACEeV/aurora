@@ -1,0 +1,74 @@
+# Getting Started
+
+## Prerequisites
+
+AURORA is built inside a `west` workspace.  The directory layout is:
+
+```
+zephyr_workspace/
+├── aurora/          ← this repository
+├── modules/
+├── .west/
+└── zephyr/
+```
+
+All `west` commands must be run from the `aurora/` directory.
+
+## Building
+
+Build the primary `sensor_board` application for one of the supported boards:
+
+```shell
+# RP2040 (primary target)
+west build -b sensor_board_v2/rp2040 sensor_board
+
+# RP2350 RISC-V
+west build -b sensor_board_v2/rp2350a/hazard3 sensor_board
+
+# ESP32-S3 Micrometer board
+west build -b esp32s3_micrometer/esp32s3/procpu sensor_board/
+```
+
+Build output is located at `build/zephyr/zephyr.uf2` and
+`build/zephyr/zephyr.elf`.
+
+### Interactive Kconfig
+
+```shell
+./run.sh -b sensor_board_v2/rp2040 menuconfig
+```
+
+### Docker Container
+
+```shell
+# Open a shell inside the dev container
+./run.sh -b sensor_board_v2/rp2040 shell
+
+# Clean build artefacts
+./run.sh clean
+```
+
+## Flashing
+
+### Via west
+
+```shell
+west flash
+```
+
+### Via OpenOCD (CMSIS-DAP)
+
+```shell
+sudo openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg \
+  -c "adapter speed 5000" \
+  -c "program build/zephyr/zephyr.elf verify reset exit"
+```
+
+### Via USB (RPi Pico BOOTSEL mode)
+
+Hold BOOTSEL while connecting the board, then copy the UF2 file:
+
+```shell
+cp build/zephyr/zephyr.uf2 /media/${USER}/RPI-RP2
+```
+
