@@ -17,17 +17,29 @@ release = '1.1.0'
 extensions = [
     'sphinx.ext.intersphinx',
     'breathe',
+    'myst_parser',
+]
+
+source_suffix = {
+    '.rst': 'restructuredtext',
+    '.md': 'markdown',
+}
+
+myst_enable_extensions = [
+    'colon_fence',
+    'fieldlist',
 ]
 
 templates_path = ['_templates']
-exclude_patterns = ['_build_sphinx', '_build_doxygen', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['_build_sphinx', '_build_doxygen', 'Thumbs.db',
+                    '.DS_Store', 'README.md', '_doxygen/main.md']
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'furo'
 html_logo = 'img/logo.png'
-html_title = 'Auxspace e.V. AURORA'
+html_title = 'Auxspace e.V. <b>AURORA</b>'
 
 html_theme_options = {
     # White and blue colour scheme
