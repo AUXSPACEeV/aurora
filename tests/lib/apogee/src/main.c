@@ -85,6 +85,10 @@ ZTEST(kalman_filter_tests, test_init_values)
 	/* Measurement noise from Kconfig */
 	zassert_near(f.noise_m, EXPECTED_R, FLOAT_TOL,
 		     "R should match Kconfig");
+
+	/* Previous velocity for apogee detection */
+	zassert_near(f.prev_velocity, 0.0f, FLOAT_TOL,
+		     "prev_velocity should be initialized to 0");
 }
 
 /* ----------------------------------------------------------------
@@ -121,30 +125,29 @@ ZTEST(kalman_filter_tests, test_predict_negative_dt)
 /**
  * @brief Test filter_predict propagates state correctly.
  *
- * With altitude=100 and velocity=50, after dt the predicted
- * altitude should be altitude + velocity * dt_s.
+ * With altitude=100 and velocity=50, after dt=100ms (0.1s) the predicted
+ * altitude should be altitude + velocity * dt_s = 100 + 50 * 0.1 = 105.
  */
 ZTEST(kalman_filter_tests, test_predict_state_propagation)
 {
 	filt.state[0] = 100.0f;  /* altitude */
 	filt.state[1] = 50.0f;   /* velocity */
 
-	/* dt = 100ms = 100,000,000 ns. dt_ms = 100,000,000 / 1,000,000 = 100.
-	 * Clamped to 1.0. So predicted altitude = 100 + 50 * 1.0 = 150. */
+	/* dt = 100ms = 100,000,000 ns -> dt_s = 0.1 */
 	int ret = filter_predict(&filt, 100 * NS_PER_MS);
 	zassert_equal(ret, 0, "filter_predict should return 0");
 
-	zassert_near(filt.state[0], 150.0f, FLOAT_TOL,
-		     "Altitude should be predicted forward (clamped dt=1)");
+	zassert_near(filt.state[0], 105.0f, FLOAT_TOL,
+		     "Altitude should be predicted forward by velocity * dt_s");
 	zassert_near(filt.state[1], 50.0f, FLOAT_TOL,
 		     "Velocity should remain unchanged in constant-velocity model");
 }
 
 /**
- * @brief Test filter_predict with small dt (below clamp threshold).
+ * @brief Test filter_predict with small dt.
  *
- * dt = 500,000 ns = 0.5 ms (integer division: 500000/1000000 = 0).
- * dt_ms = 0 which is not > 1, so no clamping. state[0] += vel * 0 = no change.
+ * dt = 500,000 ns = 0.5 ms = 0.0005 s.
+ * predicted altitude = 100 + 50 * 0.0005 = 100.025.
  */
 ZTEST(kalman_filter_tests, test_predict_small_dt)
 {
@@ -154,9 +157,18 @@ ZTEST(kalman_filter_tests, test_predict_small_dt)
 	int ret = filter_predict(&filt, 500000LL);  /* 0.5 ms */
 	zassert_equal(ret, 0, "filter_predict should return 0");
 
-	/* Integer division: 500000 / 1000000 = 0, so dt_ms=0, no state change */
-	zassert_near(filt.state[0], 100.0f, FLOAT_TOL,
-		     "Altitude should be unchanged with sub-ms dt");
+	zassert_near(filt.state[0], 100.025f, FLOAT_TOL,
+		     "Altitude should advance by velocity * 0.0005s");
+}
+
+/**
+ * @brief Test filter_predict rejects dt exceeding the 1-second clamp.
+ */
+ZTEST(kalman_filter_tests, test_predict_excessive_dt)
+{
+	int ret = filter_predict(&filt, 2000000000LL);  /* 2 seconds */
+	zassert_equal(ret, -EINVAL,
+		      "filter_predict should reject dt > 1s");
 }
 
 /**
@@ -351,9 +363,10 @@ ZTEST(kalman_filter_tests, test_detect_apogee_no_repeat)
 /**
  * @brief Test a simulated ascent and descent trajectory.
  *
- * Feeds rising altitude measurements, then falling ones.
- * The filter velocity estimate should transition from positive
- * to negative, allowing apogee detection.
+ * Feeds rising altitude measurements, then falling ones at 100 ms
+ * intervals (realistic barometric sample rate). Implied velocity
+ * is 10 m / 0.1 s = 100 m/s. The filter velocity estimate should
+ * transition from positive to negative, triggering apogee detection.
  */
 ZTEST(kalman_filter_tests, test_flight_trajectory)
 {
@@ -362,7 +375,7 @@ ZTEST(kalman_filter_tests, test_flight_trajectory)
 	/* Ascent: altitude increasing */
 	for (int i = 0; i < 30; i++) {
 		float alt = 10.0f * i;  /* 0, 10, 20, ..., 290 */
-		filter_predict(&filt, 10 * NS_PER_MS);
+		filter_predict(&filt, 100 * NS_PER_MS);
 		filter_update(&filt, alt);
 		if (filter_detect_apogee(&filt) == 1) {
 			apogee_detected = 1;
@@ -373,7 +386,7 @@ ZTEST(kalman_filter_tests, test_flight_trajectory)
 	/* Descent: altitude decreasing from peak */
 	for (int i = 0; i < 30; i++) {
 		float alt = 290.0f - 10.0f * i;  /* 290, 280, ..., 0 */
-		filter_predict(&filt, 10 * NS_PER_MS);
+		filter_predict(&filt, 100 * NS_PER_MS);
 		filter_update(&filt, alt);
 		if (filter_detect_apogee(&filt) == 1) {
 			apogee_detected = 1;
