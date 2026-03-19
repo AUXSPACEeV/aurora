@@ -58,6 +58,7 @@ LOG_MODULE_REGISTER(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 static float orientation = 0.0f;  /**< Latest orientation angle from IMU (degrees). */
 static float acceleration = 0.0f; /**< Latest acceleration magnitude from IMU (m/s^2). */
 static float velocity = 0.0f;     /**< Latest vertical velocity estimate (m/s). */
+static float altitude = 0.0f;     /**< Latest barometric altitude AGL (m). */
 
 static bool baro_active = false; /**< True once the barometer thread has initialized. */
 static bool imu_active = false;  /**< True once the IMU thread has initialized. */
@@ -116,6 +117,7 @@ void baro_task(void *, void *, void *)
 {
 	const struct device *baro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_baro));
 	const int baro_hz = CONFIG_BARO_FREQUENCY_VALUE;
+	bool ref_set = false;
 
 	if (baro_init(baro0)) {
 		LOG_ERR("Baro not ready!");
@@ -132,8 +134,18 @@ void baro_task(void *, void *, void *)
 			continue;
 		}
 
-		LOG_INF("[baro0] Temperature: %d.%06d | Pressure: %d.%06d\n",
-				temp.val1, temp.val2, press.val1, press.val2);
+		float press_kpa = (float)press.val1 + (float)press.val2 / 1e6f;
+
+		if (!ref_set) {
+			baro_set_reference(press_kpa);
+			ref_set = true;
+		}
+
+		altitude = baro_pressure_to_altitude(press_kpa);
+
+		LOG_INF("[baro0] Temp: %d.%06d | Press: %d.%06d kPa | Alt: %d.%02d m",
+				temp.val1, temp.val2, press.val1, press.val2,
+				(int)altitude, abs((int)(altitude * 100) % 100));
 
 		k_sleep(K_MSEC(1000 / baro_hz));
 	}
@@ -189,6 +201,7 @@ void state_machine_task(void *, void *, void *)
 			.orientation = orientation,
 			.acceleration = acceleration,
 			.velocity = velocity,
+			.altitude = altitude,
 		};
 
 		sm_update(&inputs);
