@@ -1,6 +1,7 @@
 /**
  * @file main.c
- * @brief Unit tests for the Kalman filter apogee detection.
+ * @brief Unit tests for the Kalman filter apogee detection with
+ *        hypsometric altitude conversion.
  *
  * Copyright (c) 2026 Auxspace e.V.
  *
@@ -32,12 +33,66 @@
 /** @brief Nanoseconds per millisecond for dt conversion. */
 #define NS_PER_MS 1000000LL
 
+/* ----------------------------------------------------------------
+ * ISA troposphere constants (mirror aurora/lib/sensor/baro.c)
+ * ---------------------------------------------------------------- */
+
+/** @brief ISA sea-level temperature (K). */
+#define ISA_T0 288.15f
+
+/** @brief ISA temperature lapse rate (K/m). */
+#define ISA_L  0.0065f
+
+/** @brief g*M / (R*L) exponent for the barometric formula. */
+#define ISA_GMR_OVER_L 5.25588f
+
+/** @brief R*L / (g*M) exponent for the hypsometric formula. */
+#define ISA_RL_OVER_GM 0.190263f
+
+/** @brief Standard sea-level pressure (kPa). */
+#define ISA_P0_KPA 101.325f
+
+/**
+ * @brief Convert altitude to pressure using the barometric formula.
+ *
+ * P = P_ref * (1 - L*h / T0) ^ (g*M / (R*L))
+ *
+ * @param alt_m    Altitude AGL in meters.
+ * @param ref_kpa  Reference (ground-level) pressure in kPa.
+ * @return Pressure in kPa.
+ */
+static float altitude_to_pressure(float alt_m, float ref_kpa)
+{
+	return ref_kpa * powf(1.0f - ISA_L * alt_m / ISA_T0, ISA_GMR_OVER_L);
+}
+
+/**
+ * @brief Convert pressure to altitude using the hypsometric formula.
+ *
+ * h = (T0 / L) * (1 - (P / P_ref) ^ (R*L / (g*M)))
+ *
+ * This mirrors baro_pressure_to_altitude() from baro.c.
+ *
+ * @param press_kpa  Measured pressure in kPa.
+ * @param ref_kpa    Reference (ground-level) pressure in kPa.
+ * @return Altitude AGL in meters.
+ */
+static float pressure_to_altitude(float press_kpa, float ref_kpa)
+{
+	return (ISA_T0 / ISA_L) *
+	       (1.0f - powf(press_kpa / ref_kpa, ISA_RL_OVER_GM));
+}
+
 static struct filter filt;
 
 static void kalman_filter_before(void *fixture)
 {
 	filter_init(&filt);
 }
+
+/* ================================================================
+ * Suite 1: Filter core unit tests
+ * ================================================================ */
 
 ZTEST_SUITE(kalman_filter_tests, NULL, NULL, kalman_filter_before, NULL, NULL);
 
@@ -236,24 +291,6 @@ ZTEST(kalman_filter_tests, test_update_reduces_covariance)
 		     "P[0][0] should decrease after measurement update");
 }
 
-/**
- * @brief Test filter converges to repeated measurements.
- *
- * Feed the same measurement repeatedly; the estimate should converge.
- */
-ZTEST(kalman_filter_tests, test_update_convergence)
-{
-	const float measurement = 500.0f;
-
-	for (int i = 0; i < 50; i++) {
-		filter_predict(&filt, 10 * NS_PER_MS);
-		filter_update(&filt, measurement);
-	}
-
-	zassert_near(filt.state[0], measurement, 5.0f,
-		     "Altitude should converge to repeated measurement");
-}
-
 /* ----------------------------------------------------------------
  * filter_detect_apogee tests
  * ---------------------------------------------------------------- */
@@ -356,38 +393,138 @@ ZTEST(kalman_filter_tests, test_detect_apogee_no_repeat)
 	zassert_equal(ret, 0, "No repeat apogee detection");
 }
 
+/* ================================================================
+ * Suite 2: Hypsometric altitude pipeline tests
+ *
+ * These tests verify that the Kalman filter works correctly when
+ * fed altitude measurements derived from pressure via the ISA
+ * hypsometric formula, matching the real sensor pipeline.
+ * ================================================================ */
+
+ZTEST_SUITE(hypsometric_pipeline_tests, NULL, NULL, kalman_filter_before,
+	    NULL, NULL);
+
 /* ----------------------------------------------------------------
- * Integration tests: predict + update cycle
+ * Hypsometric conversion sanity checks
  * ---------------------------------------------------------------- */
 
 /**
- * @brief Test a simulated ascent and descent trajectory.
+ * @brief Verify pressure-to-altitude round-trip at ground level.
  *
- * Feeds rising altitude measurements, then falling ones at 100 ms
- * intervals (realistic barometric sample rate). Implied velocity
- * is 10 m / 0.1 s = 100 m/s. The filter velocity estimate should
- * transition from positive to negative, triggering apogee detection.
+ * At reference pressure the hypsometric formula must return 0 m.
  */
-ZTEST(kalman_filter_tests, test_flight_trajectory)
+ZTEST(hypsometric_pipeline_tests, test_hypsometric_ground_level)
 {
+	float alt = pressure_to_altitude(ISA_P0_KPA, ISA_P0_KPA);
+
+	zassert_near(alt, 0.0f, FLOAT_TOL,
+		     "Altitude at reference pressure should be 0 m");
+}
+
+/**
+ * @brief Verify altitude-to-pressure-to-altitude round-trip.
+ *
+ * Convert 500 m -> pressure -> altitude and check we get 500 m back.
+ */
+ZTEST(hypsometric_pipeline_tests, test_hypsometric_round_trip)
+{
+	const float target_alt = 500.0f;
+	float press = altitude_to_pressure(target_alt, ISA_P0_KPA);
+	float recovered_alt = pressure_to_altitude(press, ISA_P0_KPA);
+
+	zassert_near(recovered_alt, target_alt, 0.1f,
+		     "Round-trip altitude should match within 0.1 m");
+}
+
+/**
+ * @brief Verify hypsometric formula at a known ISA altitude.
+ *
+ * At 1000 m ISA, pressure is approximately 89.875 kPa.
+ */
+ZTEST(hypsometric_pipeline_tests, test_hypsometric_known_altitude)
+{
+	const float alt_1000m = 1000.0f;
+	float press = altitude_to_pressure(alt_1000m, ISA_P0_KPA);
+
+	/* ISA standard: ~89.875 kPa at 1000 m */
+	zassert_near(press, 89.875f, 0.1f,
+		     "Pressure at 1000 m should be ~89.875 kPa");
+
+	float alt = pressure_to_altitude(press, ISA_P0_KPA);
+
+	zassert_near(alt, alt_1000m, 0.1f,
+		     "Recovered altitude should be ~1000 m");
+}
+
+/* ----------------------------------------------------------------
+ * Filter convergence with hypsometric input
+ * ---------------------------------------------------------------- */
+
+/**
+ * @brief Test filter converges when fed repeated hypsometric altitude.
+ *
+ * Converts a constant pressure (corresponding to ~500 m) to altitude
+ * via the hypsometric formula, then feeds it to the filter repeatedly.
+ * The estimate should converge to that altitude.
+ */
+ZTEST(hypsometric_pipeline_tests, test_convergence_from_pressure)
+{
+	const float target_alt = 500.0f;
+	const float press = altitude_to_pressure(target_alt, ISA_P0_KPA);
+	const float hyp_alt = pressure_to_altitude(press, ISA_P0_KPA);
+
+	for (int i = 0; i < 50; i++) {
+		filter_predict(&filt, 10 * NS_PER_MS);
+		filter_update(&filt, hyp_alt);
+	}
+
+	zassert_near(filt.state[0], target_alt, 5.0f,
+		     "Filter should converge to hypsometric altitude");
+}
+
+/* ----------------------------------------------------------------
+ * Full flight trajectory with hypsometric pipeline
+ * ---------------------------------------------------------------- */
+
+/**
+ * @brief Simulated flight trajectory using pressure-derived altitudes.
+ *
+ * Models a rocket flight profile:
+ *   - Ground reference at standard sea-level pressure (101.325 kPa)
+ *   - Ascent:  altitude 0 -> 300 m (pressure decreasing)
+ *   - Descent: altitude 300 -> 0 m (pressure increasing)
+ *
+ * Pressures are converted to altitude via the hypsometric formula
+ * before being fed to the Kalman filter, matching the real pipeline.
+ * The filter should detect apogee during the descent phase.
+ */
+ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_hypsometric)
+{
+	const float ref_kpa = ISA_P0_KPA;
 	int apogee_detected = 0;
 
-	/* Ascent: altitude increasing */
+	/* Ascent: altitude 0 -> 290 m in 10 m steps */
 	for (int i = 0; i < 30; i++) {
-		float alt = 10.0f * i;  /* 0, 10, 20, ..., 290 */
+		float true_alt = 10.0f * i;
+		float press = altitude_to_pressure(true_alt, ref_kpa);
+		float meas_alt = pressure_to_altitude(press, ref_kpa);
+
 		filter_predict(&filt, 100 * NS_PER_MS);
-		filter_update(&filt, alt);
+		filter_update(&filt, meas_alt);
 		if (filter_detect_apogee(&filt) == 1) {
 			apogee_detected = 1;
 		}
 	}
 	zassert_false(apogee_detected, "No apogee during ascent");
 
-	/* Descent: altitude decreasing from peak */
+	/* Descent: altitude 290 -> 0 m in 10 m steps */
 	for (int i = 0; i < 30; i++) {
-		float alt = 290.0f - 10.0f * i;  /* 290, 280, ..., 0 */
+		float true_alt = 290.0f - 10.0f * i;
+		float press = altitude_to_pressure(true_alt, ref_kpa);
+		float meas_alt = pressure_to_altitude(press, ref_kpa);
+
 		filter_predict(&filt, 100 * NS_PER_MS);
-		filter_update(&filt, alt);
+		filter_update(&filt, meas_alt);
 		if (filter_detect_apogee(&filt) == 1) {
 			apogee_detected = 1;
 		}
@@ -397,20 +534,153 @@ ZTEST(kalman_filter_tests, test_flight_trajectory)
 }
 
 /**
- * @brief Test predict-update cycle does not produce NaN or Inf.
+ * @brief Flight trajectory with non-standard ground pressure.
  *
- * Run many cycles and verify state remains finite.
+ * Verifies the pipeline works correctly when the launch site is not
+ * at sea level (e.g., 95 kPa reference, ~540 m elevation).
  */
-ZTEST(kalman_filter_tests, test_numerical_stability)
+ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_high_site)
 {
+	const float ref_kpa = 95.0f;
+	int apogee_detected = 0;
+
+	/* Ascent: 0 -> 290 m AGL */
+	for (int i = 0; i < 30; i++) {
+		float true_alt = 10.0f * i;
+		float press = altitude_to_pressure(true_alt, ref_kpa);
+		float meas_alt = pressure_to_altitude(press, ref_kpa);
+
+		filter_predict(&filt, 100 * NS_PER_MS);
+		filter_update(&filt, meas_alt);
+		if (filter_detect_apogee(&filt) == 1) {
+			apogee_detected = 1;
+		}
+	}
+	zassert_false(apogee_detected, "No apogee during ascent");
+
+	/* Descent: 290 -> 0 m AGL */
+	for (int i = 0; i < 30; i++) {
+		float true_alt = 290.0f - 10.0f * i;
+		float press = altitude_to_pressure(true_alt, ref_kpa);
+		float meas_alt = pressure_to_altitude(press, ref_kpa);
+
+		filter_predict(&filt, 100 * NS_PER_MS);
+		filter_update(&filt, meas_alt);
+		if (filter_detect_apogee(&filt) == 1) {
+			apogee_detected = 1;
+		}
+	}
+	zassert_true(apogee_detected,
+		     "Apogee should be detected at high-elevation site");
+}
+
+/**
+ * @brief Flight trajectory with simulated barometric noise.
+ *
+ * Adds deterministic pseudo-noise to pressure readings to simulate
+ * MS5607 sensor noise (~0.05 kPa RMS at 4096 OSR).  The Kalman
+ * filter should still detect apogee despite noisy measurements.
+ */
+ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_noisy)
+{
+	const float ref_kpa = ISA_P0_KPA;
+	const float noise_amp_kpa = 0.05f;
+	int apogee_detected = 0;
+
+	/* Ascent: 0 -> 490 m in 10 m steps */
+	for (int i = 0; i < 50; i++) {
+		float true_alt = 10.0f * i;
+		float press = altitude_to_pressure(true_alt, ref_kpa);
+		/* Deterministic pseudo-noise via sin */
+		float noisy_press = press +
+			noise_amp_kpa * sinf((float)i * 1.7f);
+		float meas_alt = pressure_to_altitude(noisy_press, ref_kpa);
+
+		filter_predict(&filt, 100 * NS_PER_MS);
+		filter_update(&filt, meas_alt);
+		if (filter_detect_apogee(&filt) == 1) {
+			apogee_detected = 1;
+		}
+	}
+	zassert_false(apogee_detected,
+		      "No apogee during noisy ascent");
+
+	/* Descent: 490 -> 0 m in 10 m steps */
+	for (int i = 0; i < 50; i++) {
+		float true_alt = 490.0f - 10.0f * i;
+		float press = altitude_to_pressure(true_alt, ref_kpa);
+		float noisy_press = press +
+			noise_amp_kpa * sinf((float)(i + 50) * 1.7f);
+		float meas_alt = pressure_to_altitude(noisy_press, ref_kpa);
+
+		filter_predict(&filt, 100 * NS_PER_MS);
+		filter_update(&filt, meas_alt);
+		if (filter_detect_apogee(&filt) == 1) {
+			apogee_detected = 1;
+		}
+	}
+	zassert_true(apogee_detected,
+		     "Apogee should be detected despite noisy pressure");
+}
+
+/* ----------------------------------------------------------------
+ * Numerical stability with hypsometric input
+ * ---------------------------------------------------------------- */
+
+/**
+ * @brief Test predict-update cycle does not produce NaN or Inf
+ *        when fed pressure-derived altitude oscillations.
+ *
+ * Simulates pressure varying sinusoidally around a nominal altitude,
+ * converts to altitude via the hypsometric formula, and feeds to the
+ * filter for 200 cycles.
+ */
+ZTEST(hypsometric_pipeline_tests, test_numerical_stability_hypsometric)
+{
+	const float ref_kpa = ISA_P0_KPA;
+	const float nominal_alt = 100.0f;
+
 	for (int i = 0; i < 200; i++) {
-		float alt = 100.0f + 50.0f * sinf((float)i * 0.1f);
+		float alt_var = nominal_alt +
+			50.0f * sinf((float)i * 0.1f);
+		float press = altitude_to_pressure(alt_var, ref_kpa);
+		float meas_alt = pressure_to_altitude(press, ref_kpa);
+
 		filter_predict(&filt, 10 * NS_PER_MS);
-		filter_update(&filt, alt);
+		filter_update(&filt, meas_alt);
 	}
 
-	zassert_true(isfinite(filt.state[0]), "Altitude should remain finite");
-	zassert_true(isfinite(filt.state[1]), "Velocity should remain finite");
-	zassert_true(isfinite(filt.covariance[0][0]), "P[0][0] should remain finite");
-	zassert_true(isfinite(filt.covariance[1][1]), "P[1][1] should remain finite");
+	zassert_true(isfinite(filt.state[0]),
+		     "Altitude should remain finite");
+	zassert_true(isfinite(filt.state[1]),
+		     "Velocity should remain finite");
+	zassert_true(isfinite(filt.covariance[0][0]),
+		     "P[0][0] should remain finite");
+	zassert_true(isfinite(filt.covariance[1][1]),
+		     "P[1][1] should remain finite");
+}
+
+/**
+ * @brief Verify filter altitude estimate tracks hypsometric input.
+ *
+ * After feeding a steady 200 m altitude (from pressure) for many
+ * cycles, the filter estimate should be close to 200 m and velocity
+ * should be near zero.
+ */
+ZTEST(hypsometric_pipeline_tests, test_steady_state_tracking)
+{
+	const float ref_kpa = ISA_P0_KPA;
+	const float target_alt = 200.0f;
+	const float press = altitude_to_pressure(target_alt, ref_kpa);
+	const float meas_alt = pressure_to_altitude(press, ref_kpa);
+
+	for (int i = 0; i < 100; i++) {
+		filter_predict(&filt, 100 * NS_PER_MS);
+		filter_update(&filt, meas_alt);
+	}
+
+	zassert_near(filt.state[0], target_alt, 1.0f,
+		     "Filter altitude should track steady input");
+	zassert_near(filt.state[1], 0.0f, 1.0f,
+		     "Filter velocity should be near zero at steady state");
 }
