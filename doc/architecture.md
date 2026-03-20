@@ -14,6 +14,16 @@ sensor, flight state machine, and pyrotechnic ignition.
 | `baro_task` | `CONFIG_BARO` | Measures pressure/temperature, computes altitude. |
 | `state_machine_task` | `CONFIG_AURORA_STATE_MACHINE` | Runs at 10 Hz. Feeds sensor data into the state machine and fires pyro channels on state transitions. |
 
+## Sensor Data Path
+
+It's a tricky situation trying to fetch data from all sensors at the exact same
+time and passing them on to the state machine, the apogee filer and the data
+logger.
+Here is a rough overview of how AURORA's data is passed between threads to the
+state machine and the data logger:
+
+![sensors datapath](img/sensor_datapath.drawio.svg)
+
 ## State Machine
 
 AURORA features a dynamic selection of state machine types via Kconfig
