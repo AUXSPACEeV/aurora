@@ -22,3 +22,9 @@
         max-width: 52rem;
     }
 }
+
+/* Left-align tables instead of Furo's default centering */
+table.docutils {
+    margin-left: 0;
+    margin-right: auto;
+}
