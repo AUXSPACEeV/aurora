@@ -61,6 +61,56 @@ State transitions are also driven by sensor thresholds configured via Kconfig
 
 Other state machines may come soon, e.g. multi-stage with two boosting phases.
 
+## Apogee detection
+
+AURORA detects apogee using a scalar constant-velocity Kalman filter
+(guarded by `CONFIG_APOGEE_DETECTION` and `CONFIG_FILTER_KALMAN`).
+The filter tracks a two-element state vector — altitude and vertical
+velocity — and is fed barometric altitude measurements that the baro
+library converts from pressure via the ISA hypsometric formula.
+
+On every state-machine tick the filter runs a predict/update cycle:
+
+- The predict step propagates altitude forward using the current velocity
+estimate while growing the covariance by a process-noise term scaled
+with dt
+- The update step corrects the state with the latest barometric
+altitude reading through the standard Kalman gain.
+
+Apogee is declared the moment the estimated velocity crosses zero from
+positive to non-positive, which in turn triggers the BURNOUT → APOGEE state
+transition.
+Three tunable noise parameters (altitude process noise Q_alt, velocity
+process noise Q_vel, and measurement noise R) are exposed as
+milliscale Kconfig options so they can be adjusted without recompiling
+the filter source.
+
+A Python simulation tool
+([`tools/sim_flight_kalman.py`](https://github.com/AUXSPACEeV/aurora/blob/main/tools/sim_flight_kalman.py))
+reproduces the same algorithm with a realistic flight profile and MS5607
+sensor-noise model, allowing the filter to be tuned and validated offline before
+flight. On run, it produces a graph and saves it to a file called
+`flight_simulation.png`. Here is an example run:
+
+```bash
+Plot saved to flight_simulation.png
+Ground ref pressure: 101340 Pa (1013.4 hPa)
+True apogee:         500.0 m
+Filter apogee:       496.4 m (t = 12.56 s)
+```
+
+```{image} img/flight_simulation.png
+:class: only-light
+```
+
+```{image} img/flight_simulation_dark.png
+:alt: flight_simulation.png
+:class: only-dark
+```
+
+The filter and its hypsometric pipeline are covered by a ztest suite under
+([`aurora/tests/lib/apogee/`](https://github.com/AUXSPACEeV/aurora/tree/main/tests/lib/apogee)).
+
 ## Supported Boards
 
 | Board | MCU | Notes |
