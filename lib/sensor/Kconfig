@@ -29,6 +29,15 @@ config IMU_FREQ_50HZ
 config IMU_FREQ_100HZ
 	bool "100 Hz"
 
+config IMU_FREQ_105HZ
+	bool "105 Hz"
+
+config IMU_FREQ_110HZ
+	bool "110 Hz"
+
+config IMU_FREQ_120HZ
+	bool "120 Hz"
+
 config IMU_FREQ_200HZ
 	bool "200 Hz"
 
@@ -43,6 +52,9 @@ config IMU_FREQUENCY_VALUE
 	default 10  if IMU_FREQ_10HZ
 	default 50  if IMU_FREQ_50HZ
 	default 100 if IMU_FREQ_100HZ
+	default 105 if IMU_FREQ_105HZ
+	default 110 if IMU_FREQ_110HZ
+	default 120 if IMU_FREQ_120HZ
 	default 200 if IMU_FREQ_200HZ
 	default 400 if IMU_FREQ_400HZ
 
@@ -72,6 +84,15 @@ config BARO_FREQ_50HZ
 config BARO_FREQ_100HZ
 	bool "100 Hz"
 
+config BARO_FREQ_110HZ
+	bool "110 Hz"
+
+config BARO_FREQ_120HZ
+	bool "120 Hz"
+
+config BARO_FREQ_190HZ
+	bool "190 Hz"
+
 config BARO_FREQ_200HZ
 	bool "200 Hz"
 
@@ -86,6 +107,10 @@ config BARO_FREQUENCY_VALUE
 	default 10  if BARO_FREQ_10HZ
 	default 50  if BARO_FREQ_50HZ
 	default 100 if BARO_FREQ_100HZ
+	default 110 if BARO_FREQ_110HZ
+	default 110 if BARO_FREQ_110HZ
+	default 120 if BARO_FREQ_120HZ
+	default 190 if BARO_FREQ_190HZ
 	default 200 if BARO_FREQ_200HZ
 	default 400 if BARO_FREQ_400HZ
 

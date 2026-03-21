@@ -9,6 +9,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/device.h>
+#include <zephyr/spinlock.h>
 
 #include <app_version.h>
 
@@ -58,6 +59,10 @@ static bool baro_active = false;
 static bool imu_active = false;
 static bool sm_active = false;
 
+static struct k_spinlock sensor_lock;
+
+static bool sensor_update = false;
+
 #if defined(CONFIG_AURORA_SENSORS)
 /* ============================================================
  *                     IMU TASK
@@ -71,6 +76,7 @@ void imu_task(void *, void *, void *)
 	imu_init(imu0);
 	imu_active = true;
 
+	// int64_t lasttime = k_uptime_get();
 	while (1) {
 		int rc = imu_poll(imu0, &orientation, &acceleration);
 		if (rc != 0) {
@@ -78,7 +84,15 @@ void imu_task(void *, void *, void *)
 			break;
 		}
 
+		K_SPINLOCK(&sensor_lock)
+		{
+			sensor_update = true;
+		}
+
 		LOG_INF("orientation: %f deg. acc: %f\n", (double)orientation, (double)acceleration);
+		// int64_t delta = k_uptime_delta(&lasttime);
+		// /* print the hz */
+		// LOG_DBG("IMU Hz: %.2f", 1000.0 / delta);
 
 		k_sleep(K_MSEC(1000 / imu_hz));
 	}
@@ -109,6 +123,8 @@ void baro_task(void *, void *, void *)
 
 	struct sensor_value temp, press;
 
+	// int64_t lasttime = k_uptime_get();
+
 	while (1) {
 
 		if (baro_measure(baro0, &temp, &press)) {
@@ -119,8 +135,17 @@ void baro_task(void *, void *, void *)
 		// currently only uses baro0 for altitude measurement
 		altitude = baro_altitude(sensor_value_to_float(&press));
 
+		K_SPINLOCK(&sensor_lock)
+		{
+			sensor_update = true;
+		}
+
 		LOG_INF("[baro0] Temperature: %d.%06d | Pressure: %d.%06d | Altitude: %.2f\n",
 				temp.val1, temp.val2, press.val1, press.val2, (double)altitude);
+
+		// int64_t delta = k_uptime_delta(&lasttime);
+		/* print the hz */
+		// LOG_DBG("BARO Hz: %.2f", 1000.0 / delta);
 
 		k_sleep(K_MSEC(1000 / baro_hz));
 	}
@@ -138,6 +163,8 @@ K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
 #if defined(CONFIG_AURORA_STATE_MACHINE)
 void state_machine_task(void *, void *, void *)
 {
+
+	k_spinlock_key_t key;
 	struct sm_inputs inputs = (struct sm_inputs){
 		.armed = 1,
 		.orientation = orientation,
@@ -153,19 +180,27 @@ void state_machine_task(void *, void *, void *)
 	while(!baro_active && !imu_active);
 
 	while (1) {
-		inputs = (struct sm_inputs){
-			.orientation = orientation,
-			.acceleration = acceleration,
-			.velocity = velocity,
-			.altitude = altitude,
-		};
 
-		sm_update(&inputs);
+		// trylock to check if there is a new sensor update, if not just skip the state machine update and sleep
+		if (k_spin_trylock(&sensor_lock, &key) == 0) {
+			if (sensor_update) {
+				inputs = (struct sm_inputs){
+					.armed = 1,
+					.orientation = orientation,
+					.acceleration = acceleration,
+					.velocity = velocity,
+					.altitude = altitude,
+				};
 
-		LOG_INF("STATE = %d\n", sm_get_state());
+				sensor_update = false;
+				sm_update(&inputs);
+				LOG_INF("STATE = %d\n", sm_get_state());
+			}
+			k_spin_unlock(&sensor_lock, key);
+		}
 
 		/* currently 10Hz. TODO: JUST FOR TESTING! */
-		k_sleep(K_MSEC(100));
+		k_sleep(K_MSEC(1));
 	}
 }
 
