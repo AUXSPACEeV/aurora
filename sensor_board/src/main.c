@@ -14,6 +14,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/device.h>
+#include <zephyr/zbus/zbus.h>
 
 #include <app_version.h>
 
@@ -55,10 +56,29 @@ static const struct sm_thresholds state_cfg = {
 
 LOG_MODULE_REGISTER(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 
-static float orientation = 0.0f;  /**< Latest orientation angle from IMU (degrees). */
-static float acceleration = 0.0f; /**< Latest acceleration magnitude from IMU (m/s^2). */
-static float velocity = 0.0f;     /**< Latest vertical velocity estimate (m/s). */
-static float altitude = 0.0f;     /**< Latest barometric altitude AGL (m). */
+struct imu_msg {
+	float orientation;
+	float acceleration;
+	float velocity;
+};
+
+struct baro_msg {
+	float pressure;
+	float temperature;
+	float altitude;
+};
+
+ZBUS_CHAN_DECLARE(imu_chan);
+ZBUS_CHAN_DECLARE(baro_chan);
+ZBUS_SUBSCRIBER_DEFINE(sm_sub, 4);
+
+ZBUS_CHAN_DEFINE(imu_chan, struct imu_msg, NULL, NULL, ZBUS_OBSERVERS(sm_sub), ZBUS_MSG_INIT(0));
+ZBUS_CHAN_DEFINE(baro_chan, struct baro_msg, NULL, NULL, ZBUS_OBSERVERS(sm_sub), ZBUS_MSG_INIT(0));
+
+// static float orientation = 0.0f;  /**< Latest orientation angle from IMU (degrees). */
+// static float acceleration = 0.0f; /**< Latest acceleration magnitude from IMU (m/s^2). */
+// static float velocity = 0.0f;     /**< Latest vertical velocity estimate (m/s). */
+// static float altitude = 0.0f;     /**< Latest barometric altitude AGL (m). */
 
 static bool baro_active = false; /**< True once the barometer thread has initialized. */
 static bool imu_active = false;  /**< True once the IMU thread has initialized. */
@@ -78,18 +98,19 @@ void imu_task(void *, void *, void *)
 {
 	const struct device *imu0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_imu));
 	const int imu_hz = CONFIG_IMU_FREQUENCY_VALUE;
+	struct imu_msg msg;
 
 	imu_init(imu0);
 	imu_active = true;
 
 	while (1) {
-		int rc = imu_poll(imu0, &orientation, &acceleration);
+		int rc = imu_poll(imu0, &msg.orientation, &msg.acceleration);
 		if (rc != 0) {
 			LOG_ERR("IMU polling failed (%d)", rc);
-			break;
+			continue;
 		}
 
-		LOG_INF("orientation: %f deg. acc: %f\n", (double)orientation, (double)acceleration);
+		zbus_chan_pub(&imu_chan, &msg, K_NO_WAIT);
 
 		k_sleep(K_MSEC(1000 / imu_hz));
 	}
@@ -118,6 +139,7 @@ void baro_task(void *, void *, void *)
 	const struct device *baro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_baro));
 	const int baro_hz = CONFIG_BARO_FREQUENCY_VALUE;
 	bool ref_set = false;
+	struct baro_msg msg;
 
 	if (baro_init(baro0)) {
 		LOG_ERR("Baro not ready!");
@@ -141,11 +163,12 @@ void baro_task(void *, void *, void *)
 			ref_set = true;
 		}
 
-		altitude = baro_pressure_to_altitude(press_kpa);
+		msg.altitude = baro_pressure_to_altitude(press_kpa);
+		msg.temperature = (float)temp.val1 + (float)temp.val2 / 1e6f;
+		msg.pressure = (float)press.val1 + (float)press.val2 / 1e6f;
 
-		LOG_INF("[baro0] Temp: %d.%06d | Press: %d.%06d kPa | Alt: %d.%02d m",
-				temp.val1, temp.val2, press.val1, press.val2,
-				(int)altitude, abs((int)(altitude * 100) % 100));
+		zbus_chan_pub(&baro_chan, &msg, K_NO_WAIT);
+
 
 		k_sleep(K_MSEC(1000 / baro_hz));
 	}
@@ -169,7 +192,12 @@ K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
 void state_machine_task(void *, void *, void *)
 {
 	enum sm_state state;
-	
+	const struct zbus_channel *chan;
+	struct baro_msg *baro_data;
+	struct imu_msg *imu_data;
+	bool baro_ready = false;
+	bool imu_ready = false;
+
 #if defined(CONFIG_PYRO)
 	const struct device *pyro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_pyro));
 	int ret;
@@ -177,9 +205,9 @@ void state_machine_task(void *, void *, void *)
 
 	struct sm_inputs inputs = (struct sm_inputs){
 		.armed = 1,
-		.orientation = orientation,
-		.acceleration = acceleration,
-		.velocity = velocity,
+		.orientation = 0.0f,
+		.acceleration = 0.0f,
+		.velocity = 0.0f,
 	};
 
 #if defined(CONFIG_PYRO)
@@ -193,20 +221,42 @@ void state_machine_task(void *, void *, void *)
 	sm_init(&state_cfg, NULL);
 	sm_active = true;
 
+	LOG_INF("State machine task started.");
+
 	// TODO: Add idling
 	while(!baro_active && !imu_active);
 
 	while (1) {
-		inputs = (struct sm_inputs){
-			.orientation = orientation,
-			.acceleration = acceleration,
-			.velocity = velocity,
-			.altitude = altitude,
-		};
+
+		if (zbus_sub_wait(&sm_sub, &chan, K_FOREVER) == 0)
+		{
+			if (chan == &imu_chan) {
+				imu_data = chan->message;
+				inputs.orientation = imu_data->orientation;
+				inputs.acceleration = imu_data->acceleration;
+				LOG_INF("orientation: %f deg. acc: %f\n", (double)inputs.orientation, (double)inputs.acceleration);
+				imu_ready = true;
+			} else if (chan == &baro_chan) {
+				baro_data = chan->message;
+				inputs.altitude = baro_data->altitude;
+				LOG_INF("[baro0] Temp: %.6f | Press: %.6f kPa | Alt: %d.%02d m",
+						(double)baro_data->temperature,
+						(double)baro_data->pressure,
+						(int)baro_data->altitude, abs((int)(baro_data->altitude * 100) % 100));
+				baro_ready = true;
+			}
+		}
+
+		if (!baro_ready || !imu_ready)
+		{
+			continue;
+		}
 
 		sm_update(&inputs);
 		state = sm_get_state();
 		LOG_INF("STATE = %d\n", state);
+		baro_ready = false;
+		imu_ready = false;
 
 #if defined(CONFIG_PYRO)
 		switch (state) {
@@ -232,8 +282,8 @@ void state_machine_task(void *, void *, void *)
 		}
 #endif /* CONFIG_PYRO */
 
-		/* currently 10Hz. TODO: JUST FOR TESTING! */
-		k_sleep(K_MSEC(100));
+		// /* currently 10Hz. TODO: JUST FOR TESTING! */
+		// k_sleep(K_MSEC(100));
 	}
 }
 
