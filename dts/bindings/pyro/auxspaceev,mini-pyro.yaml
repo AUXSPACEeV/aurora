@@ -3,6 +3,7 @@
 # Copyright (c) 2026 Auxspace e.V.
 # SPDX-License-Identifier: Apache-2.0
 
+title: MicroMETER mini pyro module
 description: Auxspace e.V. MicroMETER mini pyro module
 
 compatible: "auxspaceev,mini-pyro"
