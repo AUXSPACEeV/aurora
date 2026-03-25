@@ -24,7 +24,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          path: aurora
           persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Zephyr project
+        uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: aurora
+          toolchains: arm-zephyr-eabi:riscv64-zephyr-elf:xtensa-espressif_esp32s3_zephyr-elf
+          ccache-cache-key: ubuntu-22.04-docs
 
       - name: Install dependencies
         run: |
@@ -32,11 +45,14 @@ jobs:
           wget --no-verbose "https://github.com/doxygen/doxygen/releases/download/Release_${DOXYGEN_VERSION//./_}/doxygen-${DOXYGEN_VERSION}.linux.bin.tar.gz"
           tar xf doxygen-${DOXYGEN_VERSION}.linux.bin.tar.gz
           echo "${PWD}/doxygen-${DOXYGEN_VERSION}/bin" >> $GITHUB_PATH
-          pip install -r doc/requirements.txt
+          pip install -r aurora/doc/requirements.txt \
+            -r zephyr/scripts/requirements-base.txt \
+            -r zephyr/scripts/requirements-compliance.txt \
+            -r zephyr/scripts/requirements-build-test.txt
 
       - name: Build
+        working-directory: aurora/doc
         run: |
-          cd doc
           doxygen
 
           SPHINXOPTS="-W" make html
@@ -53,14 +69,14 @@ jobs:
         if: github.event_name != 'pull_request' && matrix.doxygen-version == '1.14.0'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: doc/deploy
+          path: aurora/doc/deploy
 
       - name: Upload artifacts
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: docs-doxygen-${{ matrix.doxygen-version }}
-          path: doc/deploy
+          path: aurora/doc/deploy
 
   deploy:
     name: Deploy

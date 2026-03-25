@@ -28,3 +28,90 @@ table.docutils {
     margin-left: 0;
     margin-right: auto;
 }
+
+/* Zephyr's board.css sets grid-template-columns on .legend .supported-hardware
+ * but omits display:grid, relying on sphinx_rtd_theme (which furo doesn't have)
+ * to have already set it on .field-list. Add it explicitly so the legend
+ * renders as a two-column key/value grid instead of a stacked definition list. */
+.legend dl.supported-hardware {
+    display: grid !important;
+}
+
+/* sphinx_rtd_theme (used by Zephyr's main docs) applies display:grid to
+ * dl.field-list, making the board overview sidebar show label and value
+ * side-by-side.  Furo stacks them vertically instead.
+ *
+ * Using display:grid on the dl inside Furo's floated aside breaks the float's
+ * height calculation (the sidebar box no longer wraps around the field list).
+ * Use the classic "float label + BFC value" two-column layout instead:
+ *   - dt floats left with a fixed min-width so all values start at the same
+ *     horizontal position regardless of label length.
+ *   - dd gets overflow:hidden which creates a block formatting context (BFC)
+ *     that sits adjacent to the float rather than wrapping under it.
+ *   - A ::after clearfix on the dl makes it expand to contain the floated dts.
+ * This changes nothing about the dl's own display type so the sidebar float
+ * contains it correctly. */
+article .sidebar.board-overview {
+    width: 42%;
+    min-width: 260px;
+}
+
+.sidebar.board-overview dl.field-list::after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+.sidebar.board-overview dl.field-list dt {
+    float: left;
+    clear: both;
+    min-width: 7.5em;
+    margin: 0;
+    padding: 0.2em 0.5em 0.2em 0;
+    font-weight: bold;
+}
+
+.sidebar.board-overview dl.field-list dd {
+    overflow: hidden;
+    margin: 0;
+    padding: 0.2em 0;
+}
+
+/* The "Browse board sources" link is generated with Bootstrap (.btn .btn-info)
+ * and Font Awesome (.fa .fa-github) classes, neither of which is loaded in
+ * Furo.  Replicate the button appearance and inject the GitHub mark SVG via a
+ * ::before pseudo-element so it renders correctly without external libraries. */
+.sidebar.board-overview #board-github-link a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    padding: 0.4em 1em;
+    border-radius: 0.3em;
+    background-color: var(--color-brand-primary);
+    color: white !important;
+    text-decoration: none !important;
+    font-size: 0.9em;
+}
+
+.sidebar.board-overview #board-github-link a::before {
+    content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' width='16' height='16'%3E%3Cpath fill='white' d='M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z'/%3E%3C/svg%3E");
+    display: block;
+    line-height: 0;
+}
+
+/* Bridge Zephyr board.css CSS variable names to Furo's equivalents so that
+ * zephyr:board-supported-hw and zephyr:board-supported-runners render
+ * correctly under the Furo theme. */
+:root {
+    --body-color:                          var(--color-foreground-primary);
+    --monospace-font-family:               var(--font-stack--monospace);
+    --input-background-color:             var(--color-background-secondary);
+    --input-border-color:                  var(--color-background-border);
+    --input-focus-border-color:            var(--color-brand-primary);
+    --navbar-background-color:             var(--color-background-secondary);
+    --navbar-level-1-color:                var(--color-foreground-primary);
+    --admonition-note-title-color:         var(--color-admonition-title--note);
+    --admonition-note-title-background-color: var(--color-admonition-title-background--note);
+    --admonition-tip-title-color:          var(--color-admonition-title--tip);
+    --admonition-tip-title-background-color: var(--color-admonition-title-background--tip);
+}

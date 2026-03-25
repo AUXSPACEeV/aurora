@@ -30,8 +30,14 @@ zephyr
 api/index
 ```
 
+```{toctree}
+:maxdepth: 1
+:caption: Boards
+
+boards/index
+```
+
 ## Indices and tables
 
 - {ref}`genindex`
 - {ref}`search`
-

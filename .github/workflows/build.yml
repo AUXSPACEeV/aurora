@@ -1,4 +1,7 @@
-name: Build
+# Copyright (c) 2026, Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+name: CI
 
 on:
   push:
@@ -27,7 +30,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.12
+          python-version: "3.12"
 
       - name: Setup Zephyr project
         uses: zephyrproject-rtos/action-zephyr-setup@v1

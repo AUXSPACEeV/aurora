@@ -3,6 +3,7 @@
 # Copyright (c) 2026 Auxspace e.V.
 # SPDX-License-Identifier: Apache-2.0
 
+title: Capacitive pyro module
 description: Auxspace e.V. capacitive pyro module
 
 compatible: "auxspaceev,cap-pyro"
