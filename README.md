@@ -4,13 +4,13 @@
 
 ## General Info
 
-### Disclaimer
+### :warning: Disclaimer
 
-This Project is a fork of the official
-[Zephyr Example Project](https://github.com/zephyrproject-rtos/example-application)
-with a few tweaks.
+This is the project's info page.
+For detailed documentation head to
+[aurora.auxspace.de](https://aurora.auxspace.de/).
 
-### Technical Terms
+### Technical Terms (for Student Newcomers)
 
 * `RTOS`: **R**eal-**T**ime **O**perating **S**ystem
 * `µC`: **Mi**cro**C**ontroller (µ - Controller)
@@ -31,28 +31,30 @@ for building and containerizing your applications"
 **AURORA** is an open-source software project developed by Auxspace e.V.,
 a student-driven initiative dedicated to building rockets and providing
 hands-on aerospace engineering experience.
-This project is specifically designed for the **METER-2** rocket,
-incorporating a modular electronics stack for optimal performance and
-flexibility.
+This project is specifically designed for the **Auxspace e.V. Rocket
+Electronics Stack**, incorporating a modular electronics stack for
+optimal performance and flexibility.
 
 The **AURORA** system leverages a series of interconnected PCBs
 communicating over **CAN**, with each PCB housing a microchip running
-the **AURORA** software.
+either the **AURORA** software or adding value to it (e.g. GPIO port
+expanders, pyro ignition channels or long-range communication modules).
 The primary purpose of **AURORA** is to serve as avionics software,
 managing essential data such as air pressure, acceleration, gyro, and
-magnetometer readings.
-Using the **Zephyr** kernel, **AURORA** handles task
-scheduling and real-time operations, enabling reliable and efficient
-communication between multiple **AURORA** instances through
-**CAN**.
+magnetometer readings in a plug-and-play state machine with configurable
+filters and events.
+Using the [zephyr](https://docs.zephyrproject.org/latest/) kernel,
+**AURORA** handles task scheduling and real-time operations, enabling
+reliable and efficient communication between multiple **AURORA**
+instances through **CAN**.
 
 Join us as we continue to develop and refine **AURORA**,
 contributing to the advancement of rocket technology and student
 expertise in aerospace engineering!
 
-## Setup
+## :hammer_and_wrench: Setup
 
-Setup Zephyr using either the docker container in this directory or follow the
+Setup zephyr using either the docker container in this directory or follow the
 [Getting Started Guide](https://docs.zephyrproject.org/latest/develop/getting_started/index.html)
 from the Zephyr project.
 
@@ -88,7 +90,8 @@ sudo dnf install -y \
     SDL2-devel file-libs
 ```
 
-And add a python virtualenv to install west and other dependencies:
+Using a python virtualenv, install west, zephyr's pythondependencies and
+the zephyr sdk with the required toolchains:
 
 ```bash
 python3 -m venv .venv
@@ -183,9 +186,7 @@ Run `west update` in *zephyr_workspace/aurora* to update modules.
 
 </details>
 
-## Build
-
-### Important Directories
+## :hammer: Build
 
 The important directories in this project are
 
@@ -194,22 +195,18 @@ The important directories in this project are
 
 If you ran
 `west init -m https://github.com/AUXSPACEeV/aurora --mr main .`
-in **~/zephyr_workspace** then **\<zephyr_workspace\>** will be at
-**~/zephyr_workspace** and **\<aurora\>** at
+in **~/zephyr_workspace** then **\<aurora\>** will be at
 **~/zephyr_workspace/aurora**.
 
-### Example Build
-
-The following command is an example of how to use west when building an
+The following commands are examples of how to use west when building an
 application.
-Start the command from the **\<aurora\>** dir, as explained in
-[Important Directories](#important-directories).
+Start the command from the **\<aurora\>** dir:
 
 ```bash
 # Build the sensor_board project for the sensor_board_v2/rp2040
 west build -b sensor_board_v2/rp2040 sensor_board
 
-# Another example: Micrometer on custom esp32s3 board
+# Another example: build for the custom Auxspace Micrometer PCB:
 west build -b esp32s3_micrometer/esp32s3/procpu sensor_board/
 ```
 
@@ -217,19 +214,27 @@ The output from the build will be at
 **\<aurora\>/build/zephyr**,
 called `zephyr.uf2` and `zephyr.elf`.
 
-## Deployment
+## :rocket: Deployment
+
+**note:** This chapter shows how to deploy AURORA onto the
+sensor_board_v2 as an example.
+The board uses a Raspberry Pi Pico Series microcontroller as its main
+logic unit.
 
 ### West
 
-Deploy the binary to your board by either using `west flash` or in case of the
-Raspberry Pi Pico series, copy it onto the Pi's storage.
+Deploy the binary to your board by either using `west flash` or the
+Board manufacturers' manual.
+In case of the sensor_board_v2 that would be
+[Raspberry Pi](https://www.raspberrypi.com/documentation/microcontrollers/pico-series.html).
 
-Currently, flashing from inside the docker container is untested and
-unimplemented.
+**note:** flashing from inside the docker container is currently
+untested and unimplemented.
 
 ### Openocd
 
-Natively, you can use openocd and gdb to flash and debug an application:
+The following is an example on how to flash **AURORA** onto the Pi
+using openocd:
 
 ```bash
 # Flash the PI
@@ -248,14 +253,16 @@ gdb build/zephyr/zephyr.elf
 
 ### Standard USB Interface
 
-The RP2040 comes with a backup bootloader, in case the QSPI Flash is not
-reachable by the ROM bootloader.
-The `BOOTSEL` switch deasserts the QSPI CS pin and opens up the fallback
-loader, which is a simple USB interface.
+The RP2040 and RP2350 come with a backup bootloader, in case the QSPI Flash
+is not responding to the ROM bootloader.
+The `BOOTSEL` switch deasserts the QSPI Chip Select pin and opens up the
+fallback loader, which is a simple USB interface.
 When connecting the PI to your PC in this state, the PI is registered as
-an external drive called `RPI-RP2`, which can load `.uf2` files.
+an external drive called `RPI-RP2`, which can load `.uf2` files by simply
+copying these firmware files onto the drive.
 
-Copy the files from your drive to the volume like so:
+Copy the files from your drive to the Pi's filesystem like so, or with
+your file explorer:
 
 ```bash
 # Linux example
@@ -268,11 +275,10 @@ cp build/zephyr/zephyr.uf2 /Volumes/RPI-RP2
 The PI should reboot and immediately start running your uploaded
 application.
 
-## Testing
+## :white_check_mark: Testing
 
 Zephyr provides a testing environment called `twister`.
 This repo adds twister compliant testcases under `tests/`:
-
 
 ```bash
 # In docker:
@@ -280,8 +286,8 @@ west twister -T tests -v --inline-logs
 ```
 
 **note:** Make sure to install the necessary toolchain for a given test!
-e.g. the simple state machine test requires `x86_64-zephyr-elf`:
+e.g. the basic tests require `x86_64-zephyr-elf`:
 
 ```bash
-{ZEPHYR_SDK}/setup.sh -t x86_64-zephyr-elf
+west sdk install -t x86_64-zephyr-elf
 ```
