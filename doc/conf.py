@@ -249,6 +249,11 @@ def _get_catalog_with_aurora_fixes(**kwargs):
 
     # 2. Re-categorize features whose binding lives in aurora/dts/bindings/pyro/
     #    from the catch-all "misc" bucket to "pyro".
+    # 3. Fix empty "locations" for DTS nodes whose source files live outside
+    #    ZEPHYR_BASE (i.e. in Aurora's own board/SoC trees).  gen_boards_catalog
+    #    only classifies files under ZEPHYR_BASE, so every Aurora-specific node
+    #    ends up with an empty locations set and the on-chip/on-board column in
+    #    the board-supported-hw table is left blank.
     for board_data in catalog.get("boards", {}).values():
         for target_features in board_data.get("supported_features", {}).values():
             misc = target_features.get("misc", {})
@@ -264,6 +269,21 @@ def _get_catalog_with_aurora_fixes(**kwargs):
                 target_features.setdefault("pyro", {}).update(to_move)
                 for compat in to_move:
                     del misc[compat]
+
+            for fdata in (
+                fd
+                for bucket in target_features.values()
+                for fd in bucket.values()
+                if not fd.get("locations")
+            ):
+                all_nodes = fdata.get("okay_nodes", []) + fdata.get("disabled_nodes", [])
+                for node_info in all_nodes:
+                    dts_path = Path(node_info["dts_path"])
+                    if dts_path.is_relative_to(_AURORA_BOARDS):
+                        fdata["locations"].add("board")
+                    else:
+                        fdata["locations"].add("soc")
+                    break  # one node is enough to determine the location
 
     return catalog
 
