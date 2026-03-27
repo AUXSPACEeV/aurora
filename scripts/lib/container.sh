@@ -43,7 +43,7 @@ declare -x CONTAINER_ENGINE="docker"
 declare -x CONTAINER_BIN="docker"
 declare -x CONTAINER_BUILD_BIN="${CONTAINER_BIN} buildx"
 declare -x -i REBUILD_CONTAINER_IMAGE=0
-declare -x CONTAINER_PULL_NAME="ghcr.io/auxspaceev/${_CONTAINER_NAME}:${CONTAINER_TAG}"
+declare -x CONTAINER_PULL_NAME="ghcr.io/auxspaceev/aurora:${CONTAINER_TAG}"
 
 # Default to interactive flags unless running in CI
 if [ -z "$AURORA_CI_BUILD" ] || ! [[ "$AURORA_CI_BUILD" =~ ^[1-9][0-9]*$ ]]; then
