@@ -99,6 +99,33 @@ article .sidebar.board-overview {
     line-height: 0;
 }
 
+/* Style the on-chip / on-board location badges in zephyr:board-supported-hw.
+ * Zephyr's board.css already defines these, but uses CSS nesting and variable
+ * names that can be unreliable with Furo.  Override them here explicitly so the
+ * pill badges always render with the correct colours. */
+.location-chip {
+    line-height: 1em;
+    display: inline-block;
+    width: 6em;
+    padding: 0.6em;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 600;
+    text-transform: lowercase;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.location-chip.onboard {
+    background: var(--color-admonition-title-background--note);
+    color: var(--color-admonition-title--note);
+}
+
+.location-chip.onchip {
+    background: var(--color-admonition-title-background--tip);
+    color: var(--color-admonition-title--tip);
+}
+
 /* Bridge Zephyr board.css CSS variable names to Furo's equivalents so that
  * zephyr:board-supported-hw and zephyr:board-supported-runners render
  * correctly under the Furo theme. */
