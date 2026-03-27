@@ -65,6 +65,9 @@ dkms.conf
 /build*
 /twister-out*
 
+# Zephyr IDE
+/*/build*
+
 __pycache__/
 
 # docs
