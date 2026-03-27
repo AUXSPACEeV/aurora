@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+#
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Simulated rocket flight through the AURORA Kalman filter.
 
