@@ -41,6 +41,7 @@ extensions = [
     'breathe',
     'myst_parser',
     'zephyr.domain',
+    'zephyr.link-roles',  # registers the zephyr_file role used by board-supported-hw
     'aurora_compat',  # must come after zephyr.domain; fixes missing config values and restores breathe's doxygengroup
 ]
 
@@ -254,6 +255,12 @@ def _get_catalog_with_aurora_fixes(**kwargs):
     #    only classifies files under ZEPHYR_BASE, so every Aurora-specific node
     #    ends up with an empty locations set and the on-chip/on-board column in
     #    the board-supported-hw table is left blank.
+    # 4. Normalize aurora node filenames from absolute paths to "aurora: boards/..."
+    #    so that zephyr.link-roles' zephyr_file role can produce correct GitHub
+    #    links.  gen_boards_catalog leaves them as absolute paths because they are
+    #    outside ZEPHYR_BASE; the role expects either a ZEPHYR_BASE-relative path
+    #    (default "zephyr" module) or a "<module>: <path>" form.
+    _AURORA_REPO = _AURORA_BOARDS.parent
     for board_data in catalog.get("boards", {}).values():
         for target_features in board_data.get("supported_features", {}).values():
             misc = target_features.get("misc", {})
@@ -274,16 +281,23 @@ def _get_catalog_with_aurora_fixes(**kwargs):
                 fd
                 for bucket in target_features.values()
                 for fd in bucket.values()
-                if not fd.get("locations")
             ):
                 all_nodes = fdata.get("okay_nodes", []) + fdata.get("disabled_nodes", [])
+                location_determined = bool(fdata.get("locations"))
                 for node_info in all_nodes:
                     dts_path = Path(node_info["dts_path"])
-                    if dts_path.is_relative_to(_AURORA_BOARDS):
-                        fdata["locations"].add("board")
-                    else:
-                        fdata["locations"].add("soc")
-                    break  # one node is enough to determine the location
+                    if not dts_path.is_relative_to(_AURORA_REPO):
+                        continue
+                    # Determine location from the first aurora node found.
+                    if not location_determined:
+                        fdata["locations"].add(
+                            "board" if dts_path.is_relative_to(_AURORA_BOARDS) else "soc"
+                        )
+                        location_determined = True
+                    # Rewrite to "aurora: <repo-relative path>" for link generation.
+                    node_info["filename"] = (
+                        f"aurora: {dts_path.relative_to(_AURORA_REPO).as_posix()}"
+                    )
 
     return catalog
 
@@ -304,3 +318,14 @@ _zd.BINDING_TYPE_TO_DOCUTILS_NODE["pyro"] = _nodes.Text("Pyrotechnic Ignition")
 # (e.g. sensor_board_v2_rp2040.yaml), which uses the vendor prefix "auxspaceev".
 zephyr_generate_hw_features = True
 zephyr_hw_features_vendor_filter = ["auxspaceev"]
+
+# -- Options for zephyr.link-roles -------------------------------------------
+# The zephyr_file role (used by board-supported-hw count indicators) needs to
+# know that "aurora: boards/..." paths belong to the aurora repo.  Setting
+# link_roles_manifest_project to "aurora" and link_roles_manifest_baseurl to
+# the aurora GitHub URL makes the role resolve those paths correctly.
+# The broken-links glob suppresses false-positive warnings for aurora board
+# paths that don't exist under ZEPHYR_BASE (where the role would normally look).
+link_roles_manifest_project = "aurora"
+link_roles_manifest_baseurl = gh_link_base_url
+link_roles_manifest_project_broken_links_ignore_globs = ["*"]

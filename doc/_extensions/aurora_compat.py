@@ -14,10 +14,16 @@ This extension (loaded after zephyr.domain) fixes both issues.
 from breathe.directives.content_block import DoxygenGroupDirective as BreatheDoxygenGroupDirective
 
 _GH_LINK_KEYS = ("gh_link_base_url", "gh_link_version", "gh_link_prefixes", "gh_link_exclude")
+_LINK_ROLES_KEYS = (
+    "link_roles_manifest_project",
+    "link_roles_manifest_baseurl",
+    "link_roles_manifest_project_broken_links_ignore_globs",
+)
 
 
 def _apply_gh_link_config(app):
-    """Copy gh_link_* values from the raw conf.py namespace into the live config.
+    """Copy gh_link_* and link_roles_manifest_* values from the raw conf.py
+    namespace into the live config.
 
     Sphinx calls Config.init_values() before extension setup() runs, so any
     config key registered inside setup() never receives its conf.py value —
@@ -25,20 +31,23 @@ def _apply_gh_link_config(app):
     runs after all setup() calls and patches the values from the raw namespace.
     """
     raw = getattr(app.config, "_raw_config", {})
-    for key in _GH_LINK_KEYS:
+    for key in _GH_LINK_KEYS + _LINK_ROLES_KEYS:
         if key in raw:
             setattr(app.config, key, raw[key])
 
 
 def setup(app):
-    # Register config values that zephyr.domain reads from zephyr.gh_utils.
-    # Without this, transforms that call gh_link_get_url() crash with
-    # "No such config value: gh_link_exclude".
+    # Register config values that zephyr.domain reads from zephyr.gh_utils, and
+    # config values that zephyr.link-roles registers in its own setup().
+    # Without this, transforms crash with "No such config value: ...".
     for name, default in [
         ("gh_link_base_url", ""),
         ("gh_link_version", ""),
         ("gh_link_prefixes", {}),
         ("gh_link_exclude", []),
+        ("link_roles_manifest_project", None),
+        ("link_roles_manifest_baseurl", None),
+        ("link_roles_manifest_project_broken_links_ignore_globs", []),
     ]:
         try:
             app.add_config_value(name, default, "")
