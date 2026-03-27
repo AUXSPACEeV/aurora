@@ -2,7 +2,12 @@
 
 ## Prerequisites
 
-AURORA is built inside a `west` workspace.  The directory layout is:
+In the [AURORA git repository's README](https://github.com/AUXSPACEeV/aurora)
+and the {external+zephyr:ref}`getting_started` guide from `zephyr` is everything
+you need to install first.
+
+AURORA is built inside a `west` workspace.
+The directory layout is:
 
 ```
 zephyr_workspace/
@@ -71,4 +76,3 @@ Hold BOOTSEL while connecting the board, then copy the UF2 file:
 ```shell
 cp build/zephyr/zephyr.uf2 /media/${USER}/RPI-RP2
 ```
-

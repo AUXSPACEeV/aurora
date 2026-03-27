@@ -48,4 +48,3 @@ ZTEST(my_suite, test_something)
 
 See `tests/lib/state/src/main.c` for a complete example that exercises
 the simple state machine through its full flight sequence.
-

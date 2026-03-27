@@ -58,8 +58,6 @@ from the Zephyr project.
 
 ### Native
 
-<details> <summary> <b>Step-by-step guide for containerless buildenv</b> (<i>click</i> to open) </summary>
-
 First, create a workspace:
 
 ```bash
@@ -71,11 +69,9 @@ Then, install the system dependencies:
 x86 Debian Linux:
 
 ```bash
-sudo apt-get install -y --no-install-recommends \
-    git cmake ninja-build gperf \
-    ccache dfu-util device-tree-compiler wget \
-    python3-dev python3-pip python3-setuptools python3-tk python3-wheel python3-venv \
-    xz-utils file make gcc libsdl2-dev libmagic1
+sudo apt install --no-install-recommends git cmake ninja-build gperf \
+  ccache dfu-util device-tree-compiler wget python3-dev python3-venv python3-tk \
+  xz-utils file make gcc libsdl2-dev libmagic1
 
 # x86 specific
 sudo apt-get install -y --no-install-recommends \
@@ -86,9 +82,10 @@ or if you are on fedora:
 
 ```bash
 sudo dnf install -y \
-    git cmake ninja-build gperf systemd-devel ccache dfu-util dtc wget libusb1-devel \
-    python3-devel python3-pip python3-setuptools python3-tkinter python3-wheel \
-    xz xz-devel file make gcc SDL2-devel file-libs 
+    git cmake ninja-build gperf \
+    ccache dfu-util dtc wget python3-devel python3-virtualenv python3-tkinter \
+    xz file make gcc gcc-c++ glibc-devel.i686 libstdc++-devel.i686 \
+    SDL2-devel file-libs
 ```
 
 And add a python virtualenv to install west and other dependencies:
@@ -98,42 +95,18 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 python3 -m pip install west
-```
 
-Also, don't forget the Zephyr SDK (it's big, so ensure you have enough free space):
-
-```bash
-# install zephyr for your host system. This example ist for Linux x86_64.
-# For other platforms, download the right one for your system on
-# https://github.com/zephyrproject-rtos/sdk-ng/releases/tag/v0.17.4
-wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz
-wget -O - https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/sha256.sum | shasum --check --ignore-missing
-tar xvf zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz
-rm -f zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz
-
-cd zephyr-sdk-0.17.4
-
-# -h installs the host tools
-# -t arm-zephyr-eabi installs the toolchain for sensor_board_v2/rp2040
-# -t riscv64-zephyr-elf installs the toolchain for sensor_board_v2/rp2350a/hazard3
-# -t xtensa-espressif_esp32s3_zephyr-elf installs the toolchain for esp32s3_micrometer/esp32s3/*
-./setup.sh -c -h \
-    -t arm-zephyr-eabi \
-    -t riscv64-zephyr-elf \
-    -t xtensa-espressif_esp32s3_zephyr-elf
-cd ..
-```
-
-When all dependencies are setup and ready, fetch the aurora sources:
-
-```bash
 west init -m https://github.com/AUXSPACEeV/aurora --mr main .
+cd aurora
 west update
 west zephyr-export
-
-python3 -m pip install -r ./zephyr/scripts/requirements.txt
-source ./zephyr/zephyr-env.sh
 west packages pip --install
+
+west sdk install -t \
+    riscv64-zephyr-elf \
+    arm-zephyr-eabi \
+    xtensa-espressif_esp32s3_zephyr-elf \
+    x86_64-zephyr-elf
 ```
 
 This should leave a directory setup like so:
@@ -145,12 +118,11 @@ zephyr_workspace
 ├── .venv
 ├── .west
 └── zephyr
-└── zephyr-sdk-0.17.4
 ```
 
-</details>
-
 ### Docker
+
+<details> <summary> <b>Step-by-step guide</b> (<i>click</i> to open) </summary>
 
 **Build Dependencies**
 
@@ -208,6 +180,8 @@ zephyr_workspace
 inside the container will take effect outside and vice-versa.
 
 Run `west update` in *zephyr_workspace/aurora* to update modules.
+
+</details>
 
 ## Build
 
