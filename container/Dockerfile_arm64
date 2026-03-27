@@ -63,17 +63,18 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Install zephyr python dependencies + SDK
 RUN python3 -m pip install west
 # Zephyr minimal SDK (no toolchains)
+ENV ZEPHYR_SDK_VERSION="1.0.0"
 RUN cd /builder && \
-    wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/zephyr-sdk-0.17.4_linux-aarch64_minimal.tar.xz && \
-    wget -O - https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/sha256.sum | shasum --check --ignore-missing && \
-    tar xvf zephyr-sdk-0.17.4_linux-aarch64_minimal.tar.xz && \
-    rm -f zephyr-sdk-0.17.4_linux-aarch64_minimal.tar.xz
+    wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v${ZEPHYR_SDK_VERSION}/zephyr-sdk-${ZEPHYR_SDK_VERSION}_linux-aarch64_minimal.tar.xz && \
+    wget -O - https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v${ZEPHYR_SDK_VERSION}/sha256.sum | shasum --check --ignore-missing && \
+    tar xvf zephyr-sdk-${ZEPHYR_SDK_VERSION}_linux-aarch64_minimal.tar.xz && \
+    rm -f zephyr-sdk-${ZEPHYR_SDK_VERSION}_linux-aarch64_minimal.tar.xz
 # Specific toolchain installation (minimal sdk does not have toolchains)
-RUN cd /builder/zephyr-sdk-0.17.4 && \
+RUN cd /builder/zephyr-sdk-${ZEPHYR_SDK_VERSION} && \
     ./setup.sh -c -h \
-    -t arm-zephyr-eabi \
-    -t riscv64-zephyr-elf \
-	-t xtensa-espressif_esp32s3_zephyr-elf
+        -t arm-zephyr-eabi \
+        -t riscv64-zephyr-elf \
+        -t xtensa-espressif_esp32s3_zephyr-elf
 
 # TODO: figure out testing target and add qemu toolchain for tests
 
