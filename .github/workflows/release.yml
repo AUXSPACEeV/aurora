@@ -1,0 +1,88 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.artifact }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - board: sensor_board_v2/rp2040
+            artifact: sensor_board_v2_rp2040
+            toolchain: arm-zephyr-eabi
+          - board: sensor_board_v2/rp2350a/hazard3
+            artifact: sensor_board_v2_rp2350a_hazard3
+            toolchain: riscv64-zephyr-elf
+          - board: esp32s3_micrometer/esp32s3/procpu
+            artifact: esp32s3_micrometer
+            toolchain: xtensa-espressif_esp32s3_zephyr-elf
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: aurora
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Zephyr project
+        uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: aurora
+          toolchains: ${{ matrix.toolchain }}
+          ccache-cache-key: ubuntu-22.04-release-${{ matrix.artifact }}
+
+      - name: Build firmware
+        working-directory: aurora
+        shell: bash
+        run: |
+          west build -b ${{ matrix.board }} sensor_board
+
+      - name: Collect artifacts
+        working-directory: aurora
+        shell: bash
+        run: |
+          mkdir -p dist
+          for ext in elf uf2 bin; do
+            src="build/zephyr/zephyr.${ext}"
+            [ -f "${src}" ] && cp "${src}" "dist/${{ matrix.artifact }}.${ext}"
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.artifact }}
+          path: aurora/dist/
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: firmware-*
+          merge-multiple: true
+          path: dist
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
