@@ -29,8 +29,3 @@ endif()
 target_sources(app PRIVATE
 	src/main.c
 	)
-
-# Conditionally include storage.c if CONFIG_STORAGE is enabled
-if(CONFIG_STORAGE)
-	target_sources(app PRIVATE src/storage.c)
-endif()
