@@ -311,6 +311,103 @@ import zephyr.domain as _zd
 from docutils import nodes as _nodes
 _zd.BINDING_TYPE_TO_DOCUTILS_NODE["pyro"] = _nodes.Text("Pyrotechnic Ignition")
 
+# Board status registry: board_id -> (display_name, status_string)
+# Extend this dict when new boards are added or maintenance status changes.
+_AURORA_BOARD_STATUS = {
+    "sensor_board_v2":      ("Auxspace Sensor Board V2", "Actively maintained"),
+    "esp32s3_micrometer":   ("ESP32-S3 Micrometer",      "Not actively maintained"),
+}
+
+# Patch ConvertBoardNode to ensure the Board Overview sidebar always has a
+# "Status" field.  ConvertBoardNode.apply() builds the sidebar's field_list
+# from the board YAML; if the YAML already contains a status entry we patch
+# its value, otherwise we insert a new field.
+_orig_convert_board_node_apply = _zd.ConvertBoardNode.apply
+
+def _convert_board_node_with_status(self):
+    _orig_convert_board_node_apply(self)
+
+    try:
+        docname = self.document.settings.env.docname
+    except AttributeError:
+        docname = ""
+
+    status_text = next(
+        (status for board_id, (_, status) in _AURORA_BOARD_STATUS.items()
+         if board_id in docname),
+        "Not actively maintained",
+    )
+
+    for sidebar in self.document.traverse(_nodes.sidebar):
+        if "board-overview" not in sidebar.get("classes", []):
+            continue
+        for field_list in sidebar.traverse(_nodes.field_list):
+            # Patch an existing Status field if present.
+            for field in field_list.children:
+                if not isinstance(field, _nodes.field):
+                    continue
+                name_nodes = [c for c in field.children if isinstance(c, _nodes.field_name)]
+                if name_nodes and name_nodes[0].astext() == "Status":
+                    body_nodes = [c for c in field.children if isinstance(c, _nodes.field_body)]
+                    if body_nodes:
+                        body_nodes[0].clear()
+                        body_nodes[0] += _nodes.paragraph(text=status_text)
+                    return
+            # Status field absent – insert one.
+            field = _nodes.field()
+            field += _nodes.field_name(text="Status")
+            field_body = _nodes.field_body()
+            field_body += _nodes.paragraph(text=status_text)
+            field += field_body
+            field_list += field
+            return
+
+_zd.ConvertBoardNode.apply = _convert_board_node_with_status
+
+
+def _make_boards_status_table():
+    """Build a docutils table listing every Aurora board and its status."""
+    table = _nodes.table()
+    tgroup = _nodes.tgroup(cols=2)
+    table += tgroup
+    tgroup += _nodes.colspec(colwidth=60)
+    tgroup += _nodes.colspec(colwidth=40)
+
+    thead = _nodes.thead()
+    tgroup += thead
+    hrow = _nodes.row()
+    thead += hrow
+    for header in ("Board", "Status"):
+        entry = _nodes.entry()
+        entry += _nodes.paragraph(text=header)
+        hrow += entry
+
+    tbody = _nodes.tbody()
+    tgroup += tbody
+    for _board_id, (name, status) in _AURORA_BOARD_STATUS.items():
+        row = _nodes.row()
+        tbody += row
+        for cell in (name, status):
+            entry = _nodes.entry()
+            entry += _nodes.paragraph(text=cell)
+            row += entry
+
+    return table
+
+
+def _on_doctree_resolved(app, doctree, docname):
+    """Inject the board status table at the top of the boards index page."""
+    if docname != "boards/index":
+        return
+    table = _make_boards_status_table()
+    for section in doctree.traverse(_nodes.section):
+        section.insert(1, table)
+        break
+
+
+def setup(app):
+    app.connect("doctree-resolved", _on_doctree_resolved)
+
 # -- Zephyr domain board features --------------------------------------------
 # Run CMake-only twister pass for Aurora's boards so that board-supported-hw
 # and board-supported-runners show real data instead of the "not generated" note.
