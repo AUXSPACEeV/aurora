@@ -6,7 +6,7 @@
  */
 /dts-v1/;
 
-#include <espressif/esp32s3/esp32s3_wroom_n8.dtsi>
+#include <espressif/esp32s3/esp32s3_wroom_n8r8.dtsi>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <zephyr/dt-bindings/input/esp32-touch-sensor-input.h>
 #include <espressif/partitions_0x0_amp.dtsi>
@@ -23,8 +23,8 @@
 
 	chosen {
 		zephyr,sram = &sram1;
-		zephyr,console = &usb_serial;
-		zephyr,shell-uart = &usb_serial;
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
 		zephyr,flash = &flash0;
 		zephyr,code-partition = &slot0_partition;
 		zephyr,bt-hci = &esp32_bt_hci;
@@ -111,15 +111,15 @@
 	lsm6dso320: lsm6dso32@6b {
 		compatible = "st,lsm6dso32";
 		reg = <0x6b>;
-		irq-gpios = <&gpio0 9 GPIO_ACTIVE_HIGH>;
-		int-pin = <1>;
+		// irq-gpios = <&gpio0 9 GPIO_ACTIVE_HIGH>;
+		// int-pin = <1>;
 		status = "disabled";
 	};
 
 	lps22hh0: lps22hh@5c {
 		compatible = "st,lps22hh";
 		reg = <0x5c>;
-		drdy-gpios = <&gpio0 10 GPIO_ACTIVE_HIGH>;
+		// drdy-gpios = <&gpio0 10 GPIO_ACTIVE_HIGH>;
 		status = "disabled";
 	};
 };
@@ -128,6 +128,7 @@
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 	pinctrl-0 = <&i2c1_default>;
 	pinctrl-names = "default";
+	status = "disabled";
 };
 
 &i2s0 {
