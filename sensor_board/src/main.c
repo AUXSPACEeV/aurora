@@ -194,7 +194,9 @@ void state_machine_task(void *, void *, void *)
 	sm_active = true;
 
 	// TODO: Add idling
-	while(!baro_active && !imu_active);
+	while (!baro_active || !imu_active) {
+		k_sleep(K_MSEC(100));
+	}
 
 	while (1) {
 		inputs = (struct sm_inputs){

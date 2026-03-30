@@ -25,10 +25,6 @@
 	};
 };
 
-&usb_serial {
-	status = "okay";
-};
-
 &sdhc2 {
 	status = "okay";
 };
