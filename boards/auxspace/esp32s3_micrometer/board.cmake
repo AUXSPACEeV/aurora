@@ -1,5 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
+if(NOT SYSBUILD)
+  message(WARNING
+    "esp32s3_micrometer requires sysbuild (MCUboot). "
+    "Use: west build --sysbuild")
+endif()
+
 if(NOT "${OPENOCD}" MATCHES "^${ESPRESSIF_TOOLCHAIN_PATH}/.*")
   set(OPENOCD OPENOCD-NOTFOUND)
 endif()

@@ -42,3 +42,26 @@ don't throw heavy loads an the 3V3 pin, it may overheat the LDO.
 
 ```{zephyr:board-supported-runners}
 ```
+
+## Building
+
+µMeter is built with `sysbuild` since it uses the MCUBoot boot loader:
+
+```bash
+west build -p -b esp32s3_micrometer/esp32s3/procpu --sysbuild sensor_board
+```
+
+## Flashing
+
+`west flash` is unfortunately not working with this setup, since the ESP
+requires the download mode to be set when booting and west flash is chain
+loading both images after one another.
+
+Instead, flash both images in download mode and then just reset, using
+`esptool`:
+
+```bash
+esptool --chip esp32s3 -p /dev/tty<ESP_DEV> -b 921600 write_flash \
+  0x0 build/mcuboot/zephyr/zephyr.bin \
+  0x20000 build/sensor_board/zephyr/zephyr.signed.bin
+```

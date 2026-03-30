@@ -17,7 +17,21 @@ common:
   modules:
     - fatfs
 tests:
-  app.default: {}
+  app.default:
+    platform_exclude:
+      - esp32s3_micrometer/esp32s3/procpu
+  app.default.sysbuild:
+    sysbuild: true
+    platform_allow:
+      - esp32s3_micrometer/esp32s3/procpu
   app.debug:
     extra_overlay_confs:
       - debug.conf
+    platform_exclude:
+      - esp32s3_micrometer/esp32s3/procpu
+  app.debug.sysbuild:
+    sysbuild: true
+    extra_overlay_confs:
+      - debug.conf
+    platform_allow:
+      - esp32s3_micrometer/esp32s3/procpu
