@@ -45,10 +45,6 @@
 	status = "okay";
 };
 
-&i2c1 {
-	status = "okay";
-};
-
 &lps22hh0 {
 	status = "okay";
 };
