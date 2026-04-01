@@ -9,7 +9,6 @@ common:
   integration_platforms:
     - sensor_board_v2/rp2040
     - sensor_board_v2/rp2350a/hazard3
-    - esp32s3_micrometer/esp32s3/procpu
   platform_allow:
     - sensor_board_v2/rp2040
     - sensor_board_v2/rp2350a/hazard3
