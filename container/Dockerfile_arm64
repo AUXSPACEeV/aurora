@@ -52,10 +52,9 @@ RUN echo "builder  ALL=(ALL:ALL) NOPASSWD:ALL" > /etc/sudoers.d/builder-nopasswd
 RUN echo 'Defaults env_keep += "ftp_proxy http_proxy https_proxy no_proxy"' >> /etc/sudoers.d/builder-nopasswd
 
 # Python virtualenv for pip packages
-COPY .gitconfig ~/.gitconfig
-RUN mkdir -p /builder/.ssh && chmod 700 /builder/.ssh
+COPY .gitconfig /builder/.gitconfig
+RUN mkdir -p -m 0700 /builder/.ssh && ssh-keyscan github.com >> /builder/.ssh/known_hosts
 RUN mkdir -p /opt/venv
-RUN mkdir -p -m 0700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
 
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"

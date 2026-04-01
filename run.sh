@@ -139,7 +139,7 @@ while [ $# -gt 0 ]; do
             COMMAND="$1"
             case "${COMMAND}" in
                 build|shell|clean|menuconfig)
-                    COMMAND="${BOARD:+ --board $ZEPHYR_BOARD} $1"
+                    COMMAND="${ZEPHYR_BOARD:+ --board $ZEPHYR_BOARD} $1"
                     shift
                     ;;
                 container)
@@ -174,6 +174,10 @@ if [ "$CONTAINER_ENGINE" = "docker" ]; then
         -e PUID=`id -u` \
         -e PGID=`id -g` \
         --user $(id -u):$(id -g) \
+    "
+elif [ "$CONTAINER_ENGINE" = "podman" ]; then
+    CONTAINER_RUNTIME_ARGS+=" \
+        --userns=keep-id \
     "
 fi
 

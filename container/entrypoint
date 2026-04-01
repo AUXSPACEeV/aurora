@@ -46,12 +46,18 @@ function build_app() {
   west build -b "${ZEPHYR_BOARD}" "${ZEPHYR_APPLICATION}"
 }
 
-function checkout_app() {
-  echo "ERROR: Checkout function not implemented yet!"
+function clean_app() {
+  echo "INFO: Cleaning ${AURORA_APPLICATION_DIR} ..."
+
+  cd "${AURORA_APPLICATION_DIR}"
+  rm -rf ./build ./.cache ./twister-out*
 }
 
-function clean_app() {
-  echo "ERROR: Clean function not implemented yet!"
+function do_menuconfig() {
+  echo "INFO: Building menuconfig for ${ZEPHYR_BOARD} ..."
+
+  cd "${AURORA_APPLICATION_DIR}"
+  west build -b ${ZEPHYR_BOARD} ${ZEPHYR_APPLICATION} -t menuconfig
 }
 
 ################################################################################
@@ -64,12 +70,23 @@ declare -a ARGS=()
 # Flag that shows if everything has already been initialized.
 FIRST_BOOT_TMP_FLAG="/var/auxspace/first_boot"
 
+# Detect if we need to drop privileges (Podman runs as root)
+USE_GOSU=0
+if [ "$(id -u)" = "0" ] && [ -n "${BUILDER_HOME}" ]; then
+  USE_GOSU=1
+fi
+
 ################################################################################
 # Run first boot code to setup the environment correctly                       #
 ################################################################################
 
 if [ ! -f "$FIRST_BOOT_TMP_FLAG" ]; then
   first_boot_actions
+
+  # Fix ownership when running as root (Podman)
+  if [ "$USE_GOSU" = "1" ]; then
+    chown -R builder:builder "${BUILDER_HOME}"
+  fi
 fi
 
 ################################################################################
@@ -91,16 +108,11 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     menuconfig)
-      COMMAND="menuconfig"
+      COMMAND="do_menuconfig"
       shift
       ;;
     shell)
       COMMAND="/bin/bash"
-      # Required for podman build, since in podman container you are root
-      if [ ! "${BUILDER_HOME}" = "$HOME" ]; then
-        cp "${BUILDER_HOME}/.bashrc" ~/.bashrc
-        cp "${BUILDER_HOME}/.bash_aliases" ~/.bash_aliases
-      fi
       shift
       ;;
     --*)
@@ -117,5 +129,9 @@ done
 ################################################################################
 # Run command                                                                  #
 ################################################################################
+
+if [ "$USE_GOSU" = "1" ]; then
+  exec gosu builder $COMMAND ${ARGS[@]}
+fi
 
 $COMMAND ${ARGS[@]}
