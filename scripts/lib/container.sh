@@ -78,7 +78,7 @@ function set_container_bins() {
 function pull_container() {
     log_info "Pulling '${CONTAINER_PULL_NAME}' ..."
     if [ -z "${CONTAINER_BIN}" ]; then
-        log_err "No conainer bin passed."
+        log_err "No container bin passed."
     fi
 
     ${CONTAINER_BIN} pull ${CONTAINER_PULL_NAME}
@@ -179,7 +179,6 @@ function run_container_cmd() {
     if [ "$use_run_cmd" = "1" ]; then
         log_info "Running '${_CONTAINER_NAME}:$CONTAINER_TAG' ..."
         exec $CONTAINER_BIN run \
-            $run_cmd_args \
             $CONTAINER_RUNTIME_ARGS \
             ${CONTAINER_PULL_NAME} \
             ${run_cmd}
