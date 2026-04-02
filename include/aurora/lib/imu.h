@@ -7,6 +7,8 @@
 #define APP_LIB_IMU_H_
 
 #include <zephyr/device.h>
+#include <zephyr/drivers/sensor.h>
+#include <zephyr/zbus/zbus.h>
 
 
 /**
@@ -17,18 +19,35 @@
  * @brief AURORA IMU library for avionics telemetry.
  */
 
+/** Number of axes for IMU measurements. */
+#define IMU_NUM_AXES 3
+
+/** ZBUS channel for IMU data. */
+ZBUS_CHAN_DECLARE(imu_data_chan);
+
+/**
+ * @brief IMU measurement data structure.
+ *
+ * carries the measurement data from the IMU, including accelerometer and
+ * gyroscope readings for the x, y, and z axes.  This struct is used as a
+ * z-bus message payload for IMU data updates
+ */
+typedef struct
+{
+    struct sensor_value accel[IMU_NUM_AXES]; /**< Latest accelerometer readings (x, y, z). */
+    struct sensor_value gyro[IMU_NUM_AXES];  /**< Latest gyroscope readings (x, y, z). */
+}imu_data_t;
+
 #if !defined(CONFIG_LSM6DSO_TRIGGER)
 /**
- * @brief Poll the IMU for orientation and acceleration data.
+ * @brief Poll the IMU for acceleration data and sends it over the z-bus.
  *
  * @param dev             Pointer to the IMU device.
- * @param orientation_deg Output for orientation angle in degrees, or NULL.
- * @param acc             Output for acceleration magnitude in m/s^2, or NULL.
  *
  * @retval 0 on success.
  * @retval -errno Negative errno on failure.
  */
-int imu_poll(const struct device *dev, float *orientation_deg, float *acc);
+int imu_poll(const struct device *dev);
 #endif /* CONFIG_LSM6DSO_TRIGGER */
 
 /**

@@ -111,15 +111,15 @@
 	lsm6dso320: lsm6dso32@6b {
 		compatible = "st,lsm6dso32";
 		reg = <0x6b>;
-		// irq-gpios = <&gpio0 9 GPIO_ACTIVE_HIGH>;
-		// int-pin = <1>;
+		irq-gpios = <&gpio0 9 GPIO_ACTIVE_HIGH>;
+		int-pin = <1>;
 		status = "disabled";
 	};
 
 	lps22hh0: lps22hh@5c {
 		compatible = "st,lps22hh";
 		reg = <0x5c>;
-		// drdy-gpios = <&gpio0 10 GPIO_ACTIVE_HIGH>;
+		drdy-gpios = <&gpio0 10 GPIO_ACTIVE_HIGH>;
 		status = "disabled";
 	};
 };

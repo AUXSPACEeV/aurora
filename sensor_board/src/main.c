@@ -67,7 +67,7 @@ static bool sm_active = false;   /**< True once the state machine thread has ini
 /* ============================================================
  *                     IMU TASK
  * ============================================================ */
-#if defined(CONFIG_IMU)
+#if defined(CONFIG_IMU) && !defined(CONFIG_LSM6DSO_TRIGGER)
 /**
  * @brief IMU polling thread.
  *
@@ -83,14 +83,11 @@ void imu_task(void *, void *, void *)
 	imu_active = true;
 
 	while (1) {
-		int rc = imu_poll(imu0, &orientation, &acceleration);
+		int rc = imu_poll(imu0);
 		if (rc != 0) {
 			LOG_ERR("IMU polling failed (%d)", rc);
 			break;
 		}
-
-		LOG_INF("orientation: %f deg. acc: %f\n", (double)orientation, (double)acceleration);
-
 		k_sleep(K_MSEC(1000 / imu_hz));
 	}
 
@@ -106,7 +103,7 @@ K_THREAD_DEFINE(imu_task_id, 2048, imu_task, NULL, NULL, NULL,
 /* ============================================================
  *                     BARO TASK
  * ============================================================ */
-#if defined(CONFIG_BARO)
+#if defined(CONFIG_BARO) && !defined(CONFIG_LPS22HH_TRIGGER)
 /**
  * @brief Barometer polling thread.
  *
@@ -169,7 +166,7 @@ K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
 void state_machine_task(void *, void *, void *)
 {
 	enum sm_state state;
-	
+
 #if defined(CONFIG_PYRO)
 	const struct device *pyro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_pyro));
 	int ret;
