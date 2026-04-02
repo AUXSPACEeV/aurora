@@ -27,53 +27,153 @@ LOG_MODULE_REGISTER(mini_pyro);
 /**
  * @brief Initialize the mini pyro driver instance.
  *
+ * Configures all trigger and arm GPIOs as output-inactive.
+ *
  * @param dev Pyro device instance.
  * @return 0 on success, negative errno on failure.
- * @note Unimplemented.
  */
 static int auxspaceev_mini_pyro_init(const struct device *dev)
 {
-	(void) dev;
+	const struct pyro_config *config = dev->config;
+	int ret;
 
-	LOG_WRN("auxspaceev_mini_pyro_init unimplemented.\n");
+	for (uint32_t i = 0; i < config->n_channels; i++) {
+		if (!gpio_is_ready_dt(&config->trigger_gpios[i])) {
+			LOG_ERR("trigger gpio %u not ready", i);
+			return -ENODEV;
+		}
+		ret = gpio_pin_configure_dt(&config->trigger_gpios[i],
+					    GPIO_OUTPUT_INACTIVE);
+		if (ret < 0) {
+			LOG_ERR("failed to configure trigger gpio %u: %d",
+				i, ret);
+			return ret;
+		}
+	}
 
-	return -ENOTSUP;
+	uint32_t n_arm = config->single_arm ? 1 : config->n_channels;
+
+	for (uint32_t i = 0; i < n_arm; i++) {
+		if (!gpio_is_ready_dt(&config->arm_gpios[i])) {
+			LOG_ERR("arm gpio %u not ready", i);
+			return -ENODEV;
+		}
+		ret = gpio_pin_configure_dt(&config->arm_gpios[i],
+					    GPIO_OUTPUT_INACTIVE);
+		if (ret < 0) {
+			LOG_ERR("failed to configure arm gpio %u: %d",
+				i, ret);
+			return ret;
+		}
+	}
+
+	return 0;
 }
 
-/** @brief Arm a pyro channel. @note Unimplemented. */
+/** @brief Arm a pyro channel. */
 static int auxspaceev_mini_pyro_arm_channel(const struct device *dev,
-				       uint32_t channel)
+					    uint32_t channel)
 {
-	(void) dev;
-	(void) channel;
+	const struct pyro_config *config = dev->config;
+	struct pyro_data *data = dev->data;
 
-	LOG_WRN("auxspaceev_mini_pyro_arm_channel unimplemented.\n");
+	if (channel >= config->n_channels) {
+		return -EINVAL;
+	}
 
-	return -ENOTSUP;
+	uint32_t arm_idx = config->single_arm ? 0 : channel;
+	int ret = gpio_pin_set_dt(&config->arm_gpios[arm_idx], 1);
+
+	if (ret < 0) {
+		return ret;
+	}
+
+	data->arm_flags |= BIT(channel);
+
+	return 0;
 }
 
-/** @brief Disarm a pyro channel. @note Unimplemented. */
+/** @brief Disarm a pyro channel. */
 static int auxspaceev_mini_pyro_disarm_channel(const struct device *dev,
-					  uint32_t channel)
+					       uint32_t channel)
 {
-	(void) dev;
-	(void) channel;
+	const struct pyro_config *config = dev->config;
+	struct pyro_data *data = dev->data;
 
-	LOG_WRN("auxspaceev_mini_pyro_disarm_channel unimplemented.\n");
+	if (channel >= config->n_channels) {
+		return -EINVAL;
+	}
 
-	return -ENOTSUP;
+	data->arm_flags &= ~BIT(channel);
+
+	/*
+	 * In single_arm mode, only deassert the shared arm GPIO
+	 * when no channels remain armed.
+	 */
+	uint32_t arm_idx = config->single_arm ? 0 : channel;
+
+	if (!config->single_arm || data->arm_flags == 0) {
+		int ret = gpio_pin_set_dt(&config->arm_gpios[arm_idx], 0);
+
+		if (ret < 0) {
+			return ret;
+		}
+	}
+
+	return 0;
 }
 
-/** @brief Trigger a pyro channel. @note Unimplemented. */
-static int auxspaceev_mini_pyro_trigger_channel(const struct device *dev,
-					   uint32_t channel)
+/**
+ * @brief Secure a pyro channel.
+ *
+ * Deasserts trigger and disarms the channel to make it safe.
+ */
+static int auxspaceev_mini_pyro_secure_channel(const struct device *dev,
+					       uint32_t channel)
 {
-	(void) dev;
-	(void) channel;
+	const struct pyro_config *config = dev->config;
+	struct pyro_data *data = dev->data;
+	int ret;
 
-	LOG_WRN("auxspaceev_mini_pyro_trigger_channel unimplemented.\n");
+	if (channel >= config->n_channels) {
+		return -EINVAL;
+	}
 
-	return -ENOTSUP;
+	ret = gpio_pin_set_dt(&config->trigger_gpios[channel], 0);
+	if (ret < 0) {
+		return ret;
+	}
+
+	data->trigger_flags &= ~BIT(channel);
+
+	return auxspaceev_mini_pyro_disarm_channel(dev, channel);
+}
+
+/** @brief Trigger a pyro channel. */
+static int auxspaceev_mini_pyro_trigger_channel(const struct device *dev,
+						uint32_t channel)
+{
+	const struct pyro_config *config = dev->config;
+	struct pyro_data *data = dev->data;
+
+	if (channel >= config->n_channels) {
+		return -EINVAL;
+	}
+
+	if (!(data->arm_flags & BIT(channel))) {
+		LOG_ERR("channel %u not armed", channel);
+		return -EACCES;
+	}
+
+	int ret = gpio_pin_set_dt(&config->trigger_gpios[channel], 1);
+
+	if (ret < 0) {
+		return ret;
+	}
+
+	data->trigger_flags |= BIT(channel);
+
+	return 0;
 }
 
 
@@ -115,25 +215,34 @@ static int auxspaceev_mini_pyro_read_cap_channel(const struct device *dev,
 	return -ENOTSUP;
 }
 
-/** @brief Get the number of pyro channels. @note Unimplemented. */
+/** @brief Get the number of pyro channels. */
 static int auxspaceev_mini_pyro_get_nchannels(const struct device *dev)
 {
-	(void) dev;
+	const struct pyro_config *config = dev->config;
 
-	LOG_WRN("auxspaceev_mini_pyro_get_nchannels unimplemented.\n");
-
-	return -ENOTSUP;
+	return config->n_channels;
 }
 
 static DEVICE_API(pyro, pyro_api_funcs) = {
 	.arm = auxspaceev_mini_pyro_arm_channel,
 	.disarm = auxspaceev_mini_pyro_disarm_channel,
+	.secure = auxspaceev_mini_pyro_secure_channel,
 	.trigger = auxspaceev_mini_pyro_trigger_channel,
 	.charge = auxspaceev_mini_pyro_charge_channel,
 	.sense = auxspaceev_mini_pyro_sense_channel,
 	.read_cap = auxspaceev_mini_pyro_read_cap_channel,
 	.get_nchannels = auxspaceev_mini_pyro_get_nchannels,
 };
+
+/**
+ * @brief Build a gpio_dt_spec initializer from a phandle-array element.
+ *
+ * @param node_id Devicetree node identifier.
+ * @param prop    Phandle-array property name.
+ * @param idx     Element index within the phandle-array.
+ */
+#define MINI_PYRO_GPIO_SPEC(node_id, prop, idx)				\
+	GPIO_DT_SPEC_GET_BY_IDX(node_id, prop, idx),
 
 /**
  * @brief Initialize a struct pyro_config from devicetree GPIO bindings.
@@ -144,19 +253,27 @@ static DEVICE_API(pyro, pyro_api_funcs) = {
 	{									\
 		.n_channels = DT_PROP_LEN(DT_DRV_INST(inst), trigger_gpios),	\
 		.single_arm = DT_PROP_LEN(DT_DRV_INST(inst), arm_gpios) == 1,	\
-		.trigger_gpios = GPIO_DT_SPEC_INST_GET(inst, trigger_gpios),	\
-		.arm_gpios = GPIO_DT_SPEC_INST_GET(inst, arm_gpios),		\
+		.trigger_gpios = pyro_trigger_gpios_##inst,			\
+		.arm_gpios = pyro_arm_gpios_##inst,				\
 	}
 
 /**
  * @brief Instantiate a mini pyro driver from devicetree.
  *
- * Allocates runtime data, builds the configuration struct, and
- * registers the device.
+ * Declares per-channel GPIO spec arrays, allocates runtime data,
+ * builds the configuration struct, and registers the device.
  *
  * @param inst Instance number (from DT_INST_FOREACH_STATUS_OKAY).
  */
 #define MINI_PYRO_DEFINE(inst)						\
+	static const struct gpio_dt_spec pyro_trigger_gpios_##inst[] = {\
+		DT_FOREACH_PROP_ELEM(DT_DRV_INST(inst), trigger_gpios,	\
+				     MINI_PYRO_GPIO_SPEC)		\
+	};								\
+	static const struct gpio_dt_spec pyro_arm_gpios_##inst[] = {	\
+		DT_FOREACH_PROP_ELEM(DT_DRV_INST(inst), arm_gpios,	\
+				     MINI_PYRO_GPIO_SPEC)		\
+	};								\
 	static struct pyro_data pyro_data_##inst;			\
 	static const struct pyro_config pyro_config_##inst =		\
 		PYRO_CONFIG(inst);					\
