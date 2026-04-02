@@ -55,7 +55,7 @@ jobs:
   build:
     name: Build ${{ matrix.platform }}
     needs: check
-    if: needs.check.outputs.exists != 'true' && github.event_name != 'pull_request'
+    if: needs.check.outputs.exists != 'true'
     runs-on: ${{ matrix.runner }}
     permissions:
       packages: write
@@ -117,7 +117,7 @@ jobs:
   manifest:
     name: Push manifest
     needs: [check, build]
-    if: needs.check.outputs.exists != 'true'
+    if: needs.check.outputs.exists != 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-22.04
     permissions:
       packages: write
