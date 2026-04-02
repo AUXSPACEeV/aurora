@@ -8,6 +8,10 @@ on:
     branches: [main]
     paths:
       - 'container/**'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'container/**'
   workflow_dispatch:
 
 permissions:
@@ -51,7 +55,7 @@ jobs:
   build:
     name: Build ${{ matrix.platform }}
     needs: check
-    if: needs.check.outputs.exists != 'true'
+    if: needs.check.outputs.exists != 'true' && github.event_name != 'pull_request'
     runs-on: ${{ matrix.runner }}
     permissions:
       packages: write
