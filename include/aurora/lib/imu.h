@@ -7,6 +7,8 @@
 #define APP_LIB_IMU_H_
 
 #include <zephyr/device.h>
+#include <zephyr/drivers/sensor.h>
+#include <zephyr/zbus/zbus.h>
 
 
 /**
@@ -17,19 +19,36 @@
  * @brief AURORA IMU library for avionics telemetry.
  */
 
-#if !defined(CONFIG_LSM6DSO_TRIGGER)
+/** Number of axes for IMU measurements. */
+#define IMU_NUM_AXES 3
+
+/** ZBUS channel for IMU data. */
+ZBUS_CHAN_DECLARE(imu_data_chan);
+
 /**
- * @brief Poll the IMU for orientation and acceleration data.
+ * @brief IMU measurement data structure.
+ *
+ * carries the measurement data from the IMU, including accelerometer and
+ * gyroscope readings for the x, y, and z axes.  This struct is used as a
+ * z-bus message payload for IMU data updates
+ */
+struct imu_data
+{
+	struct sensor_value accel[IMU_NUM_AXES]; /**< Latest accelerometer readings (x, y, z). */
+	struct sensor_value gyro[IMU_NUM_AXES];  /**< Latest gyroscope readings (x, y, z). */
+};
+
+#if !defined(CONFIG_IMU_TRIGGER)
+/**
+ * @brief Poll the IMU for acceleration data and sends it over the z-bus.
  *
  * @param dev             Pointer to the IMU device.
- * @param orientation_deg Output for orientation angle in degrees, or NULL.
- * @param acc             Output for acceleration magnitude in m/s^2, or NULL.
  *
  * @retval 0 on success.
  * @retval -errno Negative errno on failure.
  */
-int imu_poll(const struct device *dev, float *orientation_deg, float *acc);
-#endif /* CONFIG_LSM6DSO_TRIGGER */
+int imu_poll(const struct device *dev);
+#endif /* CONFIG_IMU_TRIGGER */
 
 /**
  * @brief Set the IMU accelerometer and gyroscope sampling frequency.
@@ -53,6 +72,28 @@ int imu_set_sampling_freq(const struct device *dev, int sampling_rate_hz);
  * @retval -ENODEV if the device is not ready.
  */
 int imu_init(const struct device *dev);
+
+/**
+ * @brief calculate the average acceleration from IMU sensor values in m/s^2.
+ *
+ * @param data  Pointer to the IMU sensor data
+ * @param acc_out Output for average acceleration in m/s^2. Must be valid pointer to a float.
+ * @retval 0 on success.
+ * @retval -EINVAL if @p data or @p acc_out is NULL
+ */
+int imu_sensor_value_to_acceleration(const struct imu_data *data,
+				     float *acc_out);
+
+/**
+ * @brief calculate the orientation angle in degrees from IMU sensor values.
+ *
+ * @param data  Pointer to the IMU sensor data
+ * @param orientation_out Calculated orientation angle. Must be valid pointer to a float.
+ * @retval 0 on success.
+ * @retval -EINVAL if @p data or @p orientation_out is NULL
+ */
+int imu_sensor_value_to_orientation(const struct imu_data *data,
+				    float *orientation_out);
 
 /** @} */
 

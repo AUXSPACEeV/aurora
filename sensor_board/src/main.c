@@ -85,31 +85,29 @@ void imu_task(void *, void *, void *)
 	}
 	imu_active = true;
 
+#if !defined(CONFIG_IMU_TRIGGER)
 	while (1) {
-		int rc = imu_poll(imu0, &orientation, &acceleration);
+		int rc = imu_poll(imu0);
 		if (rc != 0) {
 			LOG_ERR("IMU polling failed (%d)", rc);
 			break;
 		}
-
-		LOG_INF("orientation: %f deg. acc: %f\n", (double)orientation, (double)acceleration);
-
 		k_sleep(K_MSEC(1000 / imu_hz));
 	}
+#endif /* !CONFIG_IMU_TRIGGER */
 
-	LOG_INF("IMU task stopped.");
+	LOG_INF("IMU task ended.");
 }
 
 /* Create the IMU task (inactive unless CONFIG_IMU=y) */
 K_THREAD_DEFINE(imu_task_id, 2048, imu_task, NULL, NULL, NULL,
 				5, 0, 0);
-
 #endif /* CONFIG_IMU */
 
 /* ============================================================
  *                     BARO TASK
  * ============================================================ */
-#if defined(CONFIG_BARO)
+#if defined(CONFIG_BARO) && !defined(CONFIG_LPS22HH_TRIGGER)
 /**
  * @brief Barometer polling thread.
  *
@@ -172,7 +170,7 @@ K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
 void state_machine_task(void *, void *, void *)
 {
 	enum sm_state state;
-	
+
 #if defined(CONFIG_PYRO)
 	const struct device *pyro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_pyro));
 	int ret;

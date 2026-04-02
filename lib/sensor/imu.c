@@ -15,6 +15,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
+#include <zephyr/zbus/zbus.h>
 
 #include <aurora/lib/imu.h>
 
@@ -23,6 +24,13 @@
 #endif
 
 LOG_MODULE_REGISTER(imu, CONFIG_AURORA_SENSORS_LOG_LEVEL);
+
+ZBUS_CHAN_DEFINE(imu_data_chan,
+		 struct imu_data,
+		 NULL,
+		 NULL,
+		 ZBUS_OBSERVERS_EMPTY,
+		 ZBUS_MSG_INIT(0));
 
 /**
  * @brief Convert a Zephyr sensor_value to a float.
@@ -36,50 +44,28 @@ static inline float out_ev(struct sensor_value *val)
 }
 
 /**
- * @brief Fetch XYZ accelerometer channels from the IMU.
- *
- * @param dev Pointer to the IMU device.
- * @param x   Output for X-axis acceleration.
- * @param y   Output for Y-axis acceleration.
- * @param z   Output for Z-axis acceleration.
- */
-static void fetch_accel(const struct device *dev, struct sensor_value *x,
-						struct sensor_value *y, struct sensor_value *z)
-{
-	sensor_sample_fetch_chan(dev, SENSOR_CHAN_ACCEL_XYZ);
-	sensor_channel_get(dev, SENSOR_CHAN_ACCEL_X, x);
-	sensor_channel_get(dev, SENSOR_CHAN_ACCEL_Y, y);
-	sensor_channel_get(dev, SENSOR_CHAN_ACCEL_Z, z);
-}
-
-#if defined(CONFIG_LSM6DSO_TRIGGER)
-/**
  * @brief Fetch and log accelerometer and gyroscope readings.
  *
  * @param dev Pointer to the IMU device.
  */
-static void fetch_and_display(const struct device *dev)
+static void fetch_and_send(const struct device *dev)
 {
-	struct sensor_value x, y, z;
-	static int trig_cnt;
+	struct imu_data msg;
+	int ret;
 
-	trig_cnt++;
+	if (sensor_sample_fetch(dev) != 0) {
+		LOG_ERR("Failed to fetch sensor data\n");
+		return;
+	}
 
-	/* lsm6dso accel */
-	fetch_accel(dev, &x, &y, &z);
+	sensor_channel_get(dev, SENSOR_CHAN_ACCEL_XYZ, msg.accel);
+	sensor_channel_get(dev, SENSOR_CHAN_GYRO_XYZ, msg.gyro);
 
-	LOG_INF("accel x:%f ms/2 y:%f ms/2 z:%f ms/2\n",
-			(double)out_ev(&x), (double)out_ev(&y), (double)out_ev(&z));
-
-	/* lsm6dso gyro */
-	fetch_gyro(dev, &x, &y, &z);
-
-	LOG_INF("gyro x:%f rad/s y:%f rad/s z:%f rad/s\n",
-			(double)out_ev(&x), (double)out_ev(&y), (double)out_ev(&z));
-
-	LOG_INF("trig_cnt:%d\n\n", trig_cnt);
+	/* Publish the IMU data to the z-bus channel */
+	zbus_chan_pub(&imu_data_chan, &msg, K_NO_WAIT);
 }
 
+#if defined(CONFIG_IMU_TRIGGER)
 /**
  * @brief Data-ready trigger callback for the IMU.
  *
@@ -87,9 +73,9 @@ static void fetch_and_display(const struct device *dev)
  * @param trig Pointer to the sensor trigger descriptor.
  */
 static void trigger_handler(const struct device *dev,
-							const struct sensor_trigger *trig)
+			    const struct sensor_trigger *trig)
 {
-	fetch_and_display(dev);
+	fetch_and_send(dev);
 }
 
 /**
@@ -112,34 +98,12 @@ static void run_trigger_mode(const struct device *dev)
 
 #else
 /* imu_poll – see imu.h */
-int imu_poll(const struct device *dev, float *orientation_deg, float *acc_avg)
+int imu_poll(const struct device *dev)
 {
-	struct sensor_value ax, ay, az;
-
-	/* Read accelerometer values */
-	fetch_accel(dev, &ax, &ay, &az);
-
-	/* Convert to floating point */
-	float x = out_ev(&ax);
-	float y = out_ev(&ay);
-	float z = out_ev(&az);
-
-	/* Compute magnitude of acceleration */
-	float acc = sqrtf(x*x + y*y + z*z);
-
-	/* Compute orientation angle in degrees (atan2(y,x)) */
-	float angle_deg = atan2f(y, x) * (180.0f / M_PI);
-
-	/* Return results */
-	if (orientation_deg)
-		*orientation_deg = angle_deg;
-
-	if (acc_avg)
-		*acc_avg = acc;
-
+	fetch_and_send(dev);
 	return 0;
 }
-#endif
+#endif /* CONFIG_IMU_TRIGGER */
 
 /* imu_init – see imu.h */
 int imu_init(const struct device *dev)
@@ -149,10 +113,36 @@ int imu_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-#ifdef CONFIG_LSM6DSO_TRIGGER
-	LOG_DBG("Testing IMU in trigger mode.\n\n");
+#if defined(CONFIG_IMU_TRIGGER)
+	LOG_DBG("Enableing IMU in trigger mode.\n\n");
 	run_trigger_mode(dev);
 #endif
 
+	return 0;
+}
+
+/* imu_sensor_value_to_acceleration – see imu.h */
+int imu_sensor_value_to_acceleration(const struct imu_data *data, float *acc_out)
+{
+	if (data == NULL || acc_out == NULL)
+		return -EINVAL;
+
+	float x = out_ev(&data->accel[0]);
+	float y = out_ev(&data->accel[1]);
+	float z = out_ev(&data->accel[2]);
+	*acc_out = sqrtf(x*x + y*y + z*z);
+	return 0;
+}
+
+/* imu_sensor_value_to_orientation – see imu.h */
+int imu_sensor_value_to_orientation(const struct imu_data *data,
+				    float *orientation_out)
+{
+	if (data == NULL || orientation_out == NULL)
+		return -EINVAL;
+
+	float x = out_ev(&data->accel[0]);
+	float y = out_ev(&data->accel[1]);
+	*orientation_out = atan2f(y, x) * (180.0f / M_PI);
 	return 0;
 }
