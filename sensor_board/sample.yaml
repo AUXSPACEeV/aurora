@@ -6,31 +6,36 @@ sample:
   name: Sensor Board
 common:
   build_only: true
-  integration_platforms:
-    - sensor_board_v2/rp2040
-    - sensor_board_v2/rp2350a/hazard3
-  platform_allow:
-    - sensor_board_v2/rp2040
-    - sensor_board_v2/rp2350a/hazard3
-    - esp32s3_micrometer/esp32s3/procpu
   modules:
     - fatfs
 tests:
   app.default:
-    platform_exclude:
-      - esp32s3_micrometer/esp32s3/procpu
+    platform_allow:
+      - sensor_board_v2/rp2040
+      - sensor_board_v2/rp2350a/hazard3
+    integration_platforms:
+      - sensor_board_v2/rp2040
+      - sensor_board_v2/rp2350a/hazard3
   app.default.sysbuild:
     sysbuild: true
     platform_allow:
       - esp32s3_micrometer/esp32s3/procpu
+    integration_platforms:
+      - esp32s3_micrometer/esp32s3/procpu
   app.debug:
     extra_overlay_confs:
       - debug.conf
-    platform_exclude:
-      - esp32s3_micrometer/esp32s3/procpu
+    platform_allow:
+      - sensor_board_v2/rp2040
+      - sensor_board_v2/rp2350a/hazard3
+    integration_platforms:
+      - sensor_board_v2/rp2040
+      - sensor_board_v2/rp2350a/hazard3
   app.debug.sysbuild:
     sysbuild: true
     extra_overlay_confs:
       - debug.conf
     platform_allow:
+      - esp32s3_micrometer/esp32s3/procpu
+    integration_platforms:
       - esp32s3_micrometer/esp32s3/procpu
