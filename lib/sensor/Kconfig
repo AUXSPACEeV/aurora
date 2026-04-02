@@ -7,6 +7,7 @@ source "subsys/logging/Kconfig.template.log_config"
 
 config AURORA_SENSORS
 	bool "Support for sensor HAL"
+	default y if SENSOR
 	help
 		This option enables functionality for the aurora sensor HAL.
 
@@ -15,6 +16,7 @@ menu "Inertial Measurement Unit (IMU)"
 config IMU
 	bool "Support for IMU"
 	depends on AURORA_SENSORS
+	default y if LSM6DSO
 	help
 		This option enables functionality for the Inertial Measurement
 		Unit (IMU).
@@ -58,9 +60,18 @@ menu "Barometric Pressure Sensor (BARO)"
 config BARO
 	bool "Support for Baro"
 	depends on AURORA_SENSORS
+	default y if MS5607 || LPS22HH
 	help
 		This option enables functionality for barometric pressure
 		sensors.
+
+config BARO_TRIGGER
+	bool "Support for Baro Trigger"
+	depends on BARO
+	default y if LPS22HH_TRIGGER
+	help
+		This option enables functionality for barometric pressure
+		sensors to run triggers in an interrupt context.
 
 # Only show frequency options when BARO is enabled
 choice BARO_FREQUENCY
