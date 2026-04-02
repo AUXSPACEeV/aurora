@@ -58,9 +58,12 @@ jobs:
           mkdir -p firmware-artifacts
           for board_dir in aurora/twister-out-firmware/*/; do
             board=$(basename "$board_dir")
-            mkdir -p "firmware-artifacts/$board"
-            find "$board_dir" -name "zephyr.bin" -o -name "zephyr.elf" -o -name "zephyr.hex" -o -name "zephyr.uf2" \
-              | xargs -I{} cp {} "firmware-artifacts/$board/"
+            find "$board_dir" \( -name "zephyr.bin" -o -name "zephyr.elf" -o -name "zephyr.hex" -o -name "zephyr.uf2" -o -name "zephyr.signed.bin" \) \
+              | while read -r f; do
+                rel="${f#"$board_dir"}"
+                mkdir -p "firmware-artifacts/$board/$(dirname "$rel")"
+                cp "$f" "firmware-artifacts/$board/$rel"
+              done
           done
 
       - name: Upload firmware binaries
