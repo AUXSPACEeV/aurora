@@ -109,27 +109,6 @@ int baro_measure(const struct device *dev)
 }
 #endif /* CONFIG_BARO_TRIGGER */
 
-/**
- * @brief Set the barometric sensor oversampling rate.
- *
- * @param dev Pointer to the barometric sensor device.
- * @param osr Oversampling rate value.
- * @return 0 on success, -EIO on failure.
- */
-int baro_set_oversampling(const struct device *dev, uint32_t osr)
-{
-	struct sensor_value oversampling_rate = { osr, 0 };
-
-	if (sensor_attr_set(dev, SENSOR_CHAN_ALL, SENSOR_ATTR_OVERSAMPLING,
-						&oversampling_rate) != 0) {
-		LOG_ERR("Could not set oversampling rate of %d "
-				"on Baro device, aborting test.",
-				oversampling_rate.val1);
-		return -EIO;
-	}
-	return 0;
-}
-
 /* baro_init – see baro.h */
 int baro_init(const struct device *dev)
 {
@@ -169,6 +148,29 @@ int baro_init(const struct device *dev)
 /** Ground-level reference pressure in kPa (0 = not set). */
 static float ref_pressure_kpa;
 
+/** Reference pressure set flag. */
+static bool ref_set = false;
+
+/**
+ * @brief Convert a pressure reading to altitude AGL.
+ *
+ * Uses the hypsometric formula (ISA troposphere model) with the
+ * reference pressure set by @ref baro_set_reference.
+ *
+ * @param press_kpa Measured pressure in kilopascals.
+ *
+ * @return Altitude in meters above the reference level.
+ */
+static float baro_pressure_to_altitude(float press_kpa)
+{
+	/*
+	 * Hypsometric formula (ISA troposphere):
+	 *   h = (T0 / L) * (1 - (P / P_ref) ^ (R·L / (g·M)))
+	 */
+	return (ISA_T0 / ISA_L) *
+	       (1.0f - powf(press_kpa / ref_pressure_kpa, ISA_RL_OVER_GM));
+}
+
 /* baro_set_reference – see baro.h */
 int baro_set_reference(float ref_kpa)
 {
@@ -177,17 +179,6 @@ int baro_set_reference(float ref_kpa)
 
 	ref_pressure_kpa = ref_kpa;
 	return 0;
-}
-
-/* baro_pressure_to_altitude – see baro.h */
-float baro_pressure_to_altitude(float press_kpa)
-{
-	/*
-	 * Hypsometric formula (ISA troposphere):
-	 *   h = (T0 / L) * (1 - (P / P_ref) ^ (R·L / (g·M)))
-	 */
-	return (ISA_T0 / ISA_L) *
-	       (1.0f - powf(press_kpa / ref_pressure_kpa, ISA_RL_OVER_GM));
 }
 
 /* baro_sensor_value_to_altitude – see baro.h */
