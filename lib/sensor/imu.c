@@ -38,7 +38,7 @@ ZBUS_CHAN_DEFINE(imu_data_chan,
  * @param val Pointer to the sensor value.
  * @return Floating-point representation.
  */
-static inline float out_ev(struct sensor_value *val)
+static inline float out_ev(const struct sensor_value *val)
 {
 	return (val->val1 + (float)val->val2 / 1000000);
 }

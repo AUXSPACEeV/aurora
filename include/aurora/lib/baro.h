@@ -65,7 +65,7 @@ int baro_init(const struct device *dev);
 /**
  * @brief Set the ground-level reference pressure.
  *
- * Must be called before @ref baro_pressure_to_altitude to establish
+ * Must be called before @ref baro_sensor_value_to_altitude to establish
  * the zero-altitude baseline.  Typically called once at startup with
  * the first valid pressure reading.
  *
@@ -74,7 +74,7 @@ int baro_init(const struct device *dev);
  * @retval 0 on success.
  * @retval -EINVAL if @p ref_kpa is not positive.
  */
-int baro_set_reference(float ref_kpa);
+int baro_set_reference(double ref_kpa);
 
 /**
  * @brief Convert a pressure reading to altitude AGL.
@@ -82,11 +82,13 @@ int baro_set_reference(float ref_kpa);
  * Uses the hypsometric formula (ISA troposphere model) with the
  * reference pressure set by @ref baro_set_reference.
  *
- * @param press_kpa Measured pressure in kilopascals.
+ * @param press Barometric pressure as sensor_value.
+ * @param altitude_out Altitude in meters above the reference level.
  *
- * @return Altitude in meters above the reference level.
+ * @retval 0 on success.
+ * @retval -EINVAL if @p press or @p altitude_out is NULL.
  */
-float baro_pressure_to_altitude(float press_kpa);
+int baro_sensor_value_to_altitude(const struct sensor_value *press, float *altitude_out);
 
 /** @} */
 
