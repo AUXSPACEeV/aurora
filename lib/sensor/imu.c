@@ -40,7 +40,7 @@ ZBUS_CHAN_DEFINE(imu_data_chan,
  * @param val Pointer to the sensor value.
  * @return Floating-point representation.
  */
-static inline float out_ev(struct sensor_value *val)
+static inline float out_ev(const struct sensor_value *val)
 {
 	return (val->val1 + (float)val->val2 / 1000000);
 }
@@ -164,7 +164,7 @@ int imu_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-	ret = imu_set_sampling_freq(dev, imu_hz) != 0;
+	ret = imu_set_sampling_freq(dev, imu_hz);
 	if (ret != 0) {
 		LOG_WRN("Could not set IMU sampling frequency to %d.0 Hz.\n", imu_hz);
 	}
@@ -174,5 +174,30 @@ int imu_init(const struct device *dev)
 	run_trigger_mode(dev);
 #endif
 
+	return 0;
+}
+
+/* imu_sensor_value_to_acceleration – see imu.h */
+int imu_sensor_value_to_acceleration(const imu_data_t *data, float *acc_out)
+{
+	if (data == NULL || acc_out == NULL)
+		return -EINVAL;
+
+	float x = out_ev(&data->accel[0]);
+	float y = out_ev(&data->accel[1]);
+	float z = out_ev(&data->accel[2]);
+	*acc_out = sqrtf(x*x + y*y + z*z);
+	return 0;
+}
+
+/* imu_sensor_value_to_orientation – see imu.h */
+int imu_sensor_value_to_orientation(const imu_data_t *data, float *orientation_out)
+{
+	if (data == NULL || orientation_out == NULL)
+		return -EINVAL;
+
+	float x = out_ev(&data->accel[0]);
+	float y = out_ev(&data->accel[1]);
+	*orientation_out = atan2f(y, x) * (180.0f / M_PI);
 	return 0;
 }

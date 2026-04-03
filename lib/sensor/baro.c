@@ -117,7 +117,7 @@ int baro_measure(const struct device *dev)
  * @param osr Oversampling rate value.
  * @return 0 on success, -EIO on failure.
  */
-int baro_set_oversampling(const struct device *dev, uint32_t osr)
+static int baro_set_oversampling(const struct device *dev, uint32_t osr)
 {
 	struct sensor_value oversampling_rate = { osr, 0 };
 
@@ -167,8 +167,22 @@ int baro_init(const struct device *dev)
 /** Ground-level reference pressure in kPa (0 = not set). */
 static float ref_pressure_kpa;
 
-/* baro_set_reference – see baro.h */
-int baro_set_reference(float ref_kpa)
+/** Reference pressure set flag. */
+static bool ref_set = false;
+
+/**
+ * @brief Set the ground-level reference pressure.
+ *
+ * Must be called before @ref baro_pressure_to_altitude to establish
+ * the zero-altitude baseline.  Typically called once at startup with
+ * the first valid pressure reading.
+ *
+ * @param ref_kpa Ground-level pressure in kilopascals.
+ *
+ * @return 0 on success.
+ * @return -EINVAL if @p ref_kpa is not positive.
+ */
+static int baro_set_reference(float ref_kpa)
 {
 	if (ref_kpa <= 0.0f)
 		return -EINVAL;
@@ -176,9 +190,17 @@ int baro_set_reference(float ref_kpa)
 	ref_pressure_kpa = ref_kpa;
 	return 0;
 }
-
-/* baro_pressure_to_altitude – see baro.h */
-float baro_pressure_to_altitude(float press_kpa)
+/**
+ * @brief Convert a pressure reading to altitude AGL.
+ *
+ * Uses the hypsometric formula (ISA troposphere model) with the
+ * reference pressure set by @ref baro_set_reference.
+ *
+ * @param press_kpa Measured pressure in kilopascals.
+ *
+ * @return Altitude in meters above the reference level.
+ */
+static float baro_pressure_to_altitude(float press_kpa)
 {
 	/*
 	 * Hypsometric formula (ISA troposphere):
@@ -186,4 +208,23 @@ float baro_pressure_to_altitude(float press_kpa)
 	 */
 	return (ISA_T0 / ISA_L) *
 	       (1.0f - powf(press_kpa / ref_pressure_kpa, ISA_RL_OVER_GM));
+}
+
+/* baro_sensor_value_to_altitude – see baro.h */
+int baro_sensor_value_to_altitude(const struct sensor_value *press, float *altitude_out)
+{
+	if (press == NULL || altitude_out == NULL)
+		return -EINVAL;
+
+	float press_kpa = (float)press->val1 + (float)press->val2 / 1e6f;
+
+	if (!ref_set) {
+		if (baro_set_reference(press_kpa) != 0) {
+			return -EINVAL;
+		}
+		ref_set = true;
+	}
+
+	*altitude_out = baro_pressure_to_altitude(press_kpa);
+	return 0;
 }
