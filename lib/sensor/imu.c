@@ -76,21 +76,38 @@ int imu_set_sampling_freq(const struct device *dev, int sampling_rate_hz)
  * @brief Fetch and log accelerometer and gyroscope readings.
  *
  * @param dev Pointer to the IMU device.
+ *
+ * @return 0 on success, -errno on failure.
  */
-static void fetch_and_send(const struct device *dev)
+static int fetch_and_send(const struct device *dev)
 {
 	imu_data_t msg;
+	int ret;
 
-	if (sensor_sample_fetch(dev) != 0) {
+	ret = sensor_sample_fetch(dev);
+	if ( ret != 0) {
 		LOG_ERR("Failed to fetch sensor data\n");
-		return;
+		return ret;
 	}
 
-	sensor_channel_get(dev, SENSOR_CHAN_ACCEL_XYZ, msg.accel);
-	sensor_channel_get(dev, SENSOR_CHAN_GYRO_XYZ, msg.gyro);
+	ret = sensor_channel_get(dev, SENSOR_CHAN_ACCEL_XYZ, msg.accel);
+	if (ret != 0) {
+		LOG_ERR("Failed to get accelerometer data\n");
+		return ret;
+	}
+
+	ret = sensor_channel_get(dev, SENSOR_CHAN_GYRO_XYZ, msg.gyro);
+	if (ret != 0) {
+		LOG_ERR("Failed to get gyroscope data\n");
+		return ret;
+	}
 
 	/* Publish the IMU data to the z-bus channel */
-	zbus_chan_pub(&imu_data_chan, &msg, K_NO_WAIT);
+	ret = zbus_chan_pub(&imu_data_chan, &msg, K_NO_WAIT);
+	if (ret != 0) {
+		LOG_ERR("Failed to publish IMU data\n");
+	}
+	return ret;
 }
 
 #if defined(CONFIG_LSM6DSO_TRIGGER)
@@ -129,10 +146,12 @@ static void run_trigger_mode(const struct device *dev)
 /* imu_poll – see imu.h */
 int imu_poll(const struct device *dev)
 {
-	fetch_and_send(dev);
-	return 0;
+	if (dev == NULL)
+		return -EINVAL;
+
+	return fetch_and_send(dev);
 }
-#endif
+#endif /* CONFIG_LSM6DSO_TRIGGER */
 
 /* imu_init – see imu.h */
 int imu_init(const struct device *dev)
