@@ -22,12 +22,16 @@ jobs:
           - board: sensor_board_v2/rp2040
             artifact: sensor_board_v2_rp2040
             toolchain: arm-zephyr-eabi
+            extra_args: ""
           - board: sensor_board_v2/rp2350a/hazard3
             artifact: sensor_board_v2_rp2350a_hazard3
             toolchain: riscv64-zephyr-elf
+            extra_args: ""
           - board: esp32s3_micrometer/esp32s3/procpu
             artifact: esp32s3_micrometer
             toolchain: xtensa-espressif_esp32s3_zephyr-elf
+            extra_args: "--sysbuild"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -51,23 +55,34 @@ jobs:
         working-directory: aurora
         shell: bash
         run: |
-          west build -b ${{ matrix.board }} sensor_board
+          west build -b ${{ matrix.board }} ${{ matrix.extra_args }} sensor_board
 
       - name: Collect artifacts
         working-directory: aurora
         shell: bash
         run: |
-          mkdir -p dist
-          for ext in elf uf2 bin; do
-            src="build/zephyr/zephyr.${ext}"
-            [ -f "${src}" ] && cp "${src}" "dist/${{ matrix.artifact }}.${ext}"
-          done
+          mkdir -p dist/${{ matrix.artifact }}
+          if [ -d "build/mcuboot" ]; then
+            # sysbuild: collect mcuboot and signed app binaries
+            for f in build/mcuboot/zephyr/zephyr.{elf,bin}; do
+              [ -f "${f}" ] && cp "${f}" "dist/${{ matrix.artifact }}/mcuboot.${f##*.}"
+            done
+            for f in build/sensor_board/zephyr/zephyr.signed.{elf,bin}; do
+              [ -f "${f}" ] && cp "${f}" "dist/${{ matrix.artifact }}/${{ matrix.artifact }}.${f##*.}"
+            done
+          else
+            for ext in elf uf2 bin; do
+              src="build/zephyr/zephyr.${ext}"
+              [ -f "${src}" ] && cp "${src}" "dist/${{ matrix.artifact }}/${{ matrix.artifact }}.${ext}"
+            done
+          fi
+          tar -cJf "dist/${{ matrix.artifact }}.tar.xz" -C dist "${{ matrix.artifact }}"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: firmware-${{ matrix.artifact }}
-          path: aurora/dist/
+          path: aurora/dist/${{ matrix.artifact }}.tar.xz
 
   release:
     name: Publish release
