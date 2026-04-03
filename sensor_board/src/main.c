@@ -90,7 +90,7 @@ void imu_task(void *, void *, void *)
 		int rc = imu_poll(imu0);
 		if (rc != 0) {
 			LOG_ERR("IMU polling failed (%d)", rc);
-			break;
+			continue;
 		}
 		k_sleep(K_MSEC(1000 / imu_hz));
 	}
@@ -107,7 +107,7 @@ K_THREAD_DEFINE(imu_task_id, 2048, imu_task, NULL, NULL, NULL,
 /* ============================================================
  *                     BARO TASK
  * ============================================================ */
-#if defined(CONFIG_BARO) && !defined(CONFIG_LPS22HH_TRIGGER)
+#if defined(CONFIG_BARO)
 /**
  * @brief Barometer polling thread.
  *
@@ -118,7 +118,6 @@ void baro_task(void *, void *, void *)
 {
 	const struct device *baro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_baro));
 	const int baro_hz = CONFIG_BARO_FREQUENCY_VALUE;
-	bool ref_set = false;
 
 	if (baro_init(baro0)) {
 		LOG_ERR("Baro not ready!");
@@ -126,30 +125,16 @@ void baro_task(void *, void *, void *)
 	}
 	baro_active = true;
 
-	struct sensor_value temp, press;
-
+#if !defined(CONFIG_BARO_TRIGGER)
 	while (1) {
-
-		if (baro_measure(baro0, &temp, &press)) {
+		if (baro_measure(baro0)) {
 			LOG_ERR("Failed to measure baro0");
 			continue;
 		}
 
-		float press_kpa = (float)press.val1 + (float)press.val2 / 1e6f;
-
-		if (!ref_set) {
-			baro_set_reference(press_kpa);
-			ref_set = true;
-		}
-
-		altitude = baro_pressure_to_altitude(press_kpa);
-
-		LOG_INF("[baro0] Temp: %d.%06d | Press: %d.%06d kPa | Alt: %d.%02d m",
-				temp.val1, temp.val2, press.val1, press.val2,
-				(int)altitude, abs((int)(altitude * 100) % 100));
-
 		k_sleep(K_MSEC(1000 / baro_hz));
 	}
+#endif
 }
 
 /* Create the BARO task */
