@@ -16,42 +16,117 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
+#include <zephyr/zbus/zbus.h>
 
 #include <aurora/lib/baro.h>
 
 LOG_MODULE_REGISTER(baro, CONFIG_AURORA_SENSORS_LOG_LEVEL);
 
-/* baro_measure – see baro.h */
-int baro_measure(const struct device *dev, struct sensor_value *temp,
-				 struct sensor_value *press)
+ZBUS_CHAN_DEFINE(baro_data_chan,
+		 struct baro_data,
+		 NULL,
+		 NULL,
+		 ZBUS_OBSERVERS_EMPTY,
+		 ZBUS_MSG_INIT(0));
+
+/**
+ * @brief Fetch and log accelerometer and gyroscope readings.
+ *
+ * @param dev Pointer to the IMU device.
+ *
+ * @return 0 on success, -errno on failure.
+ */
+static int fetch_and_send(const struct device *dev)
 {
+	struct baro_data msg;
 	int ret;
 
-	if (dev == NULL || (temp == NULL && press == NULL))
-		return -EINVAL;
-
 	ret = sensor_sample_fetch(dev);
-	if (ret) {
-		LOG_ERR("Failed to fetch baro sample (%d)\n", ret);
+	if ( ret != 0) {
+		LOG_ERR("Failed to fetch sensor data\n");
 		return ret;
 	}
 
-	if (temp) {
-		ret = sensor_channel_get(dev, SENSOR_CHAN_AMBIENT_TEMP, temp);
-		if (ret) {
-			LOG_ERR("Failed to get baro temperature (%d)\n", ret);
-			return ret;
-		}
+	ret = sensor_channel_get(dev, SENSOR_CHAN_AMBIENT_TEMP, &(msg.temperature));
+	if (ret != 0) {
+		LOG_ERR("Failed to get baro temperature\n");
+		return ret;
 	}
 
-	if (press) {
-		ret = sensor_channel_get(dev, SENSOR_CHAN_PRESS, press);
-		if (ret) {
-			LOG_ERR("Failed to get baro pressure (%d)\n", ret);
-			return ret;
-		}
+	ret = sensor_channel_get(dev, SENSOR_CHAN_PRESS, &(msg.pressure));
+	if (ret != 0) {
+		LOG_ERR("Failed to get baro pressure\n");
+		return ret;
 	}
 
+	/* Publish the baro data to the z-bus channel */
+	ret = zbus_chan_pub(&baro_data_chan, &msg, K_NO_WAIT);
+	if (ret != 0) {
+		LOG_ERR("Failed to publish baro data\n");
+	}
+	return ret;
+}
+
+
+#if defined(CONFIG_BARO_TRIGGER)
+/**
+ * @brief Data-ready trigger callback for the baro.
+ *
+ * @param dev  Pointer to the baro device.
+ * @param trig Pointer to the sensor trigger descriptor.
+ */
+static void trigger_handler(const struct device *dev,
+							const struct sensor_trigger *trig)
+{
+	fetch_and_send(dev);
+}
+
+/**
+ * @brief Configure the baro to run in data-ready trigger mode.
+ *
+ * @param dev Pointer to the baro device.
+ */
+static void run_trigger_mode(const struct device *dev)
+{
+	struct sensor_trigger trig;
+
+	trig.type = SENSOR_TRIG_DATA_READY;
+	trig.chan = SENSOR_CHAN_ALL;
+
+	if (sensor_trigger_set(dev, &trig, trigger_handler) != 0) {
+		LOG_ERR("Could not set sensor type and channel\n");
+		return;
+	}
+}
+#else
+/* baro_measure – see baro.h */
+int baro_measure(const struct device *dev)
+{
+	if (dev == NULL)
+		return -EINVAL;
+
+	return fetch_and_send(dev);
+}
+#endif /* CONFIG_BARO_TRIGGER */
+
+/**
+ * @brief Set the barometric sensor oversampling rate.
+ *
+ * @param dev Pointer to the barometric sensor device.
+ * @param osr Oversampling rate value.
+ * @return 0 on success, -EIO on failure.
+ */
+int baro_set_oversampling(const struct device *dev, uint32_t osr)
+{
+	struct sensor_value oversampling_rate = { osr, 0 };
+
+	if (sensor_attr_set(dev, SENSOR_CHAN_ALL, SENSOR_ATTR_OVERSAMPLING,
+						&oversampling_rate) != 0) {
+		LOG_ERR("Could not set oversampling rate of %d "
+				"on Baro device, aborting test.",
+				oversampling_rate.val1);
+		return -EIO;
+	}
 	return 0;
 }
 
@@ -66,6 +141,12 @@ int baro_init(const struct device *dev)
 		LOG_ERR("Baro device %s is not ready", dev->name);
 		return -ETIMEDOUT;
 	}
+
+#if defined(CONFIG_BARO_TRIGGER)
+	run_trigger_mode(dev);
+	LOG_DBG("Baro initialized in trigger mode");
+#endif /* CONFIG_BARO_TRIGGER */
+
 	return 0;
 }
 
@@ -107,4 +188,23 @@ float baro_pressure_to_altitude(float press_kpa)
 	 */
 	return (ISA_T0 / ISA_L) *
 	       (1.0f - powf(press_kpa / ref_pressure_kpa, ISA_RL_OVER_GM));
+}
+
+/* baro_sensor_value_to_altitude – see baro.h */
+int baro_sensor_value_to_altitude(const struct sensor_value *press, float *altitude_out)
+{
+	if (press == NULL || altitude_out == NULL)
+		return -EINVAL;
+
+	float press_kpa = (float)press->val1 + (float)press->val2 / 1e6f;
+
+	if (!ref_set) {
+		if (baro_set_reference(press_kpa) != 0) {
+			return -EINVAL;
+		}
+		ref_set = true;
+	}
+
+	*altitude_out = baro_pressure_to_altitude(press_kpa);
+	return 0;
 }

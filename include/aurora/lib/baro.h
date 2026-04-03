@@ -8,6 +8,7 @@
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
+#include <zephyr/zbus/zbus.h>
 
 /**
  * @defgroup lib_baro Barometer library
@@ -17,19 +18,36 @@
  * @brief AURORA barometer library for avionics telemetry.
  */
 
+
+/** ZBUS channel for baro data. */
+ZBUS_CHAN_DECLARE(baro_data_chan);
+
 /**
- * @brief Measure temperature and pressure from the barometric sensor.
+ * @brief baro measurement data structure.
+ *
+ * carries the measurement data from the baro including temperature and
+ * pressure readings. This struct is used as a
+ * z-bus message payload for baro data updates
+ */
+struct baro_data
+{
+	struct sensor_value temperature; /**< Latest temperature reading */
+	struct sensor_value pressure;  /**< Latest pressure reading */
+};
+
+#if !defined(CONFIG_BARO_TRIGGER)
+/**
+ * @brief Measure temperature and pressure from the barometric sensor and
+ * publish the data to the z-bus.
  *
  * @param dev   Pointer to the barometric sensor device.
- * @param temp  Output for temperature, or NULL to skip.
- * @param press Output for pressure, or NULL to skip.
  *
  * @retval 0 on success.
- * @retval -EINVAL if @p dev is NULL and both outputs are NULL.
+ * @retval -EINVAL if @p dev is NULL
  * @retval -errno Other negative errno on failure.
  */
-int baro_measure(const struct device *dev, struct sensor_value *temp,
-				 struct sensor_value *press);
+int baro_measure(const struct device *dev);
+#endif /* CONFIG_BARO_TRIGGER */
 
 /**
  * @brief Initialize the barometric pressure sensor.
