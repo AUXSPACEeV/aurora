@@ -10,8 +10,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <stdlib.h>
-#include <stdio.h>
 #include <math.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -21,20 +19,20 @@
 #include <aurora/lib/imu.h>
 
 #ifndef M_PI
-#define M_PI ((float)3.1415926535)
+#define M_PI ((double)3.1415926535)
 #endif
 
 LOG_MODULE_REGISTER(imu, CONFIG_AURORA_SENSORS_LOG_LEVEL);
 
 /**
- * @brief Convert a Zephyr sensor_value to a float.
+ * @brief Convert a Zephyr sensor_value to a double.
  *
  * @param val Pointer to the sensor value.
  * @return Floating-point representation.
  */
-static inline float out_ev(struct sensor_value *val)
+static inline double out_ev(struct sensor_value *val)
 {
-	return (val->val1 + (float)val->val2 / 1000000);
+	return (val->val1 + (double)val->val2 / 1000000);
 }
 
 /**
@@ -52,33 +50,6 @@ static void fetch_accel(const struct device *dev, struct sensor_value *x,
 	sensor_channel_get(dev, SENSOR_CHAN_ACCEL_X, x);
 	sensor_channel_get(dev, SENSOR_CHAN_ACCEL_Y, y);
 	sensor_channel_get(dev, SENSOR_CHAN_ACCEL_Z, z);
-}
-
-/* imu_set_sampling_freq – see imu.h */
-int imu_set_sampling_freq(const struct device *dev, int sampling_rate_hz)
-{
-	int ret = 0;
-	struct sensor_value odr_attr;
-
-	/* set accel/gyro sampling frequency */
-	odr_attr.val1 = (float)sampling_rate_hz;
-	odr_attr.val2 = 0;
-
-	ret = sensor_attr_set(dev, SENSOR_CHAN_ACCEL_XYZ,
-						  SENSOR_ATTR_SAMPLING_FREQUENCY, &odr_attr);
-	if (ret != 0) {
-		LOG_ERR("Cannot set sampling frequency for accelerometer.\n");
-		return ret;
-	}
-
-	ret = sensor_attr_set(dev, SENSOR_CHAN_GYRO_XYZ,
-						  SENSOR_ATTR_SAMPLING_FREQUENCY, &odr_attr);
-	if (ret != 0) {
-		LOG_ERR("Cannot set sampling frequency for gyro.\n");
-		return ret;
-	}
-
-	return 0;
 }
 
 #if defined(CONFIG_LSM6DSO_TRIGGER)
@@ -141,30 +112,30 @@ static void run_trigger_mode(const struct device *dev)
 
 #else
 /* imu_poll – see imu.h */
-int imu_poll(const struct device *dev, float *orientation_deg, float *acc_avg)
+int imu_poll(const struct device *dev, double *orientation_deg, double *acc_avg)
 {
 	struct sensor_value ax, ay, az;
 
 	/* Read accelerometer values */
 	fetch_accel(dev, &ax, &ay, &az);
 
-	/* Convert to floating point */
-	float x = out_ev(&ax);
-	float y = out_ev(&ay);
-	float z = out_ev(&az);
+	/* Convert to doubleing point */
+	double x = out_ev(&ax);
+	double y = out_ev(&ay);
+	double z = out_ev(&az);
 
 	/* Compute magnitude of acceleration */
-	float acc = sqrtf(x*x + y*y + z*z);
+	double acc = sqrt(x*x + y*y + z*z);
 
 	/* Compute orientation angle in degrees (atan2(y,x)) */
-	float angle_deg = atan2f(y, x) * (180.0f / M_PI);
+	double angle_deg = atan2(y, x) * (180.0 / M_PI);
 
 	/* Return results */
 	if (orientation_deg)
-		*orientation_deg = angle_deg;
+		*orientation_deg = (double)angle_deg;
 
 	if (acc_avg)
-		*acc_avg = acc;
+		*acc_avg = (double)acc;
 
 	return 0;
 }
@@ -173,17 +144,9 @@ int imu_poll(const struct device *dev, float *orientation_deg, float *acc_avg)
 /* imu_init – see imu.h */
 int imu_init(const struct device *dev)
 {
-	const int imu_hz = CONFIG_IMU_FREQUENCY_VALUE;
-	int ret;
-
 	if (!device_is_ready(dev)) {
 		LOG_ERR("%s: device not ready.\n", dev->name);
 		return -ENODEV;
-	}
-
-	ret = imu_set_sampling_freq(dev, imu_hz) != 0;
-	if (ret != 0) {
-		LOG_WRN("Could not set IMU sampling frequency to %d.0 Hz.\n", imu_hz);
 	}
 
 #ifdef CONFIG_LSM6DSO_TRIGGER

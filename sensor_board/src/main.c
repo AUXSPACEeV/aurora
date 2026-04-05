@@ -55,10 +55,10 @@ static const struct sm_thresholds state_cfg = {
 
 LOG_MODULE_REGISTER(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 
-static float orientation = 0.0f;  /**< Latest orientation angle from IMU (degrees). */
-static float acceleration = 0.0f; /**< Latest acceleration magnitude from IMU (m/s^2). */
-static float velocity = 0.0f;     /**< Latest vertical velocity estimate (m/s). */
-static float altitude = 0.0f;     /**< Latest barometric altitude AGL (m). */
+static double orientation = 0.0;  /**< Latest orientation angle from IMU (degrees). */
+static double acceleration = 0.0; /**< Latest acceleration magnitude from IMU (m/s^2). */
+static double velocity = 0.0;     /**< Latest vertical velocity estimate (m/s). */
+static double altitude = 0.0;     /**< Latest barometric altitude AGL (m). */
 
 static bool baro_active = false; /**< True once the barometer thread has initialized. */
 static bool imu_active = false;  /**< True once the IMU thread has initialized. */
@@ -101,7 +101,7 @@ void imu_task(void *, void *, void *)
 }
 
 /* Create the IMU task (inactive unless CONFIG_IMU=y) */
-K_THREAD_DEFINE(imu_task_id, 4096, imu_task, NULL, NULL, NULL,
+K_THREAD_DEFINE(imu_task_id, 2048, imu_task, NULL, NULL, NULL,
 				5, 0, 0);
 
 #endif /* CONFIG_IMU */
@@ -137,7 +137,7 @@ void baro_task(void *, void *, void *)
 			continue;
 		}
 
-		float press_kpa = (float)press.val1 + (float)press.val2 / 1e6f;
+		double press_kpa = (double)press.val1 + (double)press.val2 / (double)1e6f;
 
 		if (!ref_set) {
 			baro_set_reference(press_kpa);
@@ -155,7 +155,7 @@ void baro_task(void *, void *, void *)
 }
 
 /* Create the BARO task */
-K_THREAD_DEFINE(baro_task_id, 4096, baro_task, NULL, NULL, NULL,
+K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
 				5, 0, 0);
 #endif /* CONFIG_BARO */
 

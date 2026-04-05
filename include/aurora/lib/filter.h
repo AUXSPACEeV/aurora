@@ -15,7 +15,7 @@
  */
 
 /** @brief Divisor applied to Kconfig milliscale noise parameters. */
-#define FILTER_SCALE_DIVISOR 1000.0f
+#define FILTER_SCALE_DIVISOR 1000.0
 
 /**
  * @brief 2-state Kalman filter structure for rocket apogee detection.
@@ -28,11 +28,11 @@
  * barometric altitude as the measurement input.
  */
 struct filter {
-    float state[2];         /**< State vector [altitude, velocity]. */
-    float covariance[2][2]; /**< State covariance matrix P. */
-    float noise_p[2][2];    /**< Process noise covariance Q. */
-    float noise_m;          /**< Measurement noise variance R. */
-    float prev_velocity;    /**< Previous velocity for apogee detection. */
+    double state[2];         /**< State vector [altitude, velocity]. */
+    double covariance[2][2]; /**< State covariance matrix P. */
+    double noise_p[2][2];    /**< Process noise covariance Q. */
+    double noise_m;          /**< Measurement noise variance R. */
+    double prev_velocity;    /**< Previous velocity for apogee detection. */
 };
 
 /**
@@ -74,7 +74,7 @@ int filter_predict(struct filter *filter, int64_t dt);
  * @retval 0 on success.
  * @retval -EINVAL if @p filter is NULL.
  */
-int filter_update(struct filter *filter, float z);
+int filter_update(struct filter *filter, double z);
 
 /**
  * @brief Detect apogee from the filter's velocity estimate.

@@ -83,7 +83,7 @@ static inline void put_state_burnout(struct sm_inputs *in)
 {
 	put_state_boost(in);
 
-	in->acceleration = simple_state_cfg.T_BB - 1.0f;
+	in->acceleration = simple_state_cfg.T_BB - 1.0;
 	sm_update(in);
 	zassert_equal(sm_get_state(), SM_BURNOUT, "State should be BURNOUT");
 }
@@ -94,14 +94,14 @@ static inline void put_state_apogee(struct sm_inputs *in)
 	put_state_burnout(in);
 
 	/* First update sets previous_altitude high */
-	in->altitude = 1000.0f;
-	in->velocity = 10.0f;
+	in->altitude = 1000.0;
+	in->velocity = 10.0;
 	sm_update(in);
 	zassert_equal(sm_get_state(), SM_BURNOUT, "State should still be BURNOUT");
 
 	/* Second update: velocity <= 0 and altitude < previous */
-	in->altitude = 999.0f;
-	in->velocity = 0.0f;
+	in->altitude = 999.0;
+	in->velocity = 0.0;
 	sm_update(in);
 	zassert_equal(sm_get_state(), SM_APOGEE, "State should be APOGEE");
 }
@@ -111,7 +111,7 @@ static inline void put_state_main(struct sm_inputs *in)
 {
 	put_state_apogee(in);
 
-	in->altitude = simple_state_cfg.T_M - 1.0f;
+	in->altitude = simple_state_cfg.T_M - 1.0;
 	sm_update(in);
 	zassert_equal(sm_get_state(), SM_MAIN, "State should be MAIN");
 }
@@ -199,14 +199,14 @@ ZTEST(simple_state_tests, test_state_armed)
 	/* test update disarm via orientation */
 	put_state_armed(&inputs);
 
-	inputs.orientation = simple_state_cfg.T_OI - 1.0f;
+	inputs.orientation = simple_state_cfg.T_OI - 1.0;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_IDLE, "State should now be IDLE");
 
 	/* test update to boost (fail -> accel) */
 	put_state_armed(&inputs);
 
-	inputs.acceleration = simple_state_cfg.T_AB - 1.0f;
+	inputs.acceleration = simple_state_cfg.T_AB - 1.0;
 	inputs.altitude = simple_state_cfg.T_H;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_ARMED, "State should still be ARMED");
@@ -219,7 +219,7 @@ ZTEST(simple_state_tests, test_state_armed)
 	put_state_armed(&inputs);
 
 	inputs.acceleration = simple_state_cfg.T_AB;
-	inputs.altitude = simple_state_cfg.T_H - 1.0f;
+	inputs.altitude = simple_state_cfg.T_H - 1.0;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_ARMED, "State should still be ARMED");
 
@@ -265,12 +265,12 @@ ZTEST(simple_state_tests, test_state_boost)
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_BOOST, "State should still be BOOST");
 
-	inputs.acceleration = simple_state_cfg.T_BB + 10.0f;
+	inputs.acceleration = simple_state_cfg.T_BB + 10.0;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_BOOST, "State should still be BOOST");
 
 	/* transitions to BURNOUT when acceleration < T_BB */
-	inputs.acceleration = simple_state_cfg.T_BB - 1.0f;
+	inputs.acceleration = simple_state_cfg.T_BB - 1.0;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_BURNOUT, "State should now be BURNOUT");
 }
@@ -294,20 +294,20 @@ ZTEST(simple_state_tests, test_state_burnout)
 	put_state_burnout(&inputs);
 
 	/* stays in BURNOUT with positive velocity */
-	inputs.altitude = 500.0f;
-	inputs.velocity = 5.0f;
+	inputs.altitude = 500.0;
+	inputs.velocity = 5.0;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_BURNOUT, "State should still be BURNOUT");
 
 	/* stays in BURNOUT with velocity=0 but altitude still rising */
-	inputs.altitude = 600.0f;
-	inputs.velocity = 0.0f;
+	inputs.altitude = 600.0;
+	inputs.velocity = 0.0;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_BURNOUT, "State should still be BURNOUT");
 
 	/* transitions to APOGEE: velocity <= 0 AND altitude < previous */
-	inputs.altitude = 599.0f;
-	inputs.velocity = 0.0f;
+	inputs.altitude = 599.0;
+	inputs.velocity = 0.0;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_APOGEE, "State should now be APOGEE");
 }
@@ -335,12 +335,12 @@ ZTEST(simple_state_tests, test_state_apogee)
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_APOGEE, "State should still be APOGEE");
 
-	inputs.altitude = simple_state_cfg.T_M + 100.0f;
+	inputs.altitude = simple_state_cfg.T_M + 100.0;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_APOGEE, "State should still be APOGEE");
 
 	/* transitions to MAIN when altitude < T_M */
-	inputs.altitude = simple_state_cfg.T_M - 1.0f;
+	inputs.altitude = simple_state_cfg.T_M - 1.0;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_MAIN, "State should now be MAIN");
 }
@@ -364,7 +364,7 @@ ZTEST(simple_state_tests, test_state_apogee_timeout)
 	put_state_apogee(&inputs);
 
 	/* keep altitude above T_M so no normal transition occurs */
-	inputs.altitude = simple_state_cfg.T_M + 100.0f;
+	inputs.altitude = simple_state_cfg.T_M + 100.0;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_APOGEE, "State should still be APOGEE");
 
@@ -412,7 +412,7 @@ ZTEST(simple_state_tests, test_state_redundand_landed)
 	put_state_apogee(&inputs);
 
 	/* Let APOGEE timeout to ERROR (this starts TO_M timer) */
-	inputs.altitude = simple_state_cfg.T_M + 100.0f;
+	inputs.altitude = simple_state_cfg.T_M + 100.0;
 	k_sleep(K_MSEC(simple_state_cfg.TO_A));
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_ERROR, "State should be ERROR");
@@ -428,7 +428,7 @@ ZTEST(simple_state_tests, test_state_redundand_landed)
 	put_state_apogee(&inputs);
 
 	/* Transition to MAIN normally */
-	inputs.altitude = simple_state_cfg.T_M - 1.0f;
+	inputs.altitude = simple_state_cfg.T_M - 1.0;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_MAIN, "State should be MAIN");
 }
@@ -462,7 +462,7 @@ ZTEST(simple_state_tests, test_state_redundand_timeout)
 	put_state_apogee(&inputs);
 
 	/* Let APOGEE timeout to ERROR (this starts TO_M) */
-	inputs.altitude = simple_state_cfg.T_M + 100.0f;
+	inputs.altitude = simple_state_cfg.T_M + 100.0;
 	k_sleep(K_MSEC(simple_state_cfg.TO_A));
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_ERROR, "State should be ERROR");
@@ -560,7 +560,7 @@ ZTEST(simple_state_tests, test_state_error)
 
 	/* Reach ERROR via APOGEE timeout */
 	put_state_apogee(&inputs);
-	inputs.altitude = simple_state_cfg.T_M + 100.0f;
+	inputs.altitude = simple_state_cfg.T_M + 100.0;
 	k_sleep(K_MSEC(simple_state_cfg.TO_A));
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_ERROR, "State should be ERROR");
@@ -609,7 +609,7 @@ ZTEST(simple_state_tests, test_armed_boost_timer_reset)
 
 	/* wait half the timer, then drop conditions */
 	k_sleep(K_MSEC(simple_state_cfg.DT_AB / 2));
-	inputs.acceleration = 0.0f;
+	inputs.acceleration = 0.0;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_ARMED, "State should still be ARMED after timer reset");
 

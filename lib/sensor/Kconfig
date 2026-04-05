@@ -94,34 +94,4 @@ config BARO_FREQUENCY_VALUE
 	default 200 if BARO_FREQ_200HZ
 	default 400 if BARO_FREQ_400HZ
 
-choice BARO_OVERSAMPLING
-	prompt "BARO Oversampling Rate"
-	depends on BARO
-	default BARO_OS_256X
-
-config BARO_OS_256X
-	bool "256"
-
-config BARO_OS_512X
-	bool "512"
-
-config BARO_OS_1024X
-	bool "1024"
-
-config BARO_OS_2048X
-	bool "2048"
-
-config BARO_OS_4096X
-	bool "4096"
-
-endchoice
-
-config BARO_OVERSAMPLING_VALUE
-	int
-	depends on BARO
-	default 256  if BARO_OS_256X
-	default 512  if BARO_OS_512X
-	default 1024 if BARO_OS_1024X
-	default 2048 if BARO_OS_2048X
-	default 4096 if BARO_OS_4096X
 endmenu
