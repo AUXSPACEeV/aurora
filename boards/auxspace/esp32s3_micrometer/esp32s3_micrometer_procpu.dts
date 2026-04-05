@@ -9,6 +9,8 @@
 #include <espressif/esp32s3/esp32s3_wroom_n8r8.dtsi>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <zephyr/dt-bindings/input/esp32-touch-sensor-input.h>
+#include <zephyr/dt-bindings/sensor/lps22hh.h>
+#include <zephyr/dt-bindings/sensor/lsm6dso.h>
 #include <espressif/partitions_0x0_amp.dtsi>
 #include "esp32s3_micrometer-pinctrl.dtsi"
 
@@ -111,15 +113,16 @@
 	lsm6dso320: lsm6dso32@6b {
 		compatible = "st,lsm6dso32";
 		reg = <0x6b>;
-		// irq-gpios = <&gpio0 9 GPIO_ACTIVE_HIGH>;
-		// int-pin = <1>;
+		accel-odr = <LSM6DSO_DT_ODR_104Hz>;
+		gyro-odr = <LSM6DSO_DT_ODR_104Hz>;
 		status = "disabled";
 	};
 
 	lps22hh0: lps22hh@5d {
 		compatible = "st,lps22hh";
 		reg = <0x5d>;
-		status = "okay";
+		odr = <LPS22HH_DT_ODR_100HZ>;
+		status = "disabled";
 	};
 };
 
