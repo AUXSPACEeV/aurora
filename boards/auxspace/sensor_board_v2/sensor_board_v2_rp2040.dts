@@ -10,6 +10,7 @@
 #include <raspberrypi/rpi_pico/rp2040.dtsi>
 #include "sensor_board_v2_rp2040-pinctrl.dtsi"
 #include <zephyr/dt-bindings/i2c/i2c.h>
+#include <zephyr/dt-bindings/sensor/lsm6dso.h>
 #include <freq.h>
 
 / {
@@ -82,11 +83,13 @@ zephyr_udc0: &usbd {
 		compatible = "zephyr,sdhc-spi-slot";
 		reg = <0>;
 		status = "okay";
+
 		mmc0: mmc {
 			compatible = "zephyr,sdmmc-disk";
 			disk-name = "MMC";
 			status = "okay";
 		};
+
 		spi-max-frequency = <25000000>;
 	};
 };
@@ -108,6 +111,8 @@ zephyr_udc0: &usbd {
 	lsm6dso32_0: lsm6dso32@6b {
 		compatible = "st,lsm6dso32";
 		reg = <0x6b>;
+		accel-odr = <LSM6DSO_DT_ODR_104Hz>;
+		gyro-odr = <LSM6DSO_DT_ODR_104Hz>;
 		status = "okay";
 	};
 
