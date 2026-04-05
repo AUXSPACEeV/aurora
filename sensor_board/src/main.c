@@ -79,7 +79,10 @@ void imu_task(void *, void *, void *)
 	const struct device *imu0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_imu));
 	const int imu_hz = CONFIG_IMU_FREQUENCY_VALUE;
 
-	imu_init(imu0);
+	if (imu_init(imu0)) {
+		LOG_ERR("IMU not ready!");
+		return;
+	}
 	imu_active = true;
 
 	while (1) {
@@ -98,7 +101,7 @@ void imu_task(void *, void *, void *)
 }
 
 /* Create the IMU task (inactive unless CONFIG_IMU=y) */
-K_THREAD_DEFINE(imu_task_id, 2048, imu_task, NULL, NULL, NULL,
+K_THREAD_DEFINE(imu_task_id, 4096, imu_task, NULL, NULL, NULL,
 				5, 0, 0);
 
 #endif /* CONFIG_IMU */
@@ -152,7 +155,7 @@ void baro_task(void *, void *, void *)
 }
 
 /* Create the BARO task */
-K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
+K_THREAD_DEFINE(baro_task_id, 4096, baro_task, NULL, NULL, NULL,
 				5, 0, 0);
 #endif /* CONFIG_BARO */
 
@@ -240,7 +243,7 @@ void state_machine_task(void *, void *, void *)
 }
 
 /* Create the State machine task */
-K_THREAD_DEFINE(state_machine_task_id, 2048, state_machine_task, NULL, NULL,
+K_THREAD_DEFINE(state_machine_task_id, 4096, state_machine_task, NULL, NULL,
 				NULL, 5, 0, 0);
 #endif /* CONFIG_AURORA_STATE_MACHINE */
 

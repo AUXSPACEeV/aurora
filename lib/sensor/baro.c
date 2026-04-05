@@ -55,37 +55,18 @@ int baro_measure(const struct device *dev, struct sensor_value *temp,
 	return 0;
 }
 
-/**
- * @brief Set the barometric sensor oversampling rate.
- *
- * @param dev Pointer to the barometric sensor device.
- * @param osr Oversampling rate value.
- * @return 0 on success, -EIO on failure.
- */
-int baro_set_oversampling(const struct device *dev, uint32_t osr)
-{
-	struct sensor_value oversampling_rate = { osr, 0 };
-
-	if (sensor_attr_set(dev, SENSOR_CHAN_ALL, SENSOR_ATTR_OVERSAMPLING,
-						&oversampling_rate) != 0) {
-		LOG_ERR("Could not set oversampling rate of %d "
-				"on Baro device, aborting test.",
-				oversampling_rate.val1);
-		return -EIO;
-	}
-	return 0;
-}
-
 /* baro_init – see baro.h */
 int baro_init(const struct device *dev)
 {
+	if (dev == NULL) {
+		LOG_ERR("Baro device is NULL");
+		return -ENODEV;
+	}
 	if (!device_is_ready(dev)) {
-		LOG_ERR("Baro device %s is not ready, aborting test.",
-				dev->name);
+		LOG_ERR("Baro device %s is not ready", dev->name);
 		return -ETIMEDOUT;
 	}
-
-	return baro_set_oversampling(dev, CONFIG_BARO_OVERSAMPLING_VALUE);
+	return 0;
 }
 
 /*-----------------------------------------------------------

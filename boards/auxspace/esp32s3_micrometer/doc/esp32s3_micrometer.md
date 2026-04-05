@@ -61,7 +61,7 @@ Instead, flash both images in download mode and then just reset, using
 `esptool`:
 
 ```bash
-esptool --chip esp32s3 -p /dev/tty<ESP_DEV> -b 921600 write_flash \
+esptool --chip esp32s3 -p /dev/tty<ESP_DEV> -b 921600 write-flash \
   0x0 build/mcuboot/zephyr/zephyr.bin \
   0x20000 build/sensor_board/zephyr/zephyr.signed.bin
 ```

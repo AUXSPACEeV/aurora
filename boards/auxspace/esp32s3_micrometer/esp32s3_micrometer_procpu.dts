@@ -116,11 +116,10 @@
 		status = "disabled";
 	};
 
-	lps22hh0: lps22hh@5c {
+	lps22hh0: lps22hh@5d {
 		compatible = "st,lps22hh";
-		reg = <0x5c>;
-		// drdy-gpios = <&gpio0 10 GPIO_ACTIVE_HIGH>;
-		status = "disabled";
+		reg = <0x5d>;
+		status = "okay";
 	};
 };
 
@@ -148,7 +147,7 @@
 	pinctrl-0 = <&spim2_default>;
 	pinctrl-names = "default";
 
-	cs-gpios = <&gpio0 15 GPIO_ACTIVE_LOW>;
+	cs-gpios = <&gpio0 4 GPIO_ACTIVE_LOW>;
 
 	sdhc2: sdhc@0 {
 		compatible = "zephyr,sdhc-spi-slot";
@@ -165,12 +164,7 @@
 };
 
 &spi3 {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	status = "okay";
-	cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;
-	pinctrl-0 = <&spim3_default>;
-	pinctrl-names = "default";
+	status = "disabled";
 };
 
 &twai {
