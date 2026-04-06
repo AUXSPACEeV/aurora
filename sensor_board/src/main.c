@@ -30,6 +30,10 @@
 #include <aurora/drivers/pyro.h>
 #endif /* CONFIG_PYRO */
 
+#if defined(CONFIG_DATA_LOGGER)
+#include <aurora/lib/data_logger.h>
+#endif /* CONFIG_DATA_LOGGER */
+
 #if defined(CONFIG_AURORA_STATE_MACHINE)
 #include <aurora/lib/state/state.h>
 
@@ -60,6 +64,27 @@ ZBUS_MSG_SUBSCRIBER_DEFINE(sm_sub);
 ZBUS_CHAN_ADD_OBS(imu_data_chan, sm_sub, 1);
 ZBUS_CHAN_ADD_OBS(baro_data_chan, sm_sub, 1);
 
+#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
+/**
+ * @brief Snapshot of the exact raw sensor pair used in one SM update cycle.
+ *
+ * Published by the SM task before each sm_update(). The logger subscribes
+ * here so it always logs the same data the SM processed — never newer readings.
+ */
+struct sm_sensor_snapshot {
+	struct imu_data imu;
+	struct baro_data baro;
+};
+
+ZBUS_MSG_SUBSCRIBER_DEFINE(log_sub);
+ZBUS_CHAN_DEFINE(sm_snapshot_chan,
+		struct sm_sensor_snapshot,
+		NULL, NULL,
+		ZBUS_OBSERVERS(log_sub),
+		ZBUS_MSG_INIT(0));
+
+#endif /* CONFIG_DATA_LOGGER */
+
 static bool baro_active = false; /**< True once the barometer thread has initialized. */
 static bool imu_active = false;  /**< True once the IMU thread has initialized. */
 static bool sm_active = false;   /**< True once the state machine thread has initialized. */
@@ -77,7 +102,6 @@ static bool sm_active = false;   /**< True once the state machine thread has ini
 void imu_task(void *, void *, void *)
 {
 	const struct device *imu0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_imu));
-	const int imu_hz = CONFIG_IMU_FREQUENCY_VALUE;
 
 	if (imu_init(imu0)) {
 		LOG_ERR("IMU not ready!");
@@ -86,6 +110,7 @@ void imu_task(void *, void *, void *)
 	imu_active = true;
 
 #if !defined(CONFIG_IMU_TRIGGER)
+	const int imu_hz = CONFIG_IMU_FREQUENCY_VALUE;
 	while (1) {
 		int rc = imu_poll(imu0);
 		if (rc != 0) {
@@ -117,7 +142,6 @@ K_THREAD_DEFINE(imu_task_id, 2048, imu_task, NULL, NULL, NULL,
 void baro_task(void *, void *, void *)
 {
 	const struct device *baro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_baro));
-	const int baro_hz = CONFIG_BARO_FREQUENCY_VALUE;
 
 	if (baro_init(baro0)) {
 		LOG_ERR("Baro not ready!");
@@ -126,6 +150,7 @@ void baro_task(void *, void *, void *)
 	baro_active = true;
 
 #if !defined(CONFIG_BARO_TRIGGER)
+	const int baro_hz = CONFIG_BARO_FREQUENCY_VALUE;
 	while (1) {
 		if (baro_measure(baro0)) {
 			LOG_ERR("Failed to measure baro0");
@@ -168,6 +193,10 @@ void state_machine_task(void *, void *, void *)
 	float velocity = 0.0f;
 	bool baro_ready = false;
 	bool imu_ready = false;
+#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
+	struct imu_data last_imu = {0};
+	struct baro_data last_baro = {0};
+#endif /* CONFIG_DATA_LOGGER */
 
 #if defined(CONFIG_PYRO)
 	const struct device *pyro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_pyro));
@@ -206,6 +235,9 @@ void state_machine_task(void *, void *, void *)
 					LOG_INF("orientation: %f deg. acc: %f\n", (double)orientation,
 						(double)acceleration);
 					imu_ready = true;
+#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
+					last_imu = msg_buf.imu;
+#endif /* CONFIG_DATA_LOGGER */
 				} else {
 					LOG_ERR("IMU conversion failed");
 				}
@@ -215,6 +247,9 @@ void state_machine_task(void *, void *, void *)
 						(double)msg_buf.baro.pressure.val1 + (double)msg_buf.baro.pressure.val2 / 1e6,
 						(int)altitude, abs((int)(altitude * 100) % 100));
 					baro_ready = true;
+#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
+					last_baro = msg_buf.baro;
+#endif /* CONFIG_DATA_LOGGER */
 				} else {
 					LOG_ERR("Baro conversion failed");
 				}
@@ -225,6 +260,13 @@ void state_machine_task(void *, void *, void *)
 		if (!baro_ready || !imu_ready) {
 			continue;
 		}
+
+#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
+		{
+			struct sm_sensor_snapshot snap = { .imu = last_imu, .baro = last_baro };
+			zbus_chan_pub(&sm_snapshot_chan, &snap, K_NO_WAIT);
+		}
+#endif /* CONFIG_DATA_LOGGER */
 
 		inputs = (struct sm_inputs){
 			.orientation = orientation,
@@ -274,6 +316,74 @@ K_THREAD_DEFINE(state_machine_task_id, 4096, state_machine_task, NULL, NULL,
 #endif /* CONFIG_AURORA_STATE_MACHINE */
 
 /* ============================================================
+ *                     DATA LOGGER TASK
+ * ============================================================ */
+#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
+/**
+ * @brief Data logger thread.
+ *
+ * Subscribes to sm_snapshot_chan and writes one CSV entry per SM update cycle.
+ * Receives the exact raw sensor pair the SM used — never newer readings.
+ */
+void data_logger_task(void *, void *, void *)
+{
+	static struct data_logger logger;
+	const struct zbus_channel *chan;
+	struct sm_sensor_snapshot snap;
+
+	#if defined(CONFIG_DATA_LOGGER_CSV)
+	if (data_logger_init(&logger, &data_logger_csv_formatter,
+			     "/MMC:/data/flight.csv") != 0) {
+		LOG_ERR("data_logger_init failed");
+		return;
+	}
+	#elif defined(CONFIG_DATA_LOGGER_INFLUX)
+	if (data_logger_init(&logger, &data_logger_influx_formatter,
+					"/MMC:/data/flight.influx") != 0) {
+		LOG_ERR("data_logger_init failed");
+		return;
+	}
+	#endif /* Formatter selection */
+
+	while (1) {
+		if (zbus_sub_wait_msg(&log_sub, &chan, &snap, K_FOREVER) != 0) {
+			LOG_ERR("Failed to receive SM sensor snapshot");
+			continue;
+		}
+
+		int64_t ts = k_uptime_get();
+
+		struct datapoint dp = {
+			.timestamp_ms = ts,
+			.type = AURORA_DATA_IMU_ACCEL,
+			.channel_count = 3,
+			.channels = { snap.imu.accel[0], snap.imu.accel[1], snap.imu.accel[2] },
+		};
+		data_logger_log(&logger, &dp);
+
+		dp.type = AURORA_DATA_IMU_GYRO;
+		dp.channels[0] = snap.imu.gyro[0];
+		dp.channels[1] = snap.imu.gyro[1];
+		dp.channels[2] = snap.imu.gyro[2];
+		data_logger_log(&logger, &dp);
+
+		dp.type = AURORA_DATA_BARO;
+		dp.channel_count = 2;
+		dp.channels[0] = snap.baro.temperature;
+		dp.channels[1] = snap.baro.pressure;
+		data_logger_log(&logger, &dp);
+
+		data_logger_flush(&logger);
+
+	}
+}
+
+/* Create the data logger task */
+K_THREAD_DEFINE(data_logger_task_id, 4096, data_logger_task, NULL, NULL, NULL,
+		6, 0, 0);
+#endif /* CONFIG_DATA_LOGGER */
+
+/* ============================================================
  *                     MAIN INITIALIZATION
  * ============================================================ */
 /**
@@ -285,26 +395,6 @@ K_THREAD_DEFINE(state_machine_task_id, 4096, state_machine_task, NULL, NULL,
 int main(void)
 {
 	LOG_INF("Auxspace AURORA %s", APP_VERSION_STRING);
-
-
-	#if defined(CONFIG_IMU) && defined(CONFIG_LSM6DSO_TRIGGER)
-	imu0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_imu));
-	if (imu_init(imu0) != 0) {
-		LOG_ERR("IMU device %s failed to initialize", imu0->name);
-		return -1;
-	}
-
-	imu_active = true;
-	#endif /* CONFIG_IMU */
-
-	#if defined(CONFIG_BARO) && defined(CONFIG_LPS22HH_TRIGGER)
-	baro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_baro));
-	if (baro_init(baro0) != 0) {
-		LOG_ERR("Baro device %s failed to initialize", baro0->name);
-		return -1;
-	}
-	baro_active = true;
-	#endif /* CONFIG_BARO */
 
 	/* Threads start automatically via K_THREAD_DEFINE */
 
