@@ -12,9 +12,11 @@
  */
 
 #include <errno.h>
+#include <string.h>
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/fs/fs.h>
 
 #include <aurora/lib/data_logger.h>
 
@@ -49,13 +51,32 @@ int data_logger_init(struct data_logger *logger,
 		     const struct data_logger_formatter *fmt,
 		     const char *path)
 {
+	struct fs_dir_t ptr;
+	char dir[64];
+	char *sep;
+	int rc;
+
 	if (logger == NULL || fmt == NULL || path == NULL)
 		return -EINVAL;
 
 	logger->fmt = fmt;
 	logger->ctx = NULL;
 
-	int rc = fmt->init(logger, path);
+	/* Ensure parent directory exists (fs_open creates files, not dirs). */
+	strncpy(dir, path, sizeof(dir) - 1);
+	dir[sizeof(dir) - 1] = '\0';
+	sep = strrchr(dir, '/');
+	if (sep != NULL && sep != dir) {
+		*sep = '\0';
+		fs_dir_t_init(&ptr);
+		if (fs_opendir(&ptr, dir) < 0) {
+			(void)fs_mkdir(dir);
+		} else {
+			fs_closedir(&ptr);
+		}
+	}
+
+	rc = fmt->init(logger, path);
 
 	if (rc != 0) {
 		LOG_ERR("formatter init failed (%d)", rc);
@@ -65,6 +86,13 @@ int data_logger_init(struct data_logger *logger,
 	rc = fmt->write_header(logger);
 	if (rc != 0) {
 		LOG_ERR("formatter write_header failed (%d)", rc);
+		fmt->close(logger);
+		return rc;
+	}
+
+	rc = fmt->flush(logger);
+	if (rc != 0) {
+		LOG_ERR("formatter flush after header failed (%d)", rc);
 		fmt->close(logger);
 		return rc;
 	}
