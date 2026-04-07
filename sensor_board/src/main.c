@@ -187,10 +187,10 @@ void state_machine_task(void *, void *, void *)
 		struct imu_data imu;
 		struct baro_data baro;
 	} msg_buf;
-	float altitude = 0.0f;
-	float acceleration = 0.0f;
-	float orientation = 0.0f;
-	float velocity = 0.0f;
+	double altitude = 0.0;
+	double acceleration = 0.0;
+	double orientation = 0.0;
+	double velocity = 0.0;
 	bool baro_ready = false;
 	bool imu_ready = false;
 #if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)

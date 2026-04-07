@@ -77,23 +77,23 @@ int imu_init(const struct device *dev);
  * @brief calculate the average acceleration from IMU sensor values in m/s^2.
  *
  * @param data  Pointer to the IMU sensor data
- * @param acc_out Output for average acceleration in m/s^2. Must be valid pointer to a float.
+ * @param acc_out Output for average acceleration in m/s^2. Must be valid pointer to a double.
  * @retval 0 on success.
  * @retval -EINVAL if @p data or @p acc_out is NULL
  */
 int imu_sensor_value_to_acceleration(const struct imu_data *data,
-				     float *acc_out);
+				     double *acc_out);
 
 /**
  * @brief calculate the orientation angle in degrees from IMU sensor values.
  *
  * @param data  Pointer to the IMU sensor data
- * @param orientation_out Calculated orientation angle. Must be valid pointer to a float.
+ * @param orientation_out Calculated orientation angle. Must be valid pointer to a double.
  * @retval 0 on success.
  * @retval -EINVAL if @p data or @p orientation_out is NULL
  */
 int imu_sensor_value_to_orientation(const struct imu_data *data,
-				    float *orientation_out);
+				    double *orientation_out);
 
 /** @} */
 

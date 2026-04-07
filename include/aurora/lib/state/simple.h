@@ -76,10 +76,10 @@ enum sm_state {
  */
 struct sm_inputs {
 	int armed;				/**< System armed status (non-zero = armed). */
-	float orientation;		/**< Current orientation reading. */
-	float acceleration;		/**< Current acceleration reading. */
-	float velocity;			/**< Current vertical velocity. */
-	float altitude;			/**< Current altitude measurement. */
+	double orientation;		/**< Current orientation reading. */
+	double acceleration;		/**< Current acceleration reading. */
+	double velocity;			/**< Current vertical velocity. */
+	double altitude;			/**< Current altitude measurement. */
 };
 
 /** @} */
