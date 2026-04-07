@@ -94,4 +94,3 @@ trim_trailing_whitespace = false
 [Kconfig*]
 indent_style = tab
 indent_size = 8
-
