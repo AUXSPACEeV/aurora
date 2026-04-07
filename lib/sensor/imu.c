@@ -20,7 +20,7 @@
 #include <aurora/lib/imu.h>
 
 #ifndef M_PI
-#define M_PI 3.14159265f
+#define M_PI ((double)3.1415926535)
 #endif
 
 LOG_MODULE_REGISTER(imu, CONFIG_AURORA_SENSORS_LOG_LEVEL);
@@ -33,14 +33,14 @@ ZBUS_CHAN_DEFINE(imu_data_chan,
 		 ZBUS_MSG_INIT(0));
 
 /**
- * @brief Convert a Zephyr sensor_value to a float.
+ * @brief Convert a Zephyr sensor_value to a double.
  *
  * @param val Pointer to the sensor value.
  * @return Floating-point representation.
  */
-static inline float out_ev(const struct sensor_value *val)
+static inline double out_ev(struct sensor_value *val)
 {
-	return (val->val1 + (float)val->val2 / 1000000);
+	return (val->val1 + (double)val->val2 / 1000000);
 }
 
 /**
@@ -140,27 +140,27 @@ int imu_init(const struct device *dev)
 }
 
 /* imu_sensor_value_to_acceleration – see imu.h */
-int imu_sensor_value_to_acceleration(const struct imu_data *data, float *acc_out)
+int imu_sensor_value_to_acceleration(const struct imu_data *data, double *acc_out)
 {
 	if (data == NULL || acc_out == NULL)
 		return -EINVAL;
 
-	float x = out_ev(&data->accel[0]);
-	float y = out_ev(&data->accel[1]);
-	float z = out_ev(&data->accel[2]);
-	*acc_out = sqrtf(x*x + y*y + z*z);
+	double x = out_ev(&data->accel[0]);
+	double y = out_ev(&data->accel[1]);
+	double z = out_ev(&data->accel[2]);
+	*acc_out = sqrt(x*x + y*y + z*z);
 	return 0;
 }
 
 /* imu_sensor_value_to_orientation – see imu.h */
 int imu_sensor_value_to_orientation(const struct imu_data *data,
-				    float *orientation_out)
+				    double *orientation_out)
 {
 	if (data == NULL || orientation_out == NULL)
 		return -EINVAL;
 
-	float x = out_ev(&data->accel[0]);
-	float y = out_ev(&data->accel[1]);
-	*orientation_out = atan2f(y, x) * (180.0f / M_PI);
+	double x = out_ev(&data->accel[0]);
+	double y = out_ev(&data->accel[1]);
+	*orientation_out = atan2(y, x) * (180.0f / M_PI);
 	return 0;
 }

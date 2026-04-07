@@ -65,9 +65,9 @@ int baro_init(const struct device *dev);
 /**
  * @brief Set the ground-level reference pressure.
  *
- * Must be called before @ref baro_sensor_value_to_altitude to establish
- * the zero-altitude baseline.  Typically called once at startup with
- * the first valid pressure reading.
+ * Must be called before @ref baro_sensor_value_to_altitude to establish the
+ * zero-altitude baseline. Typically called once at startup with the first valid
+ * pressure reading.
  *
  * @param ref_kpa Ground-level pressure in kilopascals.
  *
@@ -88,7 +88,7 @@ int baro_set_reference(double ref_kpa);
  * @retval 0 on success.
  * @retval -EINVAL if @p press or @p altitude_out is NULL.
  */
-int baro_sensor_value_to_altitude(const struct sensor_value *press, float *altitude_out);
+int baro_sensor_value_to_altitude(const struct sensor_value *press, double *altitude_out);
 
 /** @} */
 

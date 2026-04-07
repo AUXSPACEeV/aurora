@@ -134,47 +134,35 @@ int baro_init(const struct device *dev)
  *----------------------------------------------------------*/
 
 /** ISA sea-level temperature (K). */
-#define ISA_T0 288.15f
+#define ISA_T0 288.15
 
 /** ISA temperature lapse rate (K/m). */
-#define ISA_L  0.0065f
+#define ISA_L  0.0065
 
 /** g·M / (R·L) exponent for the barometric formula. */
-#define ISA_GMR_OVER_L 5.25588f
+#define ISA_GMR_OVER_L 5.25588
 
 /** R·L / (g·M) exponent for the hypsometric formula. */
-#define ISA_RL_OVER_GM 0.190263f
+#define ISA_RL_OVER_GM 0.190263
 
 /** Ground-level reference pressure in kPa (0 = not set). */
-static float ref_pressure_kpa;
+static double ref_pressure_kpa;
 
-/** Reference pressure set flag. */
-static bool ref_set = false;
-
-/**
- * @brief Convert a pressure reading to altitude AGL.
- *
- * Uses the hypsometric formula (ISA troposphere model) with the
- * reference pressure set by @ref baro_set_reference.
- *
- * @param press_kpa Measured pressure in kilopascals.
- *
- * @return Altitude in meters above the reference level.
- */
-static float baro_pressure_to_altitude(float press_kpa)
+/* baro_pressure_to_altitude – see baro.h */
+static double baro_pressure_to_altitude(double press_kpa)
 {
 	/*
 	 * Hypsometric formula (ISA troposphere):
 	 *   h = (T0 / L) * (1 - (P / P_ref) ^ (R·L / (g·M)))
 	 */
 	return (ISA_T0 / ISA_L) *
-	       (1.0f - powf(press_kpa / ref_pressure_kpa, ISA_RL_OVER_GM));
+	       (1.0 - pow(press_kpa / ref_pressure_kpa, ISA_RL_OVER_GM));
 }
 
 /* baro_set_reference – see baro.h */
-int baro_set_reference(float ref_kpa)
+int baro_set_reference(double ref_kpa)
 {
-	if (ref_kpa <= 0.0f)
+	if (ref_kpa <= 0.0)
 		return -EINVAL;
 
 	ref_pressure_kpa = ref_kpa;
@@ -182,12 +170,12 @@ int baro_set_reference(float ref_kpa)
 }
 
 /* baro_sensor_value_to_altitude – see baro.h */
-int baro_sensor_value_to_altitude(const struct sensor_value *press, float *altitude_out)
+int baro_sensor_value_to_altitude(const struct sensor_value *press, double *altitude_out)
 {
 	if (press == NULL || altitude_out == NULL)
 		return -EINVAL;
 
-	float press_kpa = (float)press->val1 + (float)press->val2 / 1e6f;
+	double press_kpa = (double)press->val1 + (double)press->val2 / 1e6f;
 
 	if (!ref_set) {
 		if (baro_set_reference(press_kpa) != 0) {

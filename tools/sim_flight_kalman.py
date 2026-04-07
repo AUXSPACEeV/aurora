@@ -47,7 +47,7 @@ def pressure_to_altitude(p, p_ref=P0):
 
 
 # ---------------------------------------------------------------------------
-# Kalman filter – mirrors kalman.c exactly
+# Kalman filter - mirrors kalman.c exactly
 # ---------------------------------------------------------------------------
 
 class KalmanFilter:
@@ -71,7 +71,7 @@ class KalmanFilter:
         self.prev_velocity = 0.0
 
     def predict(self, dt_s: float):
-        """filter_predict – constant-velocity state propagation."""
+        """filter_predict - constant-velocity state propagation."""
         self.state[0] += self.state[1] * dt_s
 
         P = self.P
@@ -86,7 +86,7 @@ class KalmanFilter:
         self.P = new_P
 
     def update(self, z: float):
-        """filter_update – measurement correction."""
+        """filter_update - measurement correction."""
         y = z - self.state[0]
         S = self.P[0, 0] + self.R
 
@@ -103,7 +103,7 @@ class KalmanFilter:
         self.P[1, 1] = P[1, 1] - K1 * P[0, 1]
 
     def detect_apogee(self) -> bool:
-        """filter_detect_apogee – velocity zero-crossing."""
+        """filter_detect_apogee - velocity zero-crossing."""
         current = self.state[1]
         apogee = self.prev_velocity > 0.0 and current <= 0.0
         self.prev_velocity = current
@@ -119,9 +119,9 @@ def simulate_flight(apogee_m=500.0, dt=0.02, seed=42):
     Generate a realistic rocket altitude profile and barometric pressure.
 
     Phases:
-      1. Boost   – constant thrust acceleration for ~3 s
-      2. Coast   – ballistic arc (gravity only) up to apogee
-      3. Descent – drogue then main chute
+      1. Boost   - constant thrust acceleration for ~3 s
+      2. Coast   - ballistic arc (gravity only) up to apogee
+      3. Descent - drogue then main chute
 
     Returns (time, true_altitude, true_pressure, noisy_pressure) arrays.
     """
@@ -262,7 +262,7 @@ def plot_flight(t, true_alt, true_press, noisy_press, baro_alt,
         ax_press.axvline(t[apogee_idx], color=c["apogee"],
                          linestyle="--", linewidth=1.5)
     ax_press.set_ylabel("Pressure (hPa)")
-    ax_press.set_title("AURORA Kalman Filter – Simulated 500 m Rocket Flight",
+    ax_press.set_title("AURORA Kalman Filter - Simulated 500 m Rocket Flight",
                        color=c["brand"], fontweight="bold")
     ax_press.legend(loc="upper right")
     ax_press.grid(True, color=c["grid"], alpha=0.5)
