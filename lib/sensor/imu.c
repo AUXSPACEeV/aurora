@@ -38,7 +38,7 @@ ZBUS_CHAN_DEFINE(imu_data_chan,
  * @param val Pointer to the sensor value.
  * @return Floating-point representation.
  */
-static inline double out_ev(struct sensor_value *val)
+static inline double out_ev(const struct sensor_value *val)
 {
 	return (val->val1 + (double)val->val2 / 1000000);
 }
@@ -161,6 +161,6 @@ int imu_sensor_value_to_orientation(const struct imu_data *data,
 
 	double x = out_ev(&data->accel[0]);
 	double y = out_ev(&data->accel[1]);
-	*orientation_out = atan2(y, x) * (180.0f / M_PI);
+	*orientation_out = atan2(y, x) * (180.0 / M_PI);
 	return 0;
 }
