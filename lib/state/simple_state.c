@@ -72,7 +72,7 @@ static inline bool arm_to_boost_conditions_met(const struct sm_inputs *in);
  * @param in                Pointer to the current sensor input values.
  * @param previous_altitude Altitude from the previous update cycle (m).
  */
-static inline void _sm_update(const struct sm_inputs *in, double previous_altitude);
+static inline void _sm_update(const struct sm_inputs *in, float previous_altitude);
 
 /*-----------------------------------------------------------
  * Internal State
@@ -213,7 +213,7 @@ static inline bool arm_to_boost_conditions_met(const struct sm_inputs *in)
  * State Machine Update
  *----------------------------------------------------------*/
 static inline void _sm_update(const struct sm_inputs *in,
-							  double previous_altitude)
+							  float previous_altitude)
 {
 	/* No matter the state, go to IDLE if disarmed */
 	if (!in->armed) {
@@ -293,7 +293,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 	* APOGEE detection - BURNOUT -> APOGEE
 	*----------------------------------------------------------*/
 	case SM_BURNOUT:
-		if (in->velocity <= 0.0 && in->altitude < previous_altitude) {
+		if (in->velocity <= 0.0f && in->altitude < previous_altitude) {
 			k_timer_start(&to_a, K_MSEC(th.TO_A), K_NO_WAIT);
 			current_state = SM_APOGEE;
 			LOG_INF("-> APOGEE");
@@ -394,7 +394,7 @@ _check_timeout:
 /* sm_update – see state.h */
 void sm_update(const struct sm_inputs *inputs)
 {
-	static double previous_altitude = 0.0;
+	static float previous_altitude = 0.0f;
 
 #if defined(CONFIG_APOGEE_DETECTION)
 	static int64_t last_time_ns = 0;

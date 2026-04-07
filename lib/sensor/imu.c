@@ -19,20 +19,20 @@
 #include <aurora/lib/imu.h>
 
 #ifndef M_PI
-#define M_PI ((double)3.1415926535)
+#define M_PI 3.14159265f
 #endif
 
 LOG_MODULE_REGISTER(imu, CONFIG_AURORA_SENSORS_LOG_LEVEL);
 
 /**
- * @brief Convert a Zephyr sensor_value to a double.
+ * @brief Convert a Zephyr sensor_value to a float.
  *
  * @param val Pointer to the sensor value.
  * @return Floating-point representation.
  */
-static inline double out_ev(struct sensor_value *val)
+static inline float out_ev(struct sensor_value *val)
 {
-	return (val->val1 + (double)val->val2 / 1000000);
+	return (val->val1 + (float)val->val2 / 1000000);
 }
 
 /**
@@ -112,30 +112,30 @@ static void run_trigger_mode(const struct device *dev)
 
 #else
 /* imu_poll – see imu.h */
-int imu_poll(const struct device *dev, double *orientation_deg, double *acc_avg)
+int imu_poll(const struct device *dev, float *orientation_deg, float *acc_avg)
 {
 	struct sensor_value ax, ay, az;
 
 	/* Read accelerometer values */
 	fetch_accel(dev, &ax, &ay, &az);
 
-	/* Convert to doubleing point */
-	double x = out_ev(&ax);
-	double y = out_ev(&ay);
-	double z = out_ev(&az);
+	/* Convert to floating point */
+	float x = out_ev(&ax);
+	float y = out_ev(&ay);
+	float z = out_ev(&az);
 
 	/* Compute magnitude of acceleration */
-	double acc = sqrt(x*x + y*y + z*z);
+	float acc = sqrtf(x*x + y*y + z*z);
 
 	/* Compute orientation angle in degrees (atan2(y,x)) */
-	double angle_deg = atan2(y, x) * (180.0 / M_PI);
+	float angle_deg = atan2f(y, x) * (180.0f / M_PI);
 
 	/* Return results */
 	if (orientation_deg)
-		*orientation_deg = (double)angle_deg;
+		*orientation_deg = angle_deg;
 
 	if (acc_avg)
-		*acc_avg = (double)acc;
+		*acc_avg = acc;
 
 	return 0;
 }

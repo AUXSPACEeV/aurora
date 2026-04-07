@@ -56,7 +56,7 @@ int baro_init(const struct device *dev);
  * @retval 0 on success.
  * @retval -EINVAL if @p ref_kpa is not positive.
  */
-int baro_set_reference(double ref_kpa);
+int baro_set_reference(float ref_kpa);
 
 /**
  * @brief Convert a pressure reading to altitude AGL.
@@ -68,7 +68,7 @@ int baro_set_reference(double ref_kpa);
  *
  * @return Altitude in meters above the reference level.
  */
-double baro_pressure_to_altitude(double press_kpa);
+float baro_pressure_to_altitude(float press_kpa);
 
 /** @} */
 

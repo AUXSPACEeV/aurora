@@ -28,7 +28,7 @@
  * @retval 0 on success.
  * @retval -errno Negative errno on failure.
  */
-int imu_poll(const struct device *dev, double *orientation_deg, double *acc);
+int imu_poll(const struct device *dev, float *orientation_deg, float *acc);
 #endif /* CONFIG_LSM6DSO_TRIGGER */
 
 /**

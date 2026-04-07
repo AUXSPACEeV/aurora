@@ -13,11 +13,11 @@
 #include <aurora/lib/filter.h>
 
 /** @brief Absolute tolerance for floating-point comparisons. */
-#define FLOAT_TOL 0.001
+#define FLOAT_TOL 0.001f
 
-/** @brief Helper: assert two doubles are approximately equal. */
+/** @brief Helper: assert two floats are approximately equal. */
 #define zassert_near(a, b, tol, msg) \
-	zassert_true(fabs((a) - (b)) < (tol), msg)
+	zassert_true(fabsf((a) - (b)) < (tol), msg)
 
 /**
  * @brief Expected noise values from Kconfig defaults.
@@ -26,9 +26,9 @@
  * CONFIG_FILTER_Q_VEL_MILLISCALE = 500  -> 0.5
  * CONFIG_FILTER_R_MILLISCALE     = 4000 -> 4.0
  */
-#define EXPECTED_Q_ALT (100.0 / 1000.0)
-#define EXPECTED_Q_VEL (500.0 / 1000.0)
-#define EXPECTED_R     (4000.0 / 1000.0)
+#define EXPECTED_Q_ALT (100.0f / 1000.0f)
+#define EXPECTED_Q_VEL (500.0f / 1000.0f)
+#define EXPECTED_R     (4000.0f / 1000.0f)
 
 /** @brief Nanoseconds per millisecond for dt conversion. */
 #define NS_PER_MS 1000000LL
@@ -38,19 +38,19 @@
  * ---------------------------------------------------------------- */
 
 /** @brief ISA sea-level temperature (K). */
-#define ISA_T0 288.15
+#define ISA_T0 288.15f
 
 /** @brief ISA temperature lapse rate (K/m). */
-#define ISA_L  0.0065
+#define ISA_L  0.0065f
 
 /** @brief g*M / (R*L) exponent for the barometric formula. */
-#define ISA_GMR_OVER_L 5.25588
+#define ISA_GMR_OVER_L 5.25588f
 
 /** @brief R*L / (g*M) exponent for the hypsometric formula. */
-#define ISA_RL_OVER_GM 0.190263
+#define ISA_RL_OVER_GM 0.190263f
 
 /** @brief Standard sea-level pressure (kPa). */
-#define ISA_P0_KPA 101.325
+#define ISA_P0_KPA 101.325f
 
 /**
  * @brief Convert altitude to pressure using the barometric formula.
@@ -61,9 +61,9 @@
  * @param ref_kpa  Reference (ground-level) pressure in kPa.
  * @return Pressure in kPa.
  */
-static double altitude_to_pressure(double alt_m, double ref_kpa)
+static float altitude_to_pressure(float alt_m, float ref_kpa)
 {
-	return ref_kpa * pow(1.0 - ISA_L * alt_m / ISA_T0, ISA_GMR_OVER_L);
+	return ref_kpa * powf(1.0f - ISA_L * alt_m / ISA_T0, ISA_GMR_OVER_L);
 }
 
 /**
@@ -77,10 +77,10 @@ static double altitude_to_pressure(double alt_m, double ref_kpa)
  * @param ref_kpa    Reference (ground-level) pressure in kPa.
  * @return Altitude AGL in meters.
  */
-static double pressure_to_altitude(double press_kpa, double ref_kpa)
+static float pressure_to_altitude(float press_kpa, float ref_kpa)
 {
 	return (ISA_T0 / ISA_L) *
-	       (1.0 - pow(press_kpa / ref_kpa, ISA_RL_OVER_GM));
+	       (1.0f - powf(press_kpa / ref_kpa, ISA_RL_OVER_GM));
 }
 
 static struct filter filt;
@@ -120,20 +120,20 @@ ZTEST(kalman_filter_tests, test_init_values)
 	zassert_equal(ret, 0, "filter_init should return 0");
 
 	/* State vector zeroed */
-	zassert_near(f.state[0], 0.0, FLOAT_TOL, "Initial altitude should be 0");
-	zassert_near(f.state[1], 0.0, FLOAT_TOL, "Initial velocity should be 0");
+	zassert_near(f.state[0], 0.0f, FLOAT_TOL, "Initial altitude should be 0");
+	zassert_near(f.state[1], 0.0f, FLOAT_TOL, "Initial velocity should be 0");
 
 	/* Covariance diagonal = 10, off-diagonal = 0 */
-	zassert_near(f.covariance[0][0], 10.0, FLOAT_TOL, "P[0][0] should be 10");
-	zassert_near(f.covariance[0][1], 0.0, FLOAT_TOL, "P[0][1] should be 0");
-	zassert_near(f.covariance[1][0], 0.0, FLOAT_TOL, "P[1][0] should be 0");
-	zassert_near(f.covariance[1][1], 10.0, FLOAT_TOL, "P[1][1] should be 10");
+	zassert_near(f.covariance[0][0], 10.0f, FLOAT_TOL, "P[0][0] should be 10");
+	zassert_near(f.covariance[0][1], 0.0f, FLOAT_TOL, "P[0][1] should be 0");
+	zassert_near(f.covariance[1][0], 0.0f, FLOAT_TOL, "P[1][0] should be 0");
+	zassert_near(f.covariance[1][1], 10.0f, FLOAT_TOL, "P[1][1] should be 10");
 
 	/* Process noise from Kconfig defaults */
 	zassert_near(f.noise_p[0][0], EXPECTED_Q_ALT, FLOAT_TOL,
 		     "Q_alt should match Kconfig");
-	zassert_near(f.noise_p[0][1], 0.0, FLOAT_TOL, "Q[0][1] should be 0");
-	zassert_near(f.noise_p[1][0], 0.0, FLOAT_TOL, "Q[1][0] should be 0");
+	zassert_near(f.noise_p[0][1], 0.0f, FLOAT_TOL, "Q[0][1] should be 0");
+	zassert_near(f.noise_p[1][0], 0.0f, FLOAT_TOL, "Q[1][0] should be 0");
 	zassert_near(f.noise_p[1][1], EXPECTED_Q_VEL, FLOAT_TOL,
 		     "Q_vel should match Kconfig");
 
@@ -142,7 +142,7 @@ ZTEST(kalman_filter_tests, test_init_values)
 		     "R should match Kconfig");
 
 	/* Previous velocity for apogee detection */
-	zassert_near(f.prev_velocity, 0.0, FLOAT_TOL,
+	zassert_near(f.prev_velocity, 0.0f, FLOAT_TOL,
 		     "prev_velocity should be initialized to 0");
 }
 
@@ -185,16 +185,16 @@ ZTEST(kalman_filter_tests, test_predict_negative_dt)
  */
 ZTEST(kalman_filter_tests, test_predict_state_propagation)
 {
-	filt.state[0] = 100.0;  /* altitude */
-	filt.state[1] = 50.0;   /* velocity */
+	filt.state[0] = 100.0f;  /* altitude */
+	filt.state[1] = 50.0f;   /* velocity */
 
 	/* dt = 100ms = 100,000,000 ns -> dt_s = 0.1 */
 	int ret = filter_predict(&filt, 100 * NS_PER_MS);
 	zassert_equal(ret, 0, "filter_predict should return 0");
 
-	zassert_near(filt.state[0], 105.0, FLOAT_TOL,
+	zassert_near(filt.state[0], 105.0f, FLOAT_TOL,
 		     "Altitude should be predicted forward by velocity * dt_s");
-	zassert_near(filt.state[1], 50.0, FLOAT_TOL,
+	zassert_near(filt.state[1], 50.0f, FLOAT_TOL,
 		     "Velocity should remain unchanged in constant-velocity model");
 }
 
@@ -206,13 +206,13 @@ ZTEST(kalman_filter_tests, test_predict_state_propagation)
  */
 ZTEST(kalman_filter_tests, test_predict_small_dt)
 {
-	filt.state[0] = 100.0;
-	filt.state[1] = 50.0;
+	filt.state[0] = 100.0f;
+	filt.state[1] = 50.0f;
 
 	int ret = filter_predict(&filt, 500000LL);  /* 0.5 ms */
 	zassert_equal(ret, 0, "filter_predict should return 0");
 
-	zassert_near(filt.state[0], 100.025, FLOAT_TOL,
+	zassert_near(filt.state[0], 100.025f, FLOAT_TOL,
 		     "Altitude should advance by velocity * 0.0005s");
 }
 
@@ -231,8 +231,8 @@ ZTEST(kalman_filter_tests, test_predict_excessive_dt)
  */
 ZTEST(kalman_filter_tests, test_predict_covariance_growth)
 {
-	double P00_before = filt.covariance[0][0];
-	double P11_before = filt.covariance[1][1];
+	float P00_before = filt.covariance[0][0];
+	float P11_before = filt.covariance[1][1];
 
 	int ret = filter_predict(&filt, 1 * NS_PER_MS);
 	zassert_equal(ret, 0, "filter_predict should return 0");
@@ -253,7 +253,7 @@ ZTEST(kalman_filter_tests, test_predict_covariance_growth)
  */
 ZTEST(kalman_filter_tests, test_update_null)
 {
-	int ret = filter_update(NULL, 100.0);
+	int ret = filter_update(NULL, 100.0f);
 	zassert_equal(ret, -EINVAL, "filter_update(NULL) should return -EINVAL");
 }
 
@@ -265,14 +265,14 @@ ZTEST(kalman_filter_tests, test_update_null)
  */
 ZTEST(kalman_filter_tests, test_update_moves_toward_measurement)
 {
-	double alt_before = filt.state[0];
+	float alt_before = filt.state[0];
 
-	int ret = filter_update(&filt, 100.0);
+	int ret = filter_update(&filt, 100.0f);
 	zassert_equal(ret, 0, "filter_update should return 0");
 
 	zassert_true(filt.state[0] > alt_before,
 		     "Altitude should increase toward measurement");
-	zassert_true(filt.state[0] <= 100.0,
+	zassert_true(filt.state[0] <= 100.0f,
 		     "Altitude should not overshoot measurement");
 }
 
@@ -283,9 +283,9 @@ ZTEST(kalman_filter_tests, test_update_moves_toward_measurement)
  */
 ZTEST(kalman_filter_tests, test_update_reduces_covariance)
 {
-	double P00_before = filt.covariance[0][0];
+	float P00_before = filt.covariance[0][0];
 
-	filter_update(&filt, 50.0);
+	filter_update(&filt, 50.0f);
 
 	zassert_true(filt.covariance[0][0] < P00_before,
 		     "P[0][0] should decrease after measurement update");
@@ -312,7 +312,7 @@ ZTEST(kalman_filter_tests, test_detect_apogee_null)
  */
 ZTEST(kalman_filter_tests, test_detect_apogee_zero_velocity)
 {
-	filt.state[1] = 0.0;
+	filt.state[1] = 0.0f;
 
 	int ret = filter_detect_apogee(&filt);
 	zassert_equal(ret, 0, "No apogee with initial zero velocity");
@@ -323,7 +323,7 @@ ZTEST(kalman_filter_tests, test_detect_apogee_zero_velocity)
  */
 ZTEST(kalman_filter_tests, test_detect_apogee_positive_velocity)
 {
-	filt.state[1] = 10.0;
+	filt.state[1] = 10.0f;
 
 	int ret = filter_detect_apogee(&filt);
 	zassert_equal(ret, 0, "No apogee with positive velocity");
@@ -337,12 +337,12 @@ ZTEST(kalman_filter_tests, test_detect_apogee_positive_velocity)
 ZTEST(kalman_filter_tests, test_detect_apogee_crossing)
 {
 	/* First call: set prev_velocity to positive */
-	filt.state[1] = 10.0;
+	filt.state[1] = 10.0f;
 	int ret = filter_detect_apogee(&filt);
 	zassert_equal(ret, 0, "No apogee yet while ascending");
 
 	/* Second call: velocity crosses to zero -> apogee */
-	filt.state[1] = 0.0;
+	filt.state[1] = 0.0f;
 	ret = filter_detect_apogee(&filt);
 	zassert_equal(ret, 1, "Apogee should be detected on zero-crossing");
 }
@@ -352,10 +352,10 @@ ZTEST(kalman_filter_tests, test_detect_apogee_crossing)
  */
 ZTEST(kalman_filter_tests, test_detect_apogee_crossing_negative)
 {
-	filt.state[1] = 5.0;
+	filt.state[1] = 5.0f;
 	filter_detect_apogee(&filt);
 
-	filt.state[1] = -1.0;
+	filt.state[1] = -1.0f;
 	int ret = filter_detect_apogee(&filt);
 	zassert_equal(ret, 1, "Apogee should be detected on crossing to negative");
 }
@@ -365,10 +365,10 @@ ZTEST(kalman_filter_tests, test_detect_apogee_crossing_negative)
  */
 ZTEST(kalman_filter_tests, test_detect_apogee_stays_negative)
 {
-	filt.state[1] = -5.0;
+	filt.state[1] = -5.0f;
 	filter_detect_apogee(&filt);
 
-	filt.state[1] = -10.0;
+	filt.state[1] = -10.0f;
 	int ret = filter_detect_apogee(&filt);
 	zassert_equal(ret, 0, "No apogee when velocity stays negative");
 }
@@ -381,14 +381,14 @@ ZTEST(kalman_filter_tests, test_detect_apogee_stays_negative)
  */
 ZTEST(kalman_filter_tests, test_detect_apogee_no_repeat)
 {
-	filt.state[1] = 10.0;
+	filt.state[1] = 10.0f;
 	filter_detect_apogee(&filt);
 
-	filt.state[1] = -1.0;
+	filt.state[1] = -1.0f;
 	int ret = filter_detect_apogee(&filt);
 	zassert_equal(ret, 1, "First crossing should detect apogee");
 
-	filt.state[1] = -2.0;
+	filt.state[1] = -2.0f;
 	ret = filter_detect_apogee(&filt);
 	zassert_equal(ret, 0, "No repeat apogee detection");
 }
@@ -415,9 +415,9 @@ ZTEST_SUITE(hypsometric_pipeline_tests, NULL, NULL, kalman_filter_before,
  */
 ZTEST(hypsometric_pipeline_tests, test_hypsometric_ground_level)
 {
-	double alt = pressure_to_altitude(ISA_P0_KPA, ISA_P0_KPA);
+	float alt = pressure_to_altitude(ISA_P0_KPA, ISA_P0_KPA);
 
-	zassert_near(alt, 0.0, FLOAT_TOL,
+	zassert_near(alt, 0.0f, FLOAT_TOL,
 		     "Altitude at reference pressure should be 0 m");
 }
 
@@ -428,11 +428,11 @@ ZTEST(hypsometric_pipeline_tests, test_hypsometric_ground_level)
  */
 ZTEST(hypsometric_pipeline_tests, test_hypsometric_round_trip)
 {
-	const double target_alt = 500.0;
-	double press = altitude_to_pressure(target_alt, ISA_P0_KPA);
-	double recovered_alt = pressure_to_altitude(press, ISA_P0_KPA);
+	const float target_alt = 500.0f;
+	float press = altitude_to_pressure(target_alt, ISA_P0_KPA);
+	float recovered_alt = pressure_to_altitude(press, ISA_P0_KPA);
 
-	zassert_near(recovered_alt, target_alt, 0.1,
+	zassert_near(recovered_alt, target_alt, 0.5f,
 		     "Round-trip altitude should match within 0.1 m");
 }
 
@@ -443,16 +443,16 @@ ZTEST(hypsometric_pipeline_tests, test_hypsometric_round_trip)
  */
 ZTEST(hypsometric_pipeline_tests, test_hypsometric_known_altitude)
 {
-	const double alt_1000m = 1000.0;
-	double press = altitude_to_pressure(alt_1000m, ISA_P0_KPA);
+	const float alt_1000m = 1000.0f;
+	float press = altitude_to_pressure(alt_1000m, ISA_P0_KPA);
 
 	/* ISA standard: ~89.875 kPa at 1000 m */
-	zassert_near(press, 89.875, 0.1,
+	zassert_near(press, 89.875f, 0.5f,
 		     "Pressure at 1000 m should be ~89.875 kPa");
 
-	double alt = pressure_to_altitude(press, ISA_P0_KPA);
+	float alt = pressure_to_altitude(press, ISA_P0_KPA);
 
-	zassert_near(alt, alt_1000m, 0.1,
+	zassert_near(alt, alt_1000m, 0.5f,
 		     "Recovered altitude should be ~1000 m");
 }
 
@@ -469,16 +469,16 @@ ZTEST(hypsometric_pipeline_tests, test_hypsometric_known_altitude)
  */
 ZTEST(hypsometric_pipeline_tests, test_convergence_from_pressure)
 {
-	const double target_alt = 500.0;
-	const double press = altitude_to_pressure(target_alt, ISA_P0_KPA);
-	const double hyp_alt = pressure_to_altitude(press, ISA_P0_KPA);
+	const float target_alt = 500.0f;
+	const float press = altitude_to_pressure(target_alt, ISA_P0_KPA);
+	const float hyp_alt = pressure_to_altitude(press, ISA_P0_KPA);
 
 	for (int i = 0; i < 50; i++) {
 		filter_predict(&filt, 10 * NS_PER_MS);
 		filter_update(&filt, hyp_alt);
 	}
 
-	zassert_near(filt.state[0], target_alt, 5.0,
+	zassert_near(filt.state[0], target_alt, 5.0f,
 		     "Filter should converge to hypsometric altitude");
 }
 
@@ -500,14 +500,14 @@ ZTEST(hypsometric_pipeline_tests, test_convergence_from_pressure)
  */
 ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_hypsometric)
 {
-	const double ref_kpa = ISA_P0_KPA;
+	const float ref_kpa = ISA_P0_KPA;
 	int apogee_detected = 0;
 
 	/* Ascent: altitude 0 -> 290 m in 10 m steps */
 	for (int i = 0; i < 30; i++) {
-		double true_alt = 10.0 * i;
-		double press = altitude_to_pressure(true_alt, ref_kpa);
-		double meas_alt = pressure_to_altitude(press, ref_kpa);
+		float true_alt = 10.0f * i;
+		float press = altitude_to_pressure(true_alt, ref_kpa);
+		float meas_alt = pressure_to_altitude(press, ref_kpa);
 
 		filter_predict(&filt, 100 * NS_PER_MS);
 		filter_update(&filt, meas_alt);
@@ -519,9 +519,9 @@ ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_hypsometric)
 
 	/* Descent: altitude 290 -> 0 m in 10 m steps */
 	for (int i = 0; i < 30; i++) {
-		double true_alt = 290.0 - 10.0 * i;
-		double press = altitude_to_pressure(true_alt, ref_kpa);
-		double meas_alt = pressure_to_altitude(press, ref_kpa);
+		float true_alt = 290.0f - 10.0f * i;
+		float press = altitude_to_pressure(true_alt, ref_kpa);
+		float meas_alt = pressure_to_altitude(press, ref_kpa);
 
 		filter_predict(&filt, 100 * NS_PER_MS);
 		filter_update(&filt, meas_alt);
@@ -541,14 +541,14 @@ ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_hypsometric)
  */
 ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_high_site)
 {
-	const double ref_kpa = 95.0;
+	const float ref_kpa = 95.0f;
 	int apogee_detected = 0;
 
 	/* Ascent: 0 -> 290 m AGL */
 	for (int i = 0; i < 30; i++) {
-		double true_alt = 10.0 * i;
-		double press = altitude_to_pressure(true_alt, ref_kpa);
-		double meas_alt = pressure_to_altitude(press, ref_kpa);
+		float true_alt = 10.0f * i;
+		float press = altitude_to_pressure(true_alt, ref_kpa);
+		float meas_alt = pressure_to_altitude(press, ref_kpa);
 
 		filter_predict(&filt, 100 * NS_PER_MS);
 		filter_update(&filt, meas_alt);
@@ -560,9 +560,9 @@ ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_high_site)
 
 	/* Descent: 290 -> 0 m AGL */
 	for (int i = 0; i < 30; i++) {
-		double true_alt = 290.0 - 10.0 * i;
-		double press = altitude_to_pressure(true_alt, ref_kpa);
-		double meas_alt = pressure_to_altitude(press, ref_kpa);
+		float true_alt = 290.0f - 10.0f * i;
+		float press = altitude_to_pressure(true_alt, ref_kpa);
+		float meas_alt = pressure_to_altitude(press, ref_kpa);
 
 		filter_predict(&filt, 100 * NS_PER_MS);
 		filter_update(&filt, meas_alt);
@@ -583,18 +583,18 @@ ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_high_site)
  */
 ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_noisy)
 {
-	const double ref_kpa = ISA_P0_KPA;
-	const double noise_amp_kpa = 0.05;
+	const float ref_kpa = ISA_P0_KPA;
+	const float noise_amp_kpa = 0.05f;
 	int apogee_detected = 0;
 
 	/* Ascent: 0 -> 490 m in 10 m steps */
 	for (int i = 0; i < 50; i++) {
-		double true_alt = 10.0 * i;
-		double press = altitude_to_pressure(true_alt, ref_kpa);
+		float true_alt = 10.0f * i;
+		float press = altitude_to_pressure(true_alt, ref_kpa);
 		/* Deterministic pseudo-noise via sin */
-		double noisy_press = press +
-			noise_amp_kpa * sin((double)i * 1.7);
-		double meas_alt = pressure_to_altitude(noisy_press, ref_kpa);
+		float noisy_press = press +
+			noise_amp_kpa * sinf((float)i * 1.7f);
+		float meas_alt = pressure_to_altitude(noisy_press, ref_kpa);
 
 		filter_predict(&filt, 100 * NS_PER_MS);
 		filter_update(&filt, meas_alt);
@@ -607,11 +607,11 @@ ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_noisy)
 
 	/* Descent: 490 -> 0 m in 10 m steps */
 	for (int i = 0; i < 50; i++) {
-		double true_alt = 490.0 - 10.0 * i;
-		double press = altitude_to_pressure(true_alt, ref_kpa);
-		double noisy_press = press +
-			noise_amp_kpa * sin((double)(i + 50) * 1.7);
-		double meas_alt = pressure_to_altitude(noisy_press, ref_kpa);
+		float true_alt = 490.0f - 10.0f * i;
+		float press = altitude_to_pressure(true_alt, ref_kpa);
+		float noisy_press = press +
+			noise_amp_kpa * sinf((float)(i + 50) * 1.7f);
+		float meas_alt = pressure_to_altitude(noisy_press, ref_kpa);
 
 		filter_predict(&filt, 100 * NS_PER_MS);
 		filter_update(&filt, meas_alt);
@@ -637,14 +637,14 @@ ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_noisy)
  */
 ZTEST(hypsometric_pipeline_tests, test_numerical_stability_hypsometric)
 {
-	const double ref_kpa = ISA_P0_KPA;
-	const double nominal_alt = 100.0;
+	const float ref_kpa = ISA_P0_KPA;
+	const float nominal_alt = 100.0f;
 
 	for (int i = 0; i < 200; i++) {
-		double alt_var = nominal_alt +
-			50.0 * sin(i * 0.1);
-		double press = altitude_to_pressure(alt_var, ref_kpa);
-		double meas_alt = pressure_to_altitude(press, ref_kpa);
+		float alt_var = nominal_alt +
+			50.0f * sinf(i * 0.1f);
+		float press = altitude_to_pressure(alt_var, ref_kpa);
+		float meas_alt = pressure_to_altitude(press, ref_kpa);
 
 		filter_predict(&filt, 10 * NS_PER_MS);
 		filter_update(&filt, meas_alt);
@@ -669,18 +669,18 @@ ZTEST(hypsometric_pipeline_tests, test_numerical_stability_hypsometric)
  */
 ZTEST(hypsometric_pipeline_tests, test_steady_state_tracking)
 {
-	const double ref_kpa = ISA_P0_KPA;
-	const double target_alt = 200.0;
-	const double press = altitude_to_pressure(target_alt, ref_kpa);
-	const double meas_alt = pressure_to_altitude(press, ref_kpa);
+	const float ref_kpa = ISA_P0_KPA;
+	const float target_alt = 200.0f;
+	const float press = altitude_to_pressure(target_alt, ref_kpa);
+	const float meas_alt = pressure_to_altitude(press, ref_kpa);
 
 	for (int i = 0; i < 100; i++) {
 		filter_predict(&filt, 100 * NS_PER_MS);
 		filter_update(&filt, meas_alt);
 	}
 
-	zassert_near(filt.state[0], target_alt, 1.0,
+	zassert_near(filt.state[0], target_alt, 1.0f,
 		     "Filter altitude should track steady input");
-	zassert_near(filt.state[1], 0.0, 1.0,
+	zassert_near(filt.state[1], 0.0f, 1.0f,
 		     "Filter velocity should be near zero at steady state");
 }
