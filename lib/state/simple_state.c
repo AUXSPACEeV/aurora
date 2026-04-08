@@ -118,7 +118,7 @@ static void init_timers(void)
 {
 	k_timer_init(&dt_ab, NULL, NULL);
 	k_timer_init(&dt_l, NULL, NULL);
-	
+
 	k_timer_init(&to_a, NULL, NULL);
 	k_timer_init(&to_m, NULL, NULL);
 	k_timer_init(&to_r, NULL, NULL);
@@ -293,11 +293,19 @@ static inline void _sm_update(const struct sm_inputs *in,
 	* APOGEE detection - BURNOUT -> APOGEE
 	*----------------------------------------------------------*/
 	case SM_BURNOUT:
+#if defined(CONFIG_APOGEE_DETECTION)
+		if (filter_detect_apogee(&filter) == 1) {
+			k_timer_start(&to_a, K_MSEC(th.TO_A), K_NO_WAIT);
+			current_state = SM_APOGEE;
+			LOG_INF("-> APOGEE (filter)");
+		}
+#else
 		if (in->velocity <= 0.0 && in->altitude < previous_altitude) {
 			k_timer_start(&to_a, K_MSEC(th.TO_A), K_NO_WAIT);
 			current_state = SM_APOGEE;
 			LOG_INF("-> APOGEE");
 		}
+#endif /* CONFIG_APOGEE_DETECTION */
 		break;
 
 	/*-----------------------------------------------------------
@@ -398,20 +406,27 @@ void sm_update(const struct sm_inputs *inputs)
 
 #if defined(CONFIG_APOGEE_DETECTION)
 	static int64_t last_time_ns = 0;
+	struct sm_inputs filtered_inputs;
 
-	int current_time_ns = (k_uptime_ticks() * NSEC_PER_SEC) / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
-#endif /* CONFIG_APOGEE_DETECTION */
+	int64_t current_time_ns = (k_uptime_ticks() * NSEC_PER_SEC)
+				  / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
 
-	_sm_update(inputs, previous_altitude);
-#if defined(CONFIG_APOGEE_DETECTION)
 	if (last_time_ns != 0) {
 		filter_predict(&filter, current_time_ns - last_time_ns);
 		filter_update(&filter, inputs->altitude);
 	}
 	last_time_ns = current_time_ns;
-#endif /* CONFIG_APOGEE_DETECTION */
 
+	filtered_inputs = *inputs;
+	filtered_inputs.altitude = filter.state[0];
+	filtered_inputs.velocity = filter.state[1];
+
+	_sm_update(&filtered_inputs, previous_altitude);
+	previous_altitude = filtered_inputs.altitude;
+#else
+	_sm_update(inputs, previous_altitude);
 	previous_altitude = inputs->altitude;
+#endif /* CONFIG_APOGEE_DETECTION */
 }
 
 /*-----------------------------------------------------------
