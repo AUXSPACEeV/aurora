@@ -1,0 +1,11 @@
+# Basic Pyro Module
+#
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+title: Basic pyro module
+description: Auxspace e.V. basic pyro module
+
+compatible: "auxspaceev,basic-pyro"
+
+include: pyro-device.yaml

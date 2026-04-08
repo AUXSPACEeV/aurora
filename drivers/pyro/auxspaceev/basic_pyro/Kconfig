@@ -1,0 +1,11 @@
+# Basic pyro module configuration options
+#
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig BASIC_PYRO
+	bool "Basic pyro module."
+	default y
+	depends on DT_HAS_AUXSPACEEV_BASIC_PYRO_ENABLED
+	help
+	  Enable driver for basic pyro module.
