@@ -19,4 +19,8 @@ menu "State Machine"
 rsource "state/Kconfig"
 endmenu
 
+menu "Notifications"
+rsource "notify/Kconfig"
+endmenu
+
 endmenu

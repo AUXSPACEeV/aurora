@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+config AURORA_NOTIFY
+	bool "Notification subsystem"
+	help
+	  Enable the notification subsystem.  When enabled, registered
+	  backends (buzzer, RGB LED, ...) are called on boot, state-machine
+	  transitions, and error conditions.
+
+if AURORA_NOTIFY
+
+module = AURORA_NOTIFY
+module-str = AURORA_NOTIFY
+source "subsys/logging/Kconfig.template.log_config"
+
+config AURORA_NOTIFY_BUZZER
+	bool "PWM buzzer notifications"
+	depends on PWM
+	depends on DT_HAS_AUXSPACEEV_PWM_BUZZER_ENABLED
+	help
+	  Drive a passive buzzer via PWM to signal boot, state changes,
+	  and errors.
+
+endif # AURORA_NOTIFY
