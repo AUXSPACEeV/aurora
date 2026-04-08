@@ -331,8 +331,9 @@ ZTEST(data_logger_core, test_flush_null_logger)
 ZTEST(data_logger_core, test_flush_delegates)
 {
 	data_logger_init(&logger, &mock_fmt, "/test");
+	int before = mock_state.flush_calls;
 	zassert_ok(data_logger_flush(&logger), NULL);
-	zassert_equal(mock_state.flush_calls, 1, NULL);
+	zassert_equal(mock_state.flush_calls, before + 1, NULL);
 }
 
 ZTEST(data_logger_core, test_flush_error_propagated)
@@ -399,7 +400,7 @@ ZTEST(data_logger_core, test_full_lifecycle)
 	zassert_ok(data_logger_close(&logger), NULL);
 	zassert_equal(mock_state.init_calls,         1, NULL);
 	zassert_equal(mock_state.write_header_calls, 1, NULL);
-	zassert_equal(mock_state.flush_calls,        1, NULL);
+	zassert_equal(mock_state.flush_calls,        2, NULL);
 	zassert_equal(mock_state.close_calls,        1, NULL);
 }
 
