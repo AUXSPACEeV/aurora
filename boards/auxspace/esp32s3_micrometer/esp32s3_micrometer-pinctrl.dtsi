@@ -100,6 +100,13 @@
 		};
 	};
 
+	ledc0_default: ledc0_default {
+		group1 {
+			pinmux = <LEDC_CH0_GPIO47>;
+			output-enable;
+		};
+	};
+
 	twai_default: twai_default {
 		group1 {
 			pinmux = <TWAI_RX_GPIO19>,
