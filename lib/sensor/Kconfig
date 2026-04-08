@@ -21,6 +21,14 @@ config IMU
 		This option enables functionality for the Inertial Measurement
 		Unit (IMU).
 
+config IMU_TRIGGER
+	bool "Support for IMU Trigger"
+	depends on IMU
+	default y if LSM6DSO_TRIGGER
+	help
+		This option enables functionality for the IMU
+		to run triggers in an interrupt context.
+
 # Only show frequency options when IMU is enabled
 choice IMU_FREQUENCY
 	prompt "IMU update frequency (Hz)"
