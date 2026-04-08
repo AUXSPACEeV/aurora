@@ -1,0 +1,20 @@
+Notifications
+=============
+
+The notification library provides an abstract interface for user-facing
+indicators (buzzer, RGB LED, ...).
+Each backend registers a :c:struct:`notify_backend` at link time via an iterable
+section.
+The library fans out every call to all enabled backends.
+
+Backends
+--------
+
+- **PWM Buzzer** (``CONFIG_AURORA_NOTIFY_BUZZER``): drives a passive
+  buzzer via PWM to signal boot, state changes, and errors.
+
+API Reference
+-------------
+
+.. doxygengroup:: lib_notify
+   :content-only:
