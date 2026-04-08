@@ -1,0 +1,15 @@
+# PWM Buzzer
+#
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+title: PWM passive buzzer
+description: A passive buzzer driven by a PWM channel.
+
+compatible: "auxspaceev,pwm-buzzer"
+
+properties:
+  pwms:
+    required: true
+    type: phandle-array
+    description: PWM specifier for the buzzer output.

@@ -16,6 +16,10 @@
 #include <zephyr/device.h>
 #include <zephyr/zbus/zbus.h>
 
+#if DT_HAS_CHOSEN(auxspace_buzzer)
+#include <zephyr/drivers/pwm.h>
+#endif
+
 #include <app_version.h>
 
 #if defined(CONFIG_IMU)
@@ -393,6 +397,19 @@ K_THREAD_DEFINE(data_logger_task_id, 4096, data_logger_task, NULL, NULL, NULL,
 int main(void)
 {
 	LOG_INF("Auxspace AURORA %s", APP_VERSION_STRING);
+
+#if DT_HAS_CHOSEN(auxspace_buzzer)
+	static const struct pwm_dt_spec buzzer =
+		PWM_DT_SPEC_GET(DT_CHOSEN(auxspace_buzzer));
+
+	if (pwm_is_ready_dt(&buzzer)) {
+		pwm_set_dt(&buzzer, buzzer.period, buzzer.period / 2);
+		k_sleep(K_MSEC(500));
+		pwm_set_dt(&buzzer, buzzer.period, 0);
+	} else {
+		LOG_ERR("Buzzer PWM device not ready");
+	}
+#endif
 
 	/* Threads start automatically via K_THREAD_DEFINE */
 

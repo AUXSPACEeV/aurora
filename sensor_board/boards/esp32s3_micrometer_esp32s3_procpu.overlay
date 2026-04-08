@@ -11,6 +11,7 @@
 		auxspace,mmc = &mmc0;
 		auxspace,pyro = &pyro0;
 		auxspace,ffs = &ffs0;
+		auxspace,buzzer = &buzzer0;
 	};
 
 	fstab {
