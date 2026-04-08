@@ -16,10 +16,6 @@
 #include <zephyr/device.h>
 #include <zephyr/zbus/zbus.h>
 
-#if DT_HAS_CHOSEN(auxspace_buzzer)
-#include <zephyr/drivers/pwm.h>
-#endif
-
 #include <app_version.h>
 
 #if defined(CONFIG_IMU)
@@ -37,6 +33,10 @@
 #if defined(CONFIG_DATA_LOGGER)
 #include <aurora/lib/data_logger.h>
 #endif /* CONFIG_DATA_LOGGER */
+
+#if defined(CONFIG_AURORA_NOTIFY)
+#include <aurora/lib/notify.h>
+#endif /* CONFIG_AURORA_NOTIFY */
 
 #if defined(CONFIG_AURORA_STATE_MACHINE)
 #include <aurora/lib/state/state.h>
@@ -184,6 +184,9 @@ K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
 void state_machine_task(void *, void *, void *)
 {
 	enum sm_state state;
+#if defined(CONFIG_AURORA_NOTIFY)
+	enum sm_state prev_state = SM_IDLE;
+#endif /* CONFIG_AURORA_NOTIFY */
 	const struct zbus_channel *data_chan;
 	union {
 		struct imu_data imu;
@@ -280,6 +283,13 @@ void state_machine_task(void *, void *, void *)
 		sm_update(&inputs);
 		state = sm_get_state();
 		LOG_INF("STATE = %d\n", state);
+
+#if defined(CONFIG_AURORA_NOTIFY)
+		if (state != prev_state) {
+			notify_state_change(prev_state, state);
+			prev_state = state;
+		}
+#endif /* CONFIG_AURORA_NOTIFY */
 
 		/* reset the measurements */
 		baro_ready = false;
@@ -398,18 +408,10 @@ int main(void)
 {
 	LOG_INF("Auxspace AURORA %s", APP_VERSION_STRING);
 
-#if DT_HAS_CHOSEN(auxspace_buzzer)
-	static const struct pwm_dt_spec buzzer =
-		PWM_DT_SPEC_GET(DT_CHOSEN(auxspace_buzzer));
-
-	if (pwm_is_ready_dt(&buzzer)) {
-		pwm_set_dt(&buzzer, buzzer.period, buzzer.period / 2);
-		k_sleep(K_MSEC(500));
-		pwm_set_dt(&buzzer, buzzer.period, 0);
-	} else {
-		LOG_ERR("Buzzer PWM device not ready");
-	}
-#endif
+#if defined(CONFIG_AURORA_NOTIFY)
+	notify_init();
+	notify_boot();
+#endif /* CONFIG_AURORA_NOTIFY */
 
 	/* Threads start automatically via K_THREAD_DEFINE */
 

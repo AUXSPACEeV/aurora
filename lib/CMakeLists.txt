@@ -12,3 +12,6 @@ add_subdirectory_ifdef(CONFIG_DATA_LOGGER data)
 
 # state machine lib
 add_subdirectory_ifdef(CONFIG_AURORA_STATE_MACHINE state)
+
+# notification lib
+add_subdirectory_ifdef(CONFIG_AURORA_NOTIFY notify)
