@@ -1,6 +1,6 @@
 /**
- * @file mini_pyro.c
- * @brief Minimal capacitor-based pyro driver implementation.
+ * @file basic_pyro.c
+ * @brief Basic capacitor-based pyro driver implementation.
  *
  * Hardware model (per channel):
  *   - Arm GPIO   : charges the pyro capacitor.
@@ -15,7 +15,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define DT_DRV_COMPAT auxspaceev_mini_pyro
+#define DT_DRV_COMPAT auxspaceev_basic_pyro
 
 #include <stdint.h>
 
@@ -25,14 +25,14 @@
 #include <zephyr/drivers/sensor.h>
 
 #include <aurora/drivers/pyro.h>
-#include "mini_pyro.h"
+#include "basic_pyro.h"
 
 #define LOG_LEVEL CONFIG_PYRO_LOG_LEVEL
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(mini_pyro);
+LOG_MODULE_REGISTER(basic_pyro);
 
 /**
- * @brief Initialize the mini pyro driver instance.
+ * @brief Initialize the basic pyro driver instance.
  *
  * Configures trigger, arm, and (optional) short GPIOs as output-inactive.
  * Sets up ADC channels for cap-voltage and sense readings if present.
@@ -40,7 +40,7 @@ LOG_MODULE_REGISTER(mini_pyro);
  * @param dev Pyro device instance.
  * @return 0 on success, negative errno on failure.
  */
-static int auxspaceev_mini_pyro_init(const struct device *dev)
+static int auxspaceev_basic_pyro_init(const struct device *dev)
 {
 	const struct pyro_config *config = dev->config;
 	int ret;
@@ -102,6 +102,22 @@ static int auxspaceev_mini_pyro_init(const struct device *dev)
 		}
 	}
 
+	if (config->cap_gpios != NULL) {
+		for (uint32_t i = 0; i < config->n_channels; i++) {
+			if (!gpio_is_ready_dt(&config->cap_gpios[i])) {
+				LOG_ERR("cap gpio %u not ready", i);
+				return -ENODEV;
+			}
+			ret = gpio_pin_configure_dt(&config->cap_gpios[i],
+						    GPIO_OUTPUT_INACTIVE);
+			if (ret < 0) {
+				LOG_ERR("failed to configure cap gpio %u: %d",
+					i, ret);
+				return ret;
+			}
+		}
+	}
+
 	if (config->senses != NULL) {
 		for (uint32_t i = 0; i < config->n_channels; i++) {
 			ret = adc_channel_setup_dt(&config->senses[i]);
@@ -122,7 +138,7 @@ static int auxspaceev_mini_pyro_init(const struct device *dev)
  * Deasserts the short GPIO first (if present) to allow charging,
  * then asserts the arm GPIO to begin capacitor charging.
  */
-static int auxspaceev_mini_pyro_arm_channel(const struct device *dev,
+static int auxspaceev_basic_pyro_arm_channel(const struct device *dev,
 					    uint32_t channel)
 {
 	const struct pyro_config *config = dev->config;
@@ -156,7 +172,7 @@ static int auxspaceev_mini_pyro_arm_channel(const struct device *dev,
 }
 
 /** @brief Disarm a pyro channel (stops capacitor charging). */
-static int auxspaceev_mini_pyro_disarm_channel(const struct device *dev,
+static int auxspaceev_basic_pyro_disarm_channel(const struct device *dev,
 					       uint32_t channel)
 {
 	const struct pyro_config *config = dev->config;
@@ -191,7 +207,7 @@ static int auxspaceev_mini_pyro_disarm_channel(const struct device *dev,
  * Deasserts the trigger, asserts the short GPIO (shorts across the
  * pyro to make it safe), and disarms (stops charging).
  */
-static int auxspaceev_mini_pyro_secure_channel(const struct device *dev,
+static int auxspaceev_basic_pyro_secure_channel(const struct device *dev,
 					       uint32_t channel)
 {
 	const struct pyro_config *config = dev->config;
@@ -209,6 +225,16 @@ static int auxspaceev_mini_pyro_secure_channel(const struct device *dev,
 	}
 	data->trigger_flags &= ~BIT(channel);
 
+	/* Deassert cap charge GPIO if present */
+	if (config->cap_gpios != NULL &&
+	    (data->charge_flags & BIT(channel))) {
+		ret = gpio_pin_set_dt(&config->cap_gpios[channel], 0);
+		if (ret < 0) {
+			return ret;
+		}
+		data->charge_flags &= ~BIT(channel);
+	}
+
 	/* Short across the pyro to make it safe */
 	if (config->short_gpios != NULL) {
 		ret = gpio_pin_set_dt(&config->short_gpios[channel], 1);
@@ -218,7 +244,7 @@ static int auxspaceev_mini_pyro_secure_channel(const struct device *dev,
 		data->short_flags |= BIT(channel);
 	}
 
-	return auxspaceev_mini_pyro_disarm_channel(dev, channel);
+	return auxspaceev_basic_pyro_disarm_channel(dev, channel);
 }
 
 /**
@@ -227,7 +253,7 @@ static int auxspaceev_mini_pyro_secure_channel(const struct device *dev,
  * Connects the charged capacitor to the pyro. Only succeeds if the
  * channel is armed (capacitor charging/charged).
  */
-static int auxspaceev_mini_pyro_trigger_channel(const struct device *dev,
+static int auxspaceev_basic_pyro_trigger_channel(const struct device *dev,
 						uint32_t channel)
 {
 	const struct pyro_config *config = dev->config;
@@ -256,12 +282,32 @@ static int auxspaceev_mini_pyro_trigger_channel(const struct device *dev,
 /**
  * @brief Charge a pyro channel's capacitor.
  *
- * On mini-pyro hardware, arming and charging are the same operation.
+ * When cap-gpios are present, asserts the dedicated charge GPIO.
+ * Otherwise, charging is the same as arming.
  */
-static int auxspaceev_mini_pyro_charge_channel(const struct device *dev,
+static int auxspaceev_basic_pyro_charge_channel(const struct device *dev,
 					       uint32_t channel)
 {
-	return auxspaceev_mini_pyro_arm_channel(dev, channel);
+	const struct pyro_config *config = dev->config;
+	struct pyro_data *data = dev->data;
+
+	if (config->cap_gpios == NULL) {
+		return auxspaceev_basic_pyro_arm_channel(dev, channel);
+	}
+
+	if (channel >= config->n_channels) {
+		return -EINVAL;
+	}
+
+	int ret = gpio_pin_set_dt(&config->cap_gpios[channel], 1);
+
+	if (ret < 0) {
+		return ret;
+	}
+
+	data->charge_flags |= BIT(channel);
+
+	return 0;
 }
 
 /**
@@ -270,7 +316,7 @@ static int auxspaceev_mini_pyro_charge_channel(const struct device *dev,
  * Measures pyro resistance via the sense ADC. The returned value is
  * the raw ADC millivolt reading.
  */
-static int auxspaceev_mini_pyro_sense_channel(const struct device *dev,
+static int auxspaceev_basic_pyro_sense_channel(const struct device *dev,
 					      uint32_t channel, uint32_t *val)
 {
 	const struct pyro_config *config = dev->config;
@@ -315,7 +361,7 @@ static int auxspaceev_mini_pyro_sense_channel(const struct device *dev,
  * Measures the capacitor voltage via the cap-V ADC. The returned
  * value is in millivolts.
  */
-static int auxspaceev_mini_pyro_read_cap_channel(const struct device *dev,
+static int auxspaceev_basic_pyro_read_cap_channel(const struct device *dev,
 						 uint32_t channel,
 						 uint32_t *val)
 {
@@ -356,7 +402,7 @@ static int auxspaceev_mini_pyro_read_cap_channel(const struct device *dev,
 }
 
 /** @brief Get the number of pyro channels. */
-static int auxspaceev_mini_pyro_get_nchannels(const struct device *dev)
+static int auxspaceev_basic_pyro_get_nchannels(const struct device *dev)
 {
 	const struct pyro_config *config = dev->config;
 
@@ -364,14 +410,14 @@ static int auxspaceev_mini_pyro_get_nchannels(const struct device *dev)
 }
 
 static DEVICE_API(pyro, pyro_api_funcs) = {
-	.arm = auxspaceev_mini_pyro_arm_channel,
-	.disarm = auxspaceev_mini_pyro_disarm_channel,
-	.secure = auxspaceev_mini_pyro_secure_channel,
-	.trigger = auxspaceev_mini_pyro_trigger_channel,
-	.charge = auxspaceev_mini_pyro_charge_channel,
-	.sense = auxspaceev_mini_pyro_sense_channel,
-	.read_cap = auxspaceev_mini_pyro_read_cap_channel,
-	.get_nchannels = auxspaceev_mini_pyro_get_nchannels,
+	.arm = auxspaceev_basic_pyro_arm_channel,
+	.disarm = auxspaceev_basic_pyro_disarm_channel,
+	.secure = auxspaceev_basic_pyro_secure_channel,
+	.trigger = auxspaceev_basic_pyro_trigger_channel,
+	.charge = auxspaceev_basic_pyro_charge_channel,
+	.sense = auxspaceev_basic_pyro_sense_channel,
+	.read_cap = auxspaceev_basic_pyro_read_cap_channel,
+	.get_nchannels = auxspaceev_basic_pyro_get_nchannels,
 };
 
 /**
@@ -381,7 +427,7 @@ static DEVICE_API(pyro, pyro_api_funcs) = {
  * @param prop    Phandle-array property name.
  * @param idx     Element index within the phandle-array.
  */
-#define MINI_PYRO_GPIO_SPEC(node_id, prop, idx)				\
+#define BASIC_PYRO_GPIO_SPEC(node_id, prop, idx)				\
 	GPIO_DT_SPEC_GET_BY_IDX(node_id, prop, idx),
 
 /**
@@ -391,7 +437,7 @@ static DEVICE_API(pyro, pyro_api_funcs) = {
  * @param prop    Phandle-array property name.
  * @param idx     Element index within the phandle-array.
  */
-#define MINI_PYRO_ADC_SPEC(node_id, prop, idx)				\
+#define BASIC_PYRO_ADC_SPEC(node_id, prop, idx)				\
 	ADC_DT_SPEC_STRUCT(DT_PHANDLE_BY_IDX(node_id, prop, idx),	\
 			   DT_PHA_BY_IDX(node_id, prop, idx, input)),
 
@@ -409,54 +455,77 @@ static DEVICE_API(pyro, pyro_api_funcs) = {
 		.short_gpios = COND_CODE_1(					\
 			DT_NODE_HAS_PROP(DT_DRV_INST(inst), short_gpios),	\
 			(pyro_short_gpios_##inst), (NULL)),			\
+		.cap_gpios = COND_CODE_1(					\
+			DT_NODE_HAS_PROP(DT_DRV_INST(inst), cap_gpios),	\
+			(pyro_cap_gpios_##inst), (NULL)),			\
 		.capv = COND_CODE_1(						\
 			DT_NODE_HAS_PROP(DT_DRV_INST(inst), capv_adcs),	\
 			(pyro_capv_adcs_##inst), (NULL)),			\
 		.senses = COND_CODE_1(						\
 			DT_NODE_HAS_PROP(DT_DRV_INST(inst), sense_adcs),	\
 			(pyro_sense_adcs_##inst), (NULL)),			\
+		.capv_max = COND_CODE_1(					\
+			DT_NODE_HAS_PROP(DT_DRV_INST(inst), capv_max),		\
+			(pyro_capv_max_##inst), (NULL)),			\
+		.sense_max = COND_CODE_1(					\
+			DT_NODE_HAS_PROP(DT_DRV_INST(inst), sense_max),	\
+			(pyro_sense_max_##inst), (NULL)),			\
 	}
 
 /**
- * @brief Instantiate a mini pyro driver from devicetree.
+ * @brief Instantiate a basic pyro driver from devicetree.
  *
  * Declares per-channel GPIO and ADC spec arrays, allocates runtime data,
  * builds the configuration struct, and registers the device.
  *
  * @param inst Instance number (from DT_INST_FOREACH_STATUS_OKAY).
  */
-#define MINI_PYRO_DEFINE(inst)						\
+#define BASIC_PYRO_DEFINE(inst)						\
 	static const struct gpio_dt_spec pyro_trigger_gpios_##inst[] = {\
 		DT_FOREACH_PROP_ELEM(DT_DRV_INST(inst), trigger_gpios,	\
-				     MINI_PYRO_GPIO_SPEC)		\
+				     BASIC_PYRO_GPIO_SPEC)		\
 	};								\
 	static const struct gpio_dt_spec pyro_arm_gpios_##inst[] = {	\
 		DT_FOREACH_PROP_ELEM(DT_DRV_INST(inst), arm_gpios,	\
-				     MINI_PYRO_GPIO_SPEC)		\
+				     BASIC_PYRO_GPIO_SPEC)		\
 	};								\
 	IF_ENABLED(DT_NODE_HAS_PROP(DT_DRV_INST(inst), short_gpios), (	\
 	static const struct gpio_dt_spec pyro_short_gpios_##inst[] = {	\
 		DT_FOREACH_PROP_ELEM(DT_DRV_INST(inst), short_gpios,	\
-				     MINI_PYRO_GPIO_SPEC)		\
+				     BASIC_PYRO_GPIO_SPEC)		\
+	};								\
+	))								\
+	IF_ENABLED(DT_NODE_HAS_PROP(DT_DRV_INST(inst), cap_gpios), (	\
+	static const struct gpio_dt_spec pyro_cap_gpios_##inst[] = {	\
+		DT_FOREACH_PROP_ELEM(DT_DRV_INST(inst), cap_gpios,	\
+				     BASIC_PYRO_GPIO_SPEC)		\
 	};								\
 	))								\
 	IF_ENABLED(DT_NODE_HAS_PROP(DT_DRV_INST(inst), capv_adcs), (	\
 	static const struct adc_dt_spec pyro_capv_adcs_##inst[] = {	\
 		DT_FOREACH_PROP_ELEM(DT_DRV_INST(inst), capv_adcs,	\
-				     MINI_PYRO_ADC_SPEC)		\
+				     BASIC_PYRO_ADC_SPEC)		\
 	};								\
 	))								\
 	IF_ENABLED(DT_NODE_HAS_PROP(DT_DRV_INST(inst), sense_adcs), (	\
 	static const struct adc_dt_spec pyro_sense_adcs_##inst[] = {	\
 		DT_FOREACH_PROP_ELEM(DT_DRV_INST(inst), sense_adcs,	\
-				     MINI_PYRO_ADC_SPEC)		\
+				     BASIC_PYRO_ADC_SPEC)		\
 	};								\
+	))								\
+	IF_ENABLED(DT_NODE_HAS_PROP(DT_DRV_INST(inst), capv_max), (	\
+	static const uint32_t pyro_capv_max_##inst[] =			\
+		DT_PROP(DT_DRV_INST(inst), capv_max);			\
+	))								\
+	IF_ENABLED(DT_NODE_HAS_PROP(DT_DRV_INST(inst), sense_max), (	\
+	static const uint32_t pyro_sense_max_##inst[] =			\
+		DT_PROP(DT_DRV_INST(inst), sense_max);			\
 	))								\
 	static struct pyro_data pyro_data_##inst;			\
 	static const struct pyro_config pyro_config_##inst =		\
 		PYRO_CONFIG(inst);					\
 	PYRO_DEVICE_DT_INST_DEFINE(inst,				\
-				   auxspaceev_mini_pyro_init,		\
+				   auxspaceev_basic_pyro_init,		\
 				   NULL,				\
 				   &pyro_data_##inst,			\
 				   &pyro_config_##inst,			\
@@ -465,4 +534,4 @@ static DEVICE_API(pyro, pyro_api_funcs) = {
 				   &pyro_api_funcs)
 
 /* Create the struct device for every status "okay" node in the devicetree. */
-DT_INST_FOREACH_STATUS_OKAY(MINI_PYRO_DEFINE)
+DT_INST_FOREACH_STATUS_OKAY(BASIC_PYRO_DEFINE)

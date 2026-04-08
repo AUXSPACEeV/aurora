@@ -48,7 +48,7 @@
 	};
 
 	pyro0: pyro_0 {
-		compatible = "auxspaceev,mini-pyro";
+		compatible = "auxspaceev,basic-pyro";
 
 		trigger-gpios = <&gpio1 13 GPIO_ACTIVE_HIGH>,
 				<&gpio1 16 GPIO_ACTIVE_HIGH>;
