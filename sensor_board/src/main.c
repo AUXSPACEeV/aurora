@@ -165,8 +165,6 @@ void baro_task(void *, void *, void *)
 /* Create the BARO task */
 K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
 				5, 0, 0);
-#elif defined(CONFIG_BARO) && defined(CONFIG_LPS22HH_TRIGGER)
-	static const struct device *baro0 = NULL;
 #endif /* CONFIG_BARO */
 
 /* ============================================================
