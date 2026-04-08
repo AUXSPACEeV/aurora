@@ -162,27 +162,31 @@ static double baro_pressure_to_altitude(double press_kpa)
 /* baro_set_reference – see baro.h */
 int baro_set_reference(double ref_kpa)
 {
+	static bool ref_set = false;
+
 	if (ref_kpa <= 0.0)
 		return -EINVAL;
 
-	ref_pressure_kpa = ref_kpa;
+	if (!ref_set)
+	{
+		ref_pressure_kpa = ref_kpa;
+		ref_set = true;
+	}
+
+	/* Success even if reference is already set */
 	return 0;
 }
 
 /* baro_sensor_value_to_altitude – see baro.h */
 int baro_sensor_value_to_altitude(const struct sensor_value *press, double *altitude_out)
 {
-	static bool ref_set = false;
 	if (press == NULL || altitude_out == NULL)
 		return -EINVAL;
 
 	double press_kpa = (double)press->val1 + (double)press->val2 / 1e6;
 
-	if (!ref_set) {
-		if (baro_set_reference(press_kpa) != 0) {
-			return -EINVAL;
-		}
-		ref_set = true;
+	if (baro_set_reference(press_kpa) != 0) {
+		return -EINVAL;
 	}
 
 	*altitude_out = baro_pressure_to_altitude(press_kpa);
