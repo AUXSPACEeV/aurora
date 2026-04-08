@@ -8,7 +8,8 @@ The API reference is generated from in-source Doxygen comments using
 
 data
 drivers
+filter
+notify
 sensors
 state
-filter
 ```
