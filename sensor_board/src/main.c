@@ -188,7 +188,6 @@ void state_machine_task(void *, void *, void *)
 	double altitude = 0.0;
 	double acceleration = 0.0;
 	double orientation = 0.0;
-	double velocity = 0.0;
 	bool baro_ready = false;
 	bool imu_ready = false;
 #if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
@@ -207,7 +206,6 @@ void state_machine_task(void *, void *, void *)
 		.armed = 1,
 		.orientation = orientation,
 		.acceleration = acceleration,
-		.velocity = velocity,
 	};
 
 #if defined(CONFIG_PYRO)
@@ -301,7 +299,6 @@ void state_machine_task(void *, void *, void *)
 		inputs = (struct sm_inputs){
 			.orientation = orientation,
 			.acceleration = acceleration,
-			.velocity = velocity,
 			.altitude = altitude,
 		};
 
