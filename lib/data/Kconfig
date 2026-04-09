@@ -59,4 +59,18 @@ config DATA_LOGGER_INFLUX_MEASUREMENT
 
 endif # DATA_LOGGER_INFLUX
 
+config DATA_LOGGER_MAX_LOGGERS
+	int "Maximum number of data logger instances"
+	default 4
+	help
+	  Upper bound on the number of data loggers that can be registered
+	  simultaneously.  Each slot costs one pointer in a static array.
+
+config DATA_LOGGER_SHELL
+	bool "Data logger shell commands"
+	depends on SHELL
+	help
+	  Enable shell commands for listing, starting, stopping, flushing,
+	  and querying the status of registered data loggers.
+
 endif # DATA_LOGGER

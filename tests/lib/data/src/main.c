@@ -166,6 +166,7 @@ const struct data_logger_formatter data_logger_mock_formatter = {
 	.stop            = mock_stop,
 	.start           = mock_start,
 	.file_ext        = "mock",
+	.name            = "mock",
 };
 
 #endif /* CONFIG_DATA_LOGGER_MOCK */
