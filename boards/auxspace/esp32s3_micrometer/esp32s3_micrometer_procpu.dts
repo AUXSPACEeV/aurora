@@ -122,8 +122,8 @@
 		reg = <0x6b>;
 		irq-gpios = <&gpio0 9 GPIO_ACTIVE_HIGH>;
 		int-pin = <1>;
-		accel-odr = <LSM6DSO_DT_ODR_104Hz>;
-		gyro-odr = <LSM6DSO_DT_ODR_104Hz>;
+		accel-odr = <LSM6DSO_DT_ODR_52Hz>;
+		gyro-odr = <LSM6DSO_DT_ODR_52Hz>;
 		status = "disabled";
 	};
 
@@ -131,7 +131,7 @@
 		compatible = "st,lps22hh";
 		reg = <0x5d>;
 		drdy-gpios = <&gpio0 10 GPIO_ACTIVE_HIGH>;
-		odr = <LPS22HH_DT_ODR_100HZ>;
+		odr = <LPS22HH_DT_ODR_50HZ>;
 		status = "disabled";
 	};
 };
