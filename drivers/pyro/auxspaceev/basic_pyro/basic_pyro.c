@@ -91,8 +91,16 @@ static int auxspaceev_basic_pyro_init(const struct device *dev)
 		}
 	}
 
+	uint32_t n_cap = config->single_cap ? 1 : config->n_channels;
+
 	if (config->capv != NULL) {
-		for (uint32_t i = 0; i < config->n_channels; i++) {
+		for (uint32_t i = 0; i < n_cap; i++) {
+			if (!adc_is_ready_dt(&config->capv[i])) {
+				LOG_ERR("failed to setup capv adc %u: "
+					"adc not ready", i);
+				return -EBUSY;
+			}
+
 			ret = adc_channel_setup_dt(&config->capv[i]);
 			if (ret < 0) {
 				LOG_ERR("failed to setup capv adc %u: %d",
@@ -120,6 +128,12 @@ static int auxspaceev_basic_pyro_init(const struct device *dev)
 
 	if (config->senses != NULL) {
 		for (uint32_t i = 0; i < config->n_channels; i++) {
+			if (!adc_is_ready_dt(&config->senses[i])) {
+				LOG_ERR("failed to setup sense adc %u: "
+					"adc not ready", i);
+				return -EBUSY;
+			}
+
 			ret = adc_channel_setup_dt(&config->senses[i]);
 			if (ret < 0) {
 				LOG_ERR("failed to setup sense adc %u: %d",
@@ -369,7 +383,8 @@ static int auxspaceev_basic_pyro_read_cap_channel(const struct device *dev,
 	int16_t buf;
 	int ret;
 
-	if (channel >= config->n_channels) {
+	int read_channel = config->single_cap ? 0 : channel;
+	if (read_channel >= config->n_channels) {
 		return -EINVAL;
 	}
 
@@ -382,16 +397,16 @@ static int auxspaceev_basic_pyro_read_cap_channel(const struct device *dev,
 		.buffer_size = sizeof(buf),
 	};
 
-	adc_sequence_init_dt(&config->capv[channel], &seq);
+	adc_sequence_init_dt(&config->capv[read_channel], &seq);
 
-	ret = adc_read_dt(&config->capv[channel], &seq);
+	ret = adc_read_dt(&config->capv[read_channel], &seq);
 	if (ret < 0) {
 		return ret;
 	}
 
 	int32_t mv = (int32_t)buf;
 
-	ret = adc_raw_to_millivolts_dt(&config->capv[channel], &mv);
+	ret = adc_raw_to_millivolts_dt(&config->capv[read_channel], &mv);
 	if (ret < 0) {
 		return ret;
 	}
@@ -450,6 +465,10 @@ static DEVICE_API(pyro, pyro_api_funcs) = {
 	{									\
 		.n_channels = DT_PROP_LEN(DT_DRV_INST(inst), trigger_gpios),	\
 		.single_arm = DT_PROP_LEN(DT_DRV_INST(inst), arm_gpios) == 1,	\
+		.single_cap = COND_CODE_1(					\
+			DT_NODE_HAS_PROP(DT_DRV_INST(inst), capv_adcs),		\
+			(DT_PROP_LEN(DT_DRV_INST(inst), capv_adcs) == 1),	\
+			(NULL)),						\
 		.trigger_gpios = pyro_trigger_gpios_##inst,			\
 		.arm_gpios = pyro_arm_gpios_##inst,				\
 		.short_gpios = COND_CODE_1(					\

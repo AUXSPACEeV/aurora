@@ -34,14 +34,14 @@ static const struct device *get_pyro_device(const struct shell *sh,
 static int parse_common_args(const struct shell *sh, char **argv,
 			     const struct device **dev, uint32_t *channel)
 {
-	int ret;
+	int ret = 0;
 
 	*dev = get_pyro_device(sh, argv[ARGV_DEV]);
 	if (*dev == NULL) {
 		return -ENODEV;
 	}
 
-	*channel = shell_strtoul(argv[ARGV_CHANNEL], 0, &ret);
+	*channel = shell_strtoul(argv[ARGV_CHANNEL], 10, &ret);
 	if (ret != 0) {
 		shell_error(sh, "invalid channel: %s", argv[ARGV_CHANNEL]);
 		return -EINVAL;
