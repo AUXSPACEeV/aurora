@@ -456,6 +456,134 @@ ZTEST(data_logger_core, test_start_error_propagated)
 	zassert_ok(data_logger_close(&logger), NULL);
 }
 
+/* ---- Registry: data_logger_get ------------------------------------------ */
+
+ZTEST(data_logger_core, test_registry_get_after_init)
+{
+	zassert_ok(data_logger_init(&logger, "test"), NULL);
+
+	struct data_logger *found = data_logger_get("test");
+
+	zassert_equal(found, &logger,
+		      "data_logger_get must return the registered logger");
+
+	zassert_ok(data_logger_close(&logger), NULL);
+}
+
+ZTEST(data_logger_core, test_registry_get_not_found)
+{
+	struct data_logger *found = data_logger_get("nonexistent");
+
+	zassert_is_null(found,
+			"data_logger_get must return NULL for unknown name");
+}
+
+ZTEST(data_logger_core, test_registry_get_removed_after_close)
+{
+	zassert_ok(data_logger_init(&logger, "gone"), NULL);
+	zassert_ok(data_logger_close(&logger), NULL);
+
+	struct data_logger *found = data_logger_get("gone");
+
+	zassert_is_null(found,
+			"Closed logger must be removed from the registry");
+}
+
+/* ---- Registry: data_logger_foreach -------------------------------------- */
+
+static int foreach_count;
+static struct data_logger *foreach_last;
+
+static void counting_cb(struct data_logger *l, void *user_data)
+{
+	foreach_count++;
+	foreach_last = l;
+	int *acc = user_data;
+	if (acc != NULL) {
+		(*acc)++;
+	}
+}
+
+ZTEST(data_logger_core, test_registry_foreach_empty)
+{
+	foreach_count = 0;
+	foreach_last = NULL;
+
+	data_logger_foreach(counting_cb, NULL);
+
+	zassert_equal(foreach_count, 0,
+		      "foreach must not invoke callback when registry is empty");
+}
+
+ZTEST(data_logger_core, test_registry_foreach_visits_logger)
+{
+	zassert_ok(data_logger_init(&logger, "iter"), NULL);
+
+	foreach_count = 0;
+	foreach_last = NULL;
+	int user_acc = 0;
+
+	data_logger_foreach(counting_cb, &user_acc);
+
+	zassert_equal(foreach_count, 1, NULL);
+	zassert_equal(foreach_last, &logger, NULL);
+	zassert_equal(user_acc, 1,
+		      "user_data must be forwarded to the callback");
+
+	zassert_ok(data_logger_close(&logger), NULL);
+}
+
+ZTEST(data_logger_core, test_registry_foreach_multiple)
+{
+	static struct data_logger loggers[3];
+
+	memset(loggers, 0, sizeof(loggers));
+
+	zassert_ok(data_logger_init(&loggers[0], "a"), NULL);
+	zassert_ok(data_logger_init(&loggers[1], "b"), NULL);
+	zassert_ok(data_logger_init(&loggers[2], "c"), NULL);
+
+	foreach_count = 0;
+	data_logger_foreach(counting_cb, NULL);
+
+	zassert_equal(foreach_count, 3,
+		      "foreach must visit all registered loggers");
+
+	zassert_ok(data_logger_close(&loggers[0]), NULL);
+	zassert_ok(data_logger_close(&loggers[1]), NULL);
+	zassert_ok(data_logger_close(&loggers[2]), NULL);
+}
+
+/* ---- Registry: capacity ------------------------------------------------- */
+
+ZTEST(data_logger_core, test_registry_full)
+{
+	static struct data_logger loggers[CONFIG_DATA_LOGGER_MAX_LOGGERS + 1];
+	int i;
+
+	memset(loggers, 0, sizeof(loggers));
+
+	/* Fill the registry to capacity. */
+	for (i = 0; i < CONFIG_DATA_LOGGER_MAX_LOGGERS; i++) {
+		char name[DATA_LOGGER_NAME_MAX];
+
+		snprintf(name, sizeof(name), "lg%d", i);
+		zassert_ok(data_logger_init(&loggers[i], name),
+			   "Init of logger %d must succeed", i);
+	}
+
+	/* One more must fail with -ENOMEM. */
+	int rc = data_logger_init(&loggers[i], "overflow");
+
+	zassert_equal(rc, -ENOMEM,
+		      "Exceeding MAX_LOGGERS must return -ENOMEM");
+
+	/* Clean up. */
+	for (i = 0; i < CONFIG_DATA_LOGGER_MAX_LOGGERS; i++) {
+		zassert_ok(data_logger_close(&loggers[i]), NULL);
+	}
+}
+
 /* ---- Full lifecycle (mock) ----------------------------------------------- */
 
 ZTEST(data_logger_core, test_full_lifecycle)
