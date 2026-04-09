@@ -83,4 +83,3 @@ The actual float value is `CONFIG_FILTER_*_MILLISCALE / 1000.0`.
 | Option | Default | Description |
 |---|---|---|
 | `CONFIG_PYRO_INIT_PRIORITY` | 80 | Kernel init priority for pyro driver instances. |
-
