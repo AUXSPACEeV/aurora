@@ -31,7 +31,23 @@ config DATA_LOGGER_INFLUX
 	  Include the InfluxDB Line Protocol formatter backend.  Produces one
 	  line per datapoint; no header row.
 
+config DATA_LOGGER_MOCK
+	bool "Mock formatter (test only)"
+	help
+	  Select an externally provided mock formatter for unit testing the
+	  core dispatch layer.  The symbol data_logger_mock_formatter must be
+	  defined by the test application.
+
 endchoice
+
+config DATA_LOGGER_BASE_PATH
+	string "Output directory for data logger files"
+	default "/data"
+	help
+	  Directory where the data logger writes output files.  The final
+	  path is <base_path>/<filename>.<file_ext>, where filename is
+	  passed to data_logger_init() and file_ext comes from the active
+	  formatter backend.
 
 if DATA_LOGGER_INFLUX
 

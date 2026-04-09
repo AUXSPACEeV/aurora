@@ -73,6 +73,8 @@ static int read_file(const char *path, char *buf, size_t size)
 /*  Mock formatter (used by core suite only)                                  */
 /* ========================================================================== */
 
+#if defined(CONFIG_DATA_LOGGER_MOCK)
+
 static struct {
 	int init_calls;
 	int write_header_calls;
@@ -137,17 +139,22 @@ static int mock_close(struct data_logger *logger)
 	return mock_state.fail_close ? -EIO : 0;
 }
 
-static const struct data_logger_formatter mock_fmt = {
+const struct data_logger_formatter data_logger_mock_formatter = {
 	.init            = mock_init,
 	.write_header    = mock_write_header,
 	.write_datapoint = mock_write_datapoint,
 	.flush           = mock_flush,
 	.close           = mock_close,
+	.file_ext        = "mock",
 };
+
+#endif /* CONFIG_DATA_LOGGER_MOCK */
 
 /* ========================================================================== */
 /*  Suite 1: core dispatch tests (no filesystem)                              */
 /* ========================================================================== */
+
+#if defined(CONFIG_DATA_LOGGER_MOCK)
 
 static struct data_logger logger;
 
@@ -203,22 +210,15 @@ ZTEST(data_logger_core, test_type_name_out_of_range)
 
 ZTEST(data_logger_core, test_init_null_logger)
 {
-	int rc = data_logger_init(NULL, &mock_fmt, "/test");
+	int rc = data_logger_init(NULL, "test");
 
 	zassert_equal(rc, -EINVAL, NULL);
 	zassert_equal(mock_state.init_calls, 0, NULL);
 }
 
-ZTEST(data_logger_core, test_init_null_fmt)
+ZTEST(data_logger_core, test_init_null_filename)
 {
-	int rc = data_logger_init(&logger, NULL, "/test");
-
-	zassert_equal(rc, -EINVAL, NULL);
-}
-
-ZTEST(data_logger_core, test_init_null_path)
-{
-	int rc = data_logger_init(&logger, &mock_fmt, NULL);
+	int rc = data_logger_init(&logger, NULL);
 
 	zassert_equal(rc, -EINVAL, NULL);
 	zassert_equal(mock_state.init_calls, 0, NULL);
@@ -230,7 +230,7 @@ ZTEST(data_logger_core, test_init_formatter_init_fails)
 {
 	mock_state.fail_init = 1;
 
-	int rc = data_logger_init(&logger, &mock_fmt, "/test");
+	int rc = data_logger_init(&logger, "test");
 
 	zassert_equal(rc, -EIO, NULL);
 	zassert_equal(mock_state.init_calls, 1, NULL);
@@ -241,7 +241,7 @@ ZTEST(data_logger_core, test_init_write_header_fails)
 {
 	mock_state.fail_write_header = 1;
 
-	int rc = data_logger_init(&logger, &mock_fmt, "/test");
+	int rc = data_logger_init(&logger, "test");
 
 	zassert_equal(rc, -EIO, NULL);
 	zassert_equal(mock_state.write_header_calls, 1, NULL);
@@ -252,7 +252,7 @@ ZTEST(data_logger_core, test_init_write_header_fails)
 
 ZTEST(data_logger_core, test_init_success)
 {
-	int rc = data_logger_init(&logger, &mock_fmt, "/test");
+	int rc = data_logger_init(&logger, "test");
 
 	zassert_ok(rc, NULL);
 	zassert_equal(mock_state.init_calls, 1, NULL);
@@ -272,14 +272,14 @@ ZTEST(data_logger_core, test_log_null_logger)
 
 ZTEST(data_logger_core, test_log_null_dp)
 {
-	data_logger_init(&logger, &mock_fmt, "/test");
+	data_logger_init(&logger, "test");
 	zassert_equal(data_logger_log(&logger, NULL), -EINVAL, NULL);
 	zassert_equal(mock_state.write_datapoint_calls, 0, NULL);
 }
 
 ZTEST(data_logger_core, test_log_after_close)
 {
-	data_logger_init(&logger, &mock_fmt, "/test");
+	data_logger_init(&logger, "test");
 	data_logger_close(&logger);
 	mock_reset();
 
@@ -290,7 +290,7 @@ ZTEST(data_logger_core, test_log_after_close)
 
 ZTEST(data_logger_core, test_log_delegates_datapoint)
 {
-	data_logger_init(&logger, &mock_fmt, "/test");
+	data_logger_init(&logger, "test");
 
 	struct datapoint dp = {
 		.timestamp_ms  = 12345LL,
@@ -313,7 +313,7 @@ ZTEST(data_logger_core, test_log_delegates_datapoint)
 
 ZTEST(data_logger_core, test_log_error_propagated)
 {
-	data_logger_init(&logger, &mock_fmt, "/test");
+	data_logger_init(&logger, "test");
 	mock_state.fail_write_datapoint = 1;
 
 	struct datapoint dp = {.type = AURORA_DATA_BARO, .channel_count = 2};
@@ -330,7 +330,7 @@ ZTEST(data_logger_core, test_flush_null_logger)
 
 ZTEST(data_logger_core, test_flush_delegates)
 {
-	data_logger_init(&logger, &mock_fmt, "/test");
+	data_logger_init(&logger, "test");
 	int before = mock_state.flush_calls;
 	zassert_ok(data_logger_flush(&logger), NULL);
 	zassert_equal(mock_state.flush_calls, before + 1, NULL);
@@ -338,7 +338,7 @@ ZTEST(data_logger_core, test_flush_delegates)
 
 ZTEST(data_logger_core, test_flush_error_propagated)
 {
-	data_logger_init(&logger, &mock_fmt, "/test");
+	data_logger_init(&logger, "test");
 	mock_state.fail_flush = 1;
 	zassert_equal(data_logger_flush(&logger), -EIO, NULL);
 }
@@ -352,7 +352,7 @@ ZTEST(data_logger_core, test_close_null_logger)
 
 ZTEST(data_logger_core, test_close_resets_fields)
 {
-	data_logger_init(&logger, &mock_fmt, "/test");
+	data_logger_init(&logger, "test");
 	zassert_ok(data_logger_close(&logger), NULL);
 	zassert_equal(mock_state.close_calls, 1, NULL);
 	zassert_is_null(logger.fmt, "logger.fmt must be NULL after close");
@@ -361,7 +361,7 @@ ZTEST(data_logger_core, test_close_resets_fields)
 
 ZTEST(data_logger_core, test_close_error_propagated)
 {
-	data_logger_init(&logger, &mock_fmt, "/test");
+	data_logger_init(&logger, "test");
 	mock_state.fail_close = 1;
 	zassert_equal(data_logger_close(&logger), -EIO, NULL);
 	/* Fields must be reset even on error. */
@@ -373,7 +373,7 @@ ZTEST(data_logger_core, test_close_error_propagated)
 
 ZTEST(data_logger_core, test_full_lifecycle)
 {
-	zassert_ok(data_logger_init(&logger, &mock_fmt, "/lfs/test.csv"), NULL);
+	zassert_ok(data_logger_init(&logger, "test"), NULL);
 
 	static const struct {
 		enum aurora_data type;
@@ -404,13 +404,15 @@ ZTEST(data_logger_core, test_full_lifecycle)
 	zassert_equal(mock_state.close_calls,        1, NULL);
 }
 
+#endif /* CONFIG_DATA_LOGGER_MOCK */
+
 /* ========================================================================== */
 /*  Suite 2: CSV formatter                                                    */
 /* ========================================================================== */
 
 #if defined(CONFIG_DATA_LOGGER_CSV)
 
-#define CSV_PATH "/RAM:/test.csv"
+#define CSV_FILE_PATH CONFIG_DATA_LOGGER_BASE_PATH "/test.csv"
 #define CSV_BUF_SIZE 512
 
 static struct data_logger csv_logger;
@@ -420,7 +422,7 @@ static void csv_before(void *fixture)
 	(void)fixture;
 	memset(&csv_logger, 0, sizeof(csv_logger));
 	/* Remove any leftover file from a previous test. */
-	fs_unlink(CSV_PATH);
+	fs_unlink(CSV_FILE_PATH);
 }
 
 ZTEST_SUITE(data_logger_csv, NULL, NULL, csv_before, NULL, NULL);
@@ -434,12 +436,10 @@ ZTEST(data_logger_csv, test_csv_header_present)
 {
 	char buf[CSV_BUF_SIZE];
 
-	zassert_ok(data_logger_init(&csv_logger,
-				    &data_logger_csv_formatter,
-				    CSV_PATH), NULL);
+	zassert_ok(data_logger_init(&csv_logger, "test"), NULL);
 	zassert_ok(data_logger_close(&csv_logger), NULL);
 
-	int n = read_file(CSV_PATH, buf, sizeof(buf));
+	int n = read_file(CSV_FILE_PATH, buf, sizeof(buf));
 
 	zassert_true(n > 0, "File should not be empty after init+close");
 	zassert_not_null(strstr(buf, "timestamp_ms"),
@@ -465,13 +465,11 @@ ZTEST(data_logger_csv, test_csv_baro_datapoint)
 		},
 	};
 
-	zassert_ok(data_logger_init(&csv_logger,
-				    &data_logger_csv_formatter,
-				    CSV_PATH), NULL);
+	zassert_ok(data_logger_init(&csv_logger, "test"), NULL);
 	zassert_ok(data_logger_log(&csv_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&csv_logger), NULL);
 
-	int n = read_file(CSV_PATH, buf, sizeof(buf));
+	int n = read_file(CSV_FILE_PATH, buf, sizeof(buf));
 
 	zassert_true(n > 0, "File must not be empty");
 	zassert_not_null(strstr(buf, "1000"),
@@ -502,13 +500,11 @@ ZTEST(data_logger_csv, test_csv_imu_accel_datapoint)
 		},
 	};
 
-	zassert_ok(data_logger_init(&csv_logger,
-				    &data_logger_csv_formatter,
-				    CSV_PATH), NULL);
+	zassert_ok(data_logger_init(&csv_logger, "test"), NULL);
 	zassert_ok(data_logger_log(&csv_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&csv_logger), NULL);
 
-	int n = read_file(CSV_PATH, buf, sizeof(buf));
+	int n = read_file(CSV_FILE_PATH, buf, sizeof(buf));
 
 	zassert_true(n > 0, NULL);
 	zassert_not_null(strstr(buf, "imu_accel"), NULL);
@@ -533,13 +529,11 @@ ZTEST(data_logger_csv, test_csv_negative_value)
 		},
 	};
 
-	zassert_ok(data_logger_init(&csv_logger,
-				    &data_logger_csv_formatter,
-				    CSV_PATH), NULL);
+	zassert_ok(data_logger_init(&csv_logger, "test"), NULL);
 	zassert_ok(data_logger_log(&csv_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&csv_logger), NULL);
 
-	int n = read_file(CSV_PATH, buf, sizeof(buf));
+	int n = read_file(CSV_FILE_PATH, buf, sizeof(buf));
 
 	zassert_true(n > 0, NULL);
 	zassert_not_null(strstr(buf, "-5.250000"),
@@ -553,9 +547,7 @@ ZTEST(data_logger_csv, test_csv_multiple_rows)
 {
 	char buf[CSV_BUF_SIZE];
 
-	zassert_ok(data_logger_init(&csv_logger,
-				    &data_logger_csv_formatter,
-				    CSV_PATH), NULL);
+	zassert_ok(data_logger_init(&csv_logger, "test"), NULL);
 
 	for (int i = 0; i < 3; i++) {
 		struct datapoint dp = {
@@ -572,7 +564,7 @@ ZTEST(data_logger_csv, test_csv_multiple_rows)
 
 	zassert_ok(data_logger_close(&csv_logger), NULL);
 
-	int n = read_file(CSV_PATH, buf, sizeof(buf));
+	int n = read_file(CSV_FILE_PATH, buf, sizeof(buf));
 
 	zassert_true(n > 0, NULL);
 
@@ -597,7 +589,7 @@ ZTEST(data_logger_csv, test_csv_multiple_rows)
 
 #if defined(CONFIG_DATA_LOGGER_INFLUX)
 
-#define INFLUX_PATH "/RAM:/test.influx"
+#define INFLUX_FILE_PATH CONFIG_DATA_LOGGER_BASE_PATH "/test.influx"
 #define INFLUX_BUF_SIZE 512
 
 static struct data_logger influx_logger;
@@ -606,7 +598,7 @@ static void influx_before(void *fixture)
 {
 	(void)fixture;
 	memset(&influx_logger, 0, sizeof(influx_logger));
-	fs_unlink(INFLUX_PATH);
+	fs_unlink(INFLUX_FILE_PATH);
 }
 
 ZTEST_SUITE(data_logger_influx, NULL, NULL, influx_before, NULL, NULL);
@@ -618,12 +610,10 @@ ZTEST(data_logger_influx, test_influx_no_header)
 {
 	char buf[INFLUX_BUF_SIZE];
 
-	zassert_ok(data_logger_init(&influx_logger,
-				    &data_logger_influx_formatter,
-				    INFLUX_PATH), NULL);
+	zassert_ok(data_logger_init(&influx_logger, "test"), NULL);
 	zassert_ok(data_logger_close(&influx_logger), NULL);
 
-	int n = read_file(INFLUX_PATH, buf, sizeof(buf));
+	int n = read_file(INFLUX_FILE_PATH, buf, sizeof(buf));
 
 	zassert_equal(n, 0, "InfluxDB formatter must not write a header row");
 }
@@ -648,13 +638,11 @@ ZTEST(data_logger_influx, test_influx_baro_line)
 		},
 	};
 
-	zassert_ok(data_logger_init(&influx_logger,
-				    &data_logger_influx_formatter,
-				    INFLUX_PATH), NULL);
+	zassert_ok(data_logger_init(&influx_logger, "test"), NULL);
 	zassert_ok(data_logger_log(&influx_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&influx_logger), NULL);
 
-	int n = read_file(INFLUX_PATH, buf, sizeof(buf));
+	int n = read_file(INFLUX_FILE_PATH, buf, sizeof(buf));
 
 	zassert_true(n > 0, "File must not be empty after logging");
 
@@ -695,13 +683,11 @@ ZTEST(data_logger_influx, test_influx_imu_gyro_fields)
 		},
 	};
 
-	zassert_ok(data_logger_init(&influx_logger,
-				    &data_logger_influx_formatter,
-				    INFLUX_PATH), NULL);
+	zassert_ok(data_logger_init(&influx_logger, "test"), NULL);
 	zassert_ok(data_logger_log(&influx_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&influx_logger), NULL);
 
-	read_file(INFLUX_PATH, buf, sizeof(buf));
+	read_file(INFLUX_FILE_PATH, buf, sizeof(buf));
 
 	zassert_not_null(strstr(buf, "type=imu_gyro"), NULL);
 	zassert_not_null(strstr(buf, "x="), "IMU line must contain x field");
@@ -728,13 +714,11 @@ ZTEST(data_logger_influx, test_influx_negative_value)
 		},
 	};
 
-	zassert_ok(data_logger_init(&influx_logger,
-				    &data_logger_influx_formatter,
-				    INFLUX_PATH), NULL);
+	zassert_ok(data_logger_init(&influx_logger, "test"), NULL);
 	zassert_ok(data_logger_log(&influx_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&influx_logger), NULL);
 
-	read_file(INFLUX_PATH, buf, sizeof(buf));
+	read_file(INFLUX_FILE_PATH, buf, sizeof(buf));
 
 	zassert_not_null(strstr(buf, "-9.810000"),
 			 "Negative value must appear with leading '-'");
@@ -747,9 +731,7 @@ ZTEST(data_logger_influx, test_influx_multiple_lines)
 {
 	char buf[INFLUX_BUF_SIZE];
 
-	zassert_ok(data_logger_init(&influx_logger,
-				    &data_logger_influx_formatter,
-				    INFLUX_PATH), NULL);
+	zassert_ok(data_logger_init(&influx_logger, "test"), NULL);
 
 	static const enum aurora_data types[] = {
 		AURORA_DATA_BARO,
@@ -770,7 +752,7 @@ ZTEST(data_logger_influx, test_influx_multiple_lines)
 
 	zassert_ok(data_logger_close(&influx_logger), NULL);
 
-	int n = read_file(INFLUX_PATH, buf, sizeof(buf));
+	int n = read_file(INFLUX_FILE_PATH, buf, sizeof(buf));
 
 	zassert_true(n > 0, NULL);
 

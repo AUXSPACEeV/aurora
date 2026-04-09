@@ -47,23 +47,37 @@ const char *data_logger_type_name(enum aurora_data type)
 /* -------------------------------------------------------------------------- */
 
 /* data_logger_init – see data_logger.h */
-int data_logger_init(struct data_logger *logger,
-		     const struct data_logger_formatter *fmt,
-		     const char *path)
+int data_logger_init(struct data_logger *logger, const char *filename)
 {
 	struct fs_dir_t ptr;
 	char dir[64];
 	char *sep;
 	int rc;
+#if defined(CONFIG_DATA_LOGGER_CSV)
+	const struct data_logger_formatter *fmt = &data_logger_csv_formatter;
+#elif defined(CONFIG_DATA_LOGGER_INFLUX)
+	const struct data_logger_formatter *fmt = &data_logger_influx_formatter;
+#elif defined(CONFIG_DATA_LOGGER_MOCK)
+	const struct data_logger_formatter *fmt = &data_logger_mock_formatter;
+#else
+#error "Unknown data logger backend!"
+#endif /* CONFIG_DATA_LOGGER */
+	char full_path[64];
 
-	if (logger == NULL || fmt == NULL || path == NULL)
+	if (logger == NULL || fmt == NULL || filename == NULL)
 		return -EINVAL;
+
+	/* Build "<base_path>/<filename>.<file_ext>" */
+	rc = snprintf(full_path, sizeof(full_path), "%s/%s.%s",
+		      CONFIG_DATA_LOGGER_BASE_PATH, filename, fmt->file_ext);
+	if (rc < 0 || rc >= (int)sizeof(full_path))
+		return -ENAMETOOLONG;
 
 	logger->fmt = fmt;
 	logger->ctx = NULL;
 
 	/* Ensure parent directory exists (fs_open creates files, not dirs). */
-	strncpy(dir, path, sizeof(dir) - 1);
+	strncpy(dir, full_path, sizeof(dir) - 1);
 	dir[sizeof(dir) - 1] = '\0';
 	sep = strrchr(dir, '/');
 	if (sep != NULL && sep != dir) {
@@ -76,7 +90,7 @@ int data_logger_init(struct data_logger *logger,
 		}
 	}
 
-	rc = fmt->init(logger, path);
+	rc = fmt->init(logger, full_path);
 
 	if (rc != 0) {
 		LOG_ERR("formatter init failed (%d)", rc);

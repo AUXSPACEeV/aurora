@@ -23,7 +23,7 @@
  * Typical usage:
  * @code
  *   static struct data_logger logger;
- *   data_logger_init(&logger, &data_logger_csv_formatter, "/lfs/log.csv");
+ *   data_logger_init(&logger, "flight");
  *   data_logger_log(&logger, &dp);
  *   data_logger_flush(&logger);
  *   data_logger_close(&logger);
@@ -89,6 +89,9 @@ struct data_logger_formatter {
 
 	/** Finalise the file and free the formatter context. */
 	int (*close)(struct data_logger *logger);
+
+	/** File suffix */
+	char file_ext[8];
 };
 
 /**
@@ -100,19 +103,19 @@ struct data_logger {
 };
 
 /**
- * @brief Initialise a logger with the given formatter and output path.
+ * @brief Initialise a logger.
  *
- * Calls @c fmt->init then @c fmt->write_header.  On any failure the logger
- * is left in an invalid state and should not be used.
+ * The output file is placed at
+ * @c CONFIG_DATA_LOGGER_BASE_PATH/<filename>.<file_ext>, where file_ext
+ * comes from the active formatter.  Calls @c fmt->init then
+ * @c fmt->write_header.  On any failure the logger is left in an invalid
+ * state and should not be used.
  *
- * @param logger  Caller-allocated logger instance.
- * @param fmt     Formatter vtable to use.
- * @param path    Filesystem path for the output file.
+ * @param logger    Caller-allocated logger instance.
+ * @param filename  Base filename (without extension).
  * @retval 0 on success, negative errno on failure.
  */
-int data_logger_init(struct data_logger *logger,
-		     const struct data_logger_formatter *fmt,
-		     const char *path);
+int data_logger_init(struct data_logger *logger, const char *filename);
 
 /**
  * @brief Serialise and store one datapoint.
@@ -161,6 +164,11 @@ extern const struct data_logger_formatter data_logger_csv_formatter;
 #if defined(CONFIG_DATA_LOGGER_INFLUX)
 /** InfluxDB Line Protocol formatter — one line per datapoint, no header. */
 extern const struct data_logger_formatter data_logger_influx_formatter;
+#endif
+
+#if defined(CONFIG_DATA_LOGGER_MOCK)
+/** Mock formatter — provided by the test application. */
+extern const struct data_logger_formatter data_logger_mock_formatter;
 #endif
 
 /** @} */
