@@ -49,6 +49,14 @@ config DATA_LOGGER_BASE_PATH
 	  passed to data_logger_init() and file_ext comes from the active
 	  formatter backend.
 
+config DATA_LOGGER_MAX_FILES
+	int "Maximum number of log files in DATA_LOGGER_BASE_PATH"
+	default 200
+	help
+	  Maximum number of files in the directory where the data logger writes
+	  output files.
+	  If the maximum is reached, old files are overwritten.
+
 if DATA_LOGGER_INFLUX
 
 config DATA_LOGGER_INFLUX_MEASUREMENT
