@@ -2,7 +2,7 @@
  * @file data_logger.c
  * @brief Core data-logger logic and sensor-group name table.
  *
- * Implements data_logger_init / data_logger_log / data_logger_flush /
+ * Implements data_logger_init / data_logger_write / data_logger_flush /
  * data_logger_close by dispatching through the formatter vtable, and
  * provides data_logger_type_name() for formatter backends.
  *
@@ -101,6 +101,12 @@ int data_logger_init(struct data_logger *logger, const char *filename)
 	char *sep;
 	int rc;
 	struct data_logger_state *state = k_malloc(sizeof(*state));
+
+	if (state == NULL) {
+		LOG_ERR("failed to allocate logger state");
+		return -ENOMEM;
+	}
+
 #if defined(CONFIG_DATA_LOGGER_CSV)
 	const struct data_logger_formatter *fmt = &data_logger_csv_formatter;
 #elif defined(CONFIG_DATA_LOGGER_INFLUX)
@@ -190,18 +196,34 @@ out_err:
 	return rc;
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Default logger                                                            */
+/* -------------------------------------------------------------------------- */
+
+static struct data_logger *default_logger;
+
+/* data_logger_set_default – see data_logger.h */
+void data_logger_set_default(struct data_logger *logger)
+{
+	default_logger = logger;
+}
+
 /* data_logger_log – see data_logger.h */
-int data_logger_log(struct data_logger *logger, const struct datapoint *dp)
+int data_logger_log(const struct datapoint *dp)
+{
+	return data_logger_write(default_logger, dp);
+}
+
+/* data_logger_write – see data_logger.h */
+int data_logger_write(struct data_logger *logger, const struct datapoint *dp)
 {
 	if (logger == NULL || dp == NULL || logger->fmt == NULL ||
 		logger->state == NULL)
 		return -EINVAL;
 
-	// silently ignore if not running
-	if (logger->state->running == 0) {
-		LOG_WRN("logger->state->running is 0");
+	/* silently ignore if not running */
+	if (logger->state->running == 0)
 		return 0;
-	}
 
 	return logger->fmt->write_datapoint(logger, dp);
 }

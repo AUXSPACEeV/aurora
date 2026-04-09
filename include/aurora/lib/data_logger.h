@@ -24,7 +24,7 @@
  * @code
  *   static struct data_logger logger;
  *   data_logger_init(&logger, "flight");
- *   data_logger_log(&logger, &dp);
+ *   data_logger_log(&dp);
  *   data_logger_flush(&logger);
  *   data_logger_close(&logger);
  * @endcode
@@ -143,13 +143,31 @@ struct data_logger {
 int data_logger_init(struct data_logger *logger, const char *filename);
 
 /**
- * @brief Serialise and store one datapoint.
+ * @brief Set the default logger used by @ref data_logger_log.
+ *
+ * @param logger  Initialised logger instance (NULL to clear).
+ */
+void data_logger_set_default(struct data_logger *logger);
+
+/**
+ * @brief Log a datapoint to the default logger.
+ *
+ * Uses the logger previously registered with @ref data_logger_set_default.
+ * Returns -ENODEV if no default logger has been set.
+ *
+ * @param dp  Datapoint to write.
+ * @retval 0 on success, negative errno on failure.
+ */
+int data_logger_log(const struct datapoint *dp);
+
+/**
+ * @brief Serialise and store one datapoint to a specific logger.
  *
  * @param logger  Initialised logger instance.
  * @param dp      Datapoint to write.
  * @retval 0 on success, negative errno on failure.
  */
-int data_logger_log(struct data_logger *logger, const struct datapoint *dp);
+int data_logger_write(struct data_logger *logger, const struct datapoint *dp);
 
 /**
  * @brief Flush buffered data to the underlying storage.

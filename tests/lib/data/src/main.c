@@ -290,13 +290,13 @@ ZTEST(data_logger_core, test_log_null_logger)
 {
 	struct datapoint dp = {0};
 
-	zassert_equal(data_logger_log(NULL, &dp), -EINVAL, NULL);
+	zassert_equal(data_logger_write(NULL, &dp), -EINVAL, NULL);
 }
 
 ZTEST(data_logger_core, test_log_null_dp)
 {
 	data_logger_init(&logger, "test");
-	zassert_equal(data_logger_log(&logger, NULL), -EINVAL, NULL);
+	zassert_equal(data_logger_write(&logger, NULL), -EINVAL, NULL);
 	zassert_equal(mock_state.write_datapoint_calls, 0, NULL);
 	zassert_ok(data_logger_close(&logger), NULL);
 }
@@ -309,7 +309,7 @@ ZTEST(data_logger_core, test_log_after_close)
 
 	struct datapoint dp = {0};
 
-	zassert_equal(data_logger_log(&logger, &dp), -EINVAL, NULL);
+	zassert_equal(data_logger_write(&logger, &dp), -EINVAL, NULL);
 }
 
 ZTEST(data_logger_core, test_log_delegates_datapoint)
@@ -327,7 +327,7 @@ ZTEST(data_logger_core, test_log_delegates_datapoint)
 		},
 	};
 
-	zassert_ok(data_logger_log(&logger, &dp), NULL);
+	zassert_ok(data_logger_write(&logger, &dp), NULL);
 	zassert_equal(mock_state.write_datapoint_calls, 1, NULL);
 	zassert_equal(mock_state.last_dp.timestamp_ms, 12345LL,
 		      "timestamp must be forwarded unchanged");
@@ -344,7 +344,7 @@ ZTEST(data_logger_core, test_log_error_propagated)
 
 	struct datapoint dp = {.type = AURORA_DATA_BARO, .channel_count = 2};
 
-	zassert_equal(data_logger_log(&logger, &dp), -EIO, NULL);
+	zassert_equal(data_logger_write(&logger, &dp), -EIO, NULL);
 	zassert_ok(data_logger_close(&logger), NULL);
 }
 
@@ -606,7 +606,7 @@ ZTEST(data_logger_core, test_full_lifecycle)
 			.type          = cases[i].type,
 			.channel_count = cases[i].channel_count,
 		};
-		zassert_ok(data_logger_log(&logger, &dp), NULL);
+		zassert_ok(data_logger_write(&logger, &dp), NULL);
 	}
 
 	zassert_equal(mock_state.write_datapoint_calls, (int)ARRAY_SIZE(cases),
@@ -681,7 +681,7 @@ ZTEST(data_logger_csv, test_csv_baro_datapoint)
 	};
 
 	zassert_ok(data_logger_init(&csv_logger, "test"), NULL);
-	zassert_ok(data_logger_log(&csv_logger, &dp), NULL);
+	zassert_ok(data_logger_write(&csv_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&csv_logger), NULL);
 
 	int n = read_file(CSV_FILE_PATH, buf, sizeof(buf));
@@ -716,7 +716,7 @@ ZTEST(data_logger_csv, test_csv_imu_accel_datapoint)
 	};
 
 	zassert_ok(data_logger_init(&csv_logger, "test"), NULL);
-	zassert_ok(data_logger_log(&csv_logger, &dp), NULL);
+	zassert_ok(data_logger_write(&csv_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&csv_logger), NULL);
 
 	int n = read_file(CSV_FILE_PATH, buf, sizeof(buf));
@@ -745,7 +745,7 @@ ZTEST(data_logger_csv, test_csv_negative_value)
 	};
 
 	zassert_ok(data_logger_init(&csv_logger, "test"), NULL);
-	zassert_ok(data_logger_log(&csv_logger, &dp), NULL);
+	zassert_ok(data_logger_write(&csv_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&csv_logger), NULL);
 
 	int n = read_file(CSV_FILE_PATH, buf, sizeof(buf));
@@ -774,7 +774,7 @@ ZTEST(data_logger_csv, test_csv_multiple_rows)
 				{.val1 = 101000 + i * 100, .val2 = 0},
 			},
 		};
-		zassert_ok(data_logger_log(&csv_logger, &dp), NULL);
+		zassert_ok(data_logger_write(&csv_logger, &dp), NULL);
 	}
 
 	zassert_ok(data_logger_close(&csv_logger), NULL);
@@ -854,7 +854,7 @@ ZTEST(data_logger_influx, test_influx_baro_line)
 	};
 
 	zassert_ok(data_logger_init(&influx_logger, "test"), NULL);
-	zassert_ok(data_logger_log(&influx_logger, &dp), NULL);
+	zassert_ok(data_logger_write(&influx_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&influx_logger), NULL);
 
 	int n = read_file(INFLUX_FILE_PATH, buf, sizeof(buf));
@@ -899,7 +899,7 @@ ZTEST(data_logger_influx, test_influx_imu_gyro_fields)
 	};
 
 	zassert_ok(data_logger_init(&influx_logger, "test"), NULL);
-	zassert_ok(data_logger_log(&influx_logger, &dp), NULL);
+	zassert_ok(data_logger_write(&influx_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&influx_logger), NULL);
 
 	read_file(INFLUX_FILE_PATH, buf, sizeof(buf));
@@ -930,7 +930,7 @@ ZTEST(data_logger_influx, test_influx_negative_value)
 	};
 
 	zassert_ok(data_logger_init(&influx_logger, "test"), NULL);
-	zassert_ok(data_logger_log(&influx_logger, &dp), NULL);
+	zassert_ok(data_logger_write(&influx_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&influx_logger), NULL);
 
 	read_file(INFLUX_FILE_PATH, buf, sizeof(buf));
@@ -962,7 +962,7 @@ ZTEST(data_logger_influx, test_influx_multiple_lines)
 			.type          = types[i],
 			.channel_count = ch,
 		};
-		zassert_ok(data_logger_log(&influx_logger, &dp), NULL);
+		zassert_ok(data_logger_write(&influx_logger, &dp), NULL);
 	}
 
 	zassert_ok(data_logger_close(&influx_logger), NULL);
