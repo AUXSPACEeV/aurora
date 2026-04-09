@@ -26,6 +26,10 @@
 	};
 };
 
+&adc1 {
+	status = "okay";
+};
+
 &spi2 {
 	status = "okay";
 };

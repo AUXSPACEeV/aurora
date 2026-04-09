@@ -24,6 +24,7 @@
 struct pyro_config {
 	const uint32_t n_channels;		/**< Number of pyro channels. */
 	const uint32_t single_arm;		/**< True if a single GPIO arms all channels. */
+	const uint32_t single_cap;		/**< True if a single capacitor charges all channels. */
 	const struct gpio_dt_spec *trigger_gpios;/**< Per-channel trigger (fire) GPIO specs. */
 	const struct gpio_dt_spec *arm_gpios;	/**< Arm GPIO specs (1 or n_channels). */
 	const struct gpio_dt_spec *short_gpios;	/**< Per-channel short/safe GPIO specs, or NULL. */
