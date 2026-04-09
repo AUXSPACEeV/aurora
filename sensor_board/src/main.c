@@ -127,7 +127,7 @@ void imu_task(void *, void *, void *)
 }
 
 /* Create the IMU task (inactive unless CONFIG_IMU=y) */
-K_THREAD_DEFINE(imu_task_id, 2048, imu_task, NULL, NULL, NULL,
+K_THREAD_DEFINE(imu_polling, 2048, imu_task, NULL, NULL, NULL,
 				5, 0, 0);
 #endif /* CONFIG_IMU */
 
@@ -165,7 +165,7 @@ void baro_task(void *, void *, void *)
 }
 
 /* Create the BARO task */
-K_THREAD_DEFINE(baro_task_id, 2048, baro_task, NULL, NULL, NULL,
+K_THREAD_DEFINE(baro_polling, 2048, baro_task, NULL, NULL, NULL,
 				5, 0, 0);
 #endif /* CONFIG_BARO */
 
@@ -331,7 +331,7 @@ void state_machine_task(void *, void *, void *)
 }
 
 /* Create the State machine task */
-K_THREAD_DEFINE(state_machine_task_id, 4096, state_machine_task, NULL, NULL,
+K_THREAD_DEFINE(state_machine, 4096, state_machine_task, NULL, NULL,
 				NULL, 5, 0, 0);
 #endif /* CONFIG_AURORA_STATE_MACHINE */
 
