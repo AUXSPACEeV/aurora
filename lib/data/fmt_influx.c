@@ -61,8 +61,12 @@ static const char *field_names_for(enum aurora_data type, int channel)
 /*  Private context                                                           */
 /* -------------------------------------------------------------------------- */
 
+static char influx_write_buf[CONFIG_DATA_LOGGER_INFLUX_BUF_SIZE];
+
 struct influx_ctx {
 	struct fs_file_t file;
+	char *buf;
+	size_t used;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -77,6 +81,8 @@ static int influx_init(struct data_logger *logger, const char *path)
 		return -ENOMEM;
 
 	fs_file_t_init(&ctx->file);
+	ctx->buf = influx_write_buf;
+	ctx->used = 0;
 
 	int rc = fs_open(&ctx->file, path,
 			 FS_O_CREATE | FS_O_WRITE | FS_O_TRUNC);
@@ -98,23 +104,18 @@ static int influx_write_header(struct data_logger *logger)
 	return 0;
 }
 
-static int influx_write_datapoint(struct data_logger *logger,
-				  const struct datapoint *dp)
+static int influx_format_line(char *dst, size_t dst_size,
+			      const struct datapoint *dp)
 {
-	struct influx_ctx *ctx = logger->ctx;
-	char buf[256];
 	int offset = 0;
 	int n;
-	ssize_t wr;
 
 	/* measurement,type=<name> */
-	n = snprintf(buf + offset, sizeof(buf) - offset,
+	n = snprintf(dst + offset, dst_size - offset,
 		     "%s,type=%s ",
 		     CONFIG_DATA_LOGGER_INFLUX_MEASUREMENT,
 		     data_logger_type_name(dp->type));
-	if (n < 0 || n >= (int)(sizeof(buf) - offset)) {
-		LOG_WRN("influx line truncated for type %s",
-			data_logger_type_name(dp->type));
+	if (n < 0 || n >= (int)(dst_size - offset)) {
 		return -ENOMEM;
 	}
 	offset += n;
@@ -127,20 +128,18 @@ static int influx_write_datapoint(struct data_logger *logger,
 		int32_t v2 = sv->val2;
 
 		if (v1 < 0 || v2 < 0) {
-			n = snprintf(buf + offset, sizeof(buf) - offset,
+			n = snprintf(dst + offset, dst_size - offset,
 				     "%s%s=-%d.%06d",
 				     i > 0 ? "," : "",
 				     fname, -v1, -v2);
 		} else {
-			n = snprintf(buf + offset, sizeof(buf) - offset,
+			n = snprintf(dst + offset, dst_size - offset,
 				     "%s%s=%d.%06d",
 				     i > 0 ? "," : "",
 				     fname, v1, v2);
 		}
 
-		if (n < 0 || n >= (int)(sizeof(buf) - offset)) {
-			LOG_WRN("influx line truncated for type %s",
-				data_logger_type_name(dp->type));
+		if (n < 0 || n >= (int)(dst_size - offset)) {
 			return -ENOMEM;
 		}
 
@@ -148,28 +147,64 @@ static int influx_write_datapoint(struct data_logger *logger,
 	}
 
 	/* timestamp in milliseconds */
-	n = snprintf(buf + offset, sizeof(buf) - offset,
+	n = snprintf(dst + offset, dst_size - offset,
 		     " %" PRId64 "\n", dp->timestamp_ms);
-	if (n < 0 || n >= (int)(sizeof(buf) - offset)) {
-		LOG_WRN("influx line truncated for type %s",
-			data_logger_type_name(dp->type));
+	if (n < 0 || n >= (int)(dst_size - offset)) {
 		return -ENOMEM;
 	}
 	offset += n;
 
-	if (offset >= (int)sizeof(buf)) {
+	return offset;
+}
+
+static int influx_write_datapoint(struct data_logger *logger,
+				  const struct datapoint *dp)
+{
+	struct influx_ctx *ctx = logger->ctx;
+	char line[256];
+
+	int len = influx_format_line(line, sizeof(line), dp);
+
+	if (len < 0) {
 		LOG_WRN("influx line truncated for type %s",
 			data_logger_type_name(dp->type));
-		return -ENOMEM;
+		return len;
 	}
 
-	wr = fs_write(&ctx->file, buf, offset);
-	return wr < 0 ? (int)wr : 0;
+	/* Flush the RAM buffer to disk if the new line would not fit */
+	if (ctx->used + len > CONFIG_DATA_LOGGER_INFLUX_BUF_SIZE) {
+		ssize_t wr = fs_write(&ctx->file, ctx->buf, ctx->used);
+
+		if (wr < 0) {
+			return (int)wr;
+		}
+		ctx->used = 0;
+	}
+
+	/* If a single line exceeds the entire buffer, write it directly */
+	if (len > (int)CONFIG_DATA_LOGGER_INFLUX_BUF_SIZE) {
+		ssize_t wr = fs_write(&ctx->file, line, len);
+
+		return wr < 0 ? (int)wr : 0;
+	}
+
+	memcpy(ctx->buf + ctx->used, line, len);
+	ctx->used += len;
+	return 0;
 }
 
 static int influx_flush(struct data_logger *logger)
 {
 	struct influx_ctx *ctx = logger->ctx;
+
+	if (ctx->used > 0) {
+		ssize_t wr = fs_write(&ctx->file, ctx->buf, ctx->used);
+
+		if (wr < 0) {
+			return (int)wr;
+		}
+		ctx->used = 0;
+	}
 
 	return fs_sync(&ctx->file);
 }
@@ -177,6 +212,13 @@ static int influx_flush(struct data_logger *logger)
 static int influx_close(struct data_logger *logger)
 {
 	struct influx_ctx *ctx = logger->ctx;
+
+	/* Drain remaining buffered data before closing */
+	if (ctx->used > 0) {
+		fs_write(&ctx->file, ctx->buf, ctx->used);
+		ctx->used = 0;
+	}
+
 	int rc = fs_close(&ctx->file);
 
 	k_free(ctx);
