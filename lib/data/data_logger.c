@@ -97,6 +97,7 @@ const char *data_logger_type_name(enum aurora_data type)
 int data_logger_init(struct data_logger *logger, const char *filename)
 {
 	struct fs_dir_t ptr;
+	struct fs_dirent entry;
 	char dir[64];
 	char *sep;
 	int rc;
@@ -123,13 +124,31 @@ int data_logger_init(struct data_logger *logger, const char *filename)
 		goto out_err;
 	}
 
-	/* Build "<base_path>/<filename>.<file_ext>" */
-	rc = snprintf(full_path, sizeof(full_path), "%s/%s.%s",
-		      CONFIG_DATA_LOGGER_BASE_PATH, filename, fmt->file_ext);
-	if (rc < 0 || rc >= (int)sizeof(full_path)) {
+	/* Build "<base_path>/<filename>_i.<file_ext>" */
+	for (int i = 0; i <= CONFIG_DATA_LOGGER_MAX_FILES; i++) {
+		rc = snprintf(full_path, sizeof(full_path), "%s/%s_%d.%s",
+			      CONFIG_DATA_LOGGER_BASE_PATH, filename, i, fmt->file_ext);
 
-		rc = -ENAMETOOLONG;
-		goto out_err;
+		if (rc < 0 || rc >= (int)sizeof(full_path)) {
+			rc = -ENAMETOOLONG;
+			goto out_err;
+		}
+
+		if (fs_stat(full_path, &entry) == -ENOENT)
+			break;
+
+		/* All files already exist */
+		if (i == CONFIG_DATA_LOGGER_MAX_FILES) {
+			rc = snprintf(full_path, sizeof(full_path), "%s/%s_0.%s",
+					CONFIG_DATA_LOGGER_BASE_PATH, filename, fmt->file_ext);
+
+			if (rc < 0 || rc >= (int)sizeof(full_path)) {
+				rc = -ENAMETOOLONG;
+				goto out_err;
+			}
+
+			LOG_WRN("Could not get new file for '%s' data. Falling back to %s", filename, full_path);
+		}
 	}
 
 	logger->fmt = fmt;
