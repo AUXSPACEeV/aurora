@@ -236,54 +236,76 @@ int data_logger_log(const struct datapoint *dp)
 /* data_logger_write – see data_logger.h */
 int data_logger_write(struct data_logger *logger, const struct datapoint *dp)
 {
+	int rc;
+
 	if (logger == NULL || dp == NULL || logger->fmt == NULL ||
 		logger->state == NULL)
 		return -EINVAL;
 
-	/* silently ignore if not running */
-	if (logger->state->running == 0)
-		return 0;
+	rc = k_mutex_lock(&logger->state->mutex, K_MSEC(100));
+	if (rc != 0) {
+		return rc;
+	}
 
-	return logger->fmt->write_datapoint(logger, dp);
+	if (logger->state->running == 0) {
+		k_mutex_unlock(&logger->state->mutex);
+		return 0;
+	}
+
+	rc = logger->fmt->write_datapoint(logger, dp);
+	k_mutex_unlock(&logger->state->mutex);
+	return rc;
 }
 
 /* data_logger_flush – see data_logger.h */
 int data_logger_flush(struct data_logger *logger)
 {
-	if (logger == NULL || logger->fmt == NULL)
+	int rc;
+
+	if (logger == NULL || logger->fmt == NULL || logger->state == NULL)
 		return -EINVAL;
 
-	return logger->fmt->flush(logger);
+	rc = k_mutex_lock(&logger->state->mutex, K_MSEC(500));
+	if (rc != 0) {
+		return rc;
+	}
+
+	rc = logger->fmt->flush(logger);
+	k_mutex_unlock(&logger->state->mutex);
+	return rc;
 }
 
 /* data_logger_close – see data_logger.h */
 int data_logger_close(struct data_logger *logger)
 {
 	int rc_lock, rc_close;
+	struct data_logger_state *state;
 
 	if (logger == NULL || logger->fmt == NULL || logger->state == NULL)
 		return -EINVAL;
 
-	registry_remove(logger);
+	state = logger->state;
 
-	rc_close = logger->fmt->close(logger);
-	if (rc_close)
-		LOG_ERR("formatter close failed (%d)", rc_close);
-
-	rc_lock = k_mutex_lock(&logger->state->mutex, K_MSEC(500));
-	if (rc_lock == 0) {
-		k_free(logger->state);
-	} else {
+	rc_lock = k_mutex_lock(&state->mutex, K_MSEC(500));
+	if (rc_lock != 0) {
 		LOG_ERR("formatter close could not lock state mutex (%d)",
 			rc_lock);
 		return rc_lock;
 	}
 
 	registry_remove(logger);
+	state->running = 0;
+
+	rc_close = logger->fmt->close(logger);
+	if (rc_close)
+		LOG_ERR("formatter close failed (%d)", rc_close);
 
 	logger->fmt = NULL;
 	logger->ctx = NULL;
 	logger->state = NULL;
+
+	k_mutex_unlock(&state->mutex);
+	k_free(state);
 
 	return rc_close;
 }
@@ -296,24 +318,25 @@ int data_logger_stop(struct data_logger *logger)
 	if (logger == NULL || logger->fmt == NULL || logger->state == NULL)
 		return -EINVAL;
 
-	if (logger->fmt->stop != NULL) {
-		rc = logger->fmt->stop(logger);
-		if (rc) {
-			LOG_ERR("formatter stop preparation failed (%d)", rc);
-			return rc;
-		}
-	}
-
 	rc = k_mutex_lock(&logger->state->mutex, K_MSEC(100));
-	if (rc == 0) {
-		logger->state->running = 0;
-		k_mutex_unlock(&logger->state->mutex);
-	} else {
+	if (rc != 0) {
 		LOG_ERR("formatter stop could not lock state mutex (%d)", rc);
 		return rc;
 	}
 
-	return data_logger_flush(logger);
+	if (logger->fmt->stop != NULL) {
+		rc = logger->fmt->stop(logger);
+		if (rc) {
+			LOG_ERR("formatter stop preparation failed (%d)", rc);
+			k_mutex_unlock(&logger->state->mutex);
+			return rc;
+		}
+	}
+
+	logger->state->running = 0;
+	rc = logger->fmt->flush(logger);
+	k_mutex_unlock(&logger->state->mutex);
+	return rc;
 }
 
 /* data_logger_start – see data_logger.h */
@@ -324,22 +347,22 @@ int data_logger_start(struct data_logger *logger)
 	if (logger == NULL || logger->fmt == NULL || logger->state == NULL)
 		return -EINVAL;
 
-	if (logger->fmt->start != NULL) {
-		rc = logger->fmt->start(logger);
-		if (rc) {
-			LOG_ERR("formatter start preparation failed (%d)", rc);
-			return rc;
-		}
-	}
-
 	rc = k_mutex_lock(&logger->state->mutex, K_MSEC(100));
-	if (rc == 0) {
-		logger->state->running = 1;
-		k_mutex_unlock(&logger->state->mutex);
-	} else {
+	if (rc != 0) {
 		LOG_ERR("formatter start could not lock state mutex (%d)", rc);
 		return rc;
 	}
 
+	if (logger->fmt->start != NULL) {
+		rc = logger->fmt->start(logger);
+		if (rc) {
+			LOG_ERR("formatter start preparation failed (%d)", rc);
+			k_mutex_unlock(&logger->state->mutex);
+			return rc;
+		}
+	}
+
+	logger->state->running = 1;
+	k_mutex_unlock(&logger->state->mutex);
 	return 0;
 }

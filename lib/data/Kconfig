@@ -65,6 +65,16 @@ config DATA_LOGGER_INFLUX_MEASUREMENT
 	help
 	  The measurement name embedded in every InfluxDB line protocol record.
 
+config DATA_LOGGER_INFLUX_BUF_SIZE
+	int "RAM write buffer size in bytes"
+	default 4096
+	help
+	  Datapoints are accumulated in this RAM buffer and only written to
+	  the filesystem on flush.  A larger buffer reduces the number of
+	  fs_write/fs_sync calls (better for SD card longevity and power-fail
+	  safety) but uses more RAM.  Data that has not been flushed is lost
+	  on power failure.
+
 endif # DATA_LOGGER_INFLUX
 
 config DATA_LOGGER_MAX_LOGGERS
