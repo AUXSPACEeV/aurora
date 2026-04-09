@@ -349,11 +349,6 @@ int main(void)
 {
 	LOG_INF("Auxspace AURORA %s", APP_VERSION_STRING);
 
-#if defined(CONFIG_AURORA_NOTIFY)
-	notify_init();
-	notify_boot();
-#endif /* CONFIG_AURORA_NOTIFY */
-
 #if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
 	k_work_init(&flush_work, flush_work_handler);
 	if (data_logger_init(&sm_logger, "flight") != 0) {
@@ -363,6 +358,11 @@ int main(void)
 		k_timer_start(&data_logger_flush_timer, K_SECONDS(1), K_SECONDS(1));
 	}
 #endif /* CONFIG_DATA_LOGGER */
+
+#if defined(CONFIG_AURORA_NOTIFY)
+	notify_init();
+	notify_boot();
+#endif /* CONFIG_AURORA_NOTIFY */
 
 	return 0;
 }
