@@ -68,10 +68,7 @@ ZBUS_MSG_SUBSCRIBER_DEFINE(sm_sub);
 ZBUS_CHAN_ADD_OBS(imu_data_chan, sm_sub, 1);
 ZBUS_CHAN_ADD_OBS(baro_data_chan, sm_sub, 1);
 
-#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
-/** Flush the data logger every N SM update cycles via the system workqueue. */
-#define DATA_LOGGER_FLUSH_INTERVAL 10
-
+#if defined(CONFIG_DATA_LOGGER)
 static struct data_logger sm_logger;
 static struct k_work flush_work;
 
@@ -80,6 +77,14 @@ static void flush_work_handler(struct k_work *work)
 	ARG_UNUSED(work);
 	data_logger_flush(&sm_logger);
 }
+
+static void flush_timer_handler(struct k_timer *timer)
+{
+	ARG_UNUSED(timer);
+	k_work_submit(&flush_work);
+}
+
+K_TIMER_DEFINE(data_logger_flush_timer, flush_timer_handler, NULL);
 #endif /* CONFIG_DATA_LOGGER */
 
 static bool baro_active = false; /**< True once the barometer thread has initialized. */
@@ -190,11 +195,6 @@ void state_machine_task(void *, void *, void *)
 	double orientation = 0.0;
 	bool baro_ready = false;
 	bool imu_ready = false;
-#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
-	struct imu_data last_imu = {0};
-	struct baro_data last_baro = {0};
-	uint32_t log_count = 0;
-#endif /* CONFIG_DATA_LOGGER */
 
 #if defined(CONFIG_PYRO)
 	const struct device *pyro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_pyro));
@@ -219,13 +219,6 @@ void state_machine_task(void *, void *, void *)
 	sm_init(&state_cfg, NULL);
 	sm_active = true;
 
-#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
-	k_work_init(&flush_work, flush_work_handler);
-	if (data_logger_init(&sm_logger, "flight") != 0) {
-		LOG_ERR("data_logger_init failed");
-	}
-#endif /* CONFIG_DATA_LOGGER */
-
 	// TODO: Add idling
 	while (!baro_active || !imu_active) {
 		k_sleep(K_MSEC(100));
@@ -245,16 +238,40 @@ void state_machine_task(void *, void *, void *)
 				if (imu_sensor_value_to_orientation(&msg_buf.imu, &orientation) == 0 &&
 				    imu_sensor_value_to_acceleration(&msg_buf.imu, &acceleration) == 0) {
 					imu_ready = true;
-#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
-					last_imu = msg_buf.imu;
-#endif /* CONFIG_DATA_LOGGER */
 				}
+#if defined(CONFIG_DATA_LOGGER)
+				int64_t ts = k_uptime_get();
+				struct datapoint dp = {
+					.timestamp_ms = ts,
+					.type = AURORA_DATA_IMU_ACCEL,
+					.channel_count = 3,
+					.channels = {
+						msg_buf.imu.accel[0],
+						msg_buf.imu.accel[1],
+						msg_buf.imu.accel[2]
+					},
+				};
+				data_logger_log(&dp);
+
+				dp.type = AURORA_DATA_IMU_GYRO;
+				dp.channels[0] = msg_buf.imu.gyro[0];
+				dp.channels[1] = msg_buf.imu.gyro[1];
+				dp.channels[2] = msg_buf.imu.gyro[2];
+				data_logger_log(&dp);
+#endif /* CONFIG_DATA_LOGGER */
 			} else if (data_chan == &baro_data_chan) {
+#if defined(CONFIG_DATA_LOGGER)
+				int64_t ts = k_uptime_get();
+				struct datapoint dp = {
+					.timestamp_ms = ts,
+					.type = AURORA_DATA_BARO,
+					.channel_count = 2,
+					.channels = {msg_buf.baro.temperature, msg_buf.baro.pressure},
+				};
+				data_logger_log(&dp);
+#endif /* CONFIG_DATA_LOGGER */
 				if (baro_sensor_value_to_altitude(&msg_buf.baro.pressure, &altitude) == 0) {
 					baro_ready = true;
-#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
-					last_baro = msg_buf.baro;
-#endif /* CONFIG_DATA_LOGGER */
 				}
 			}
 		} while (zbus_sub_wait_msg(&sm_sub, &data_chan, &msg_buf, K_NO_WAIT) == 0);
@@ -263,38 +280,6 @@ void state_machine_task(void *, void *, void *)
 		if (!baro_ready || !imu_ready) {
 			continue;
 		}
-
-#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
-		{
-			int64_t ts = k_uptime_get();
-			struct datapoint dp = {
-				.timestamp_ms = ts,
-				.type = AURORA_DATA_IMU_ACCEL,
-				.channel_count = 3,
-				.channels = { last_imu.accel[0],
-					      last_imu.accel[1],
-					      last_imu.accel[2] },
-			};
-			data_logger_log(&sm_logger, &dp);
-
-			dp.type = AURORA_DATA_IMU_GYRO;
-			dp.channels[0] = last_imu.gyro[0];
-			dp.channels[1] = last_imu.gyro[1];
-			dp.channels[2] = last_imu.gyro[2];
-			data_logger_log(&sm_logger, &dp);
-
-			dp.type = AURORA_DATA_BARO;
-			dp.channel_count = 2;
-			dp.channels[0] = last_baro.temperature;
-			dp.channels[1] = last_baro.pressure;
-			data_logger_log(&sm_logger, &dp);
-
-			if (++log_count >= DATA_LOGGER_FLUSH_INTERVAL) {
-				k_work_submit(&flush_work);
-				log_count = 0;
-			}
-		}
-#endif /* CONFIG_DATA_LOGGER */
 
 		inputs = (struct sm_inputs){
 			.orientation = orientation,
@@ -369,7 +354,15 @@ int main(void)
 	notify_boot();
 #endif /* CONFIG_AURORA_NOTIFY */
 
-	/* Threads start automatically via K_THREAD_DEFINE */
+#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
+	k_work_init(&flush_work, flush_work_handler);
+	if (data_logger_init(&sm_logger, "flight") != 0) {
+		LOG_ERR("data_logger_init failed");
+	} else {
+		data_logger_set_default(&sm_logger);
+		k_timer_start(&data_logger_flush_timer, K_SECONDS(1), K_SECONDS(1));
+	}
+#endif /* CONFIG_DATA_LOGGER */
 
 	return 0;
 }

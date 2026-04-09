@@ -34,7 +34,7 @@ Example Usage
        },
    };
 
-   data_logger_log(&logger, &dp);
+   data_logger_write(&logger, &dp);
    data_logger_flush(&logger);
    data_logger_close(&logger);
 
