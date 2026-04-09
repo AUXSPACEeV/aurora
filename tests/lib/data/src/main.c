@@ -196,22 +196,22 @@ ZTEST(data_logger_core, test_type_name_baro)
 			  "AURORA_DATA_BARO should map to \"baro\"");
 }
 
-ZTEST(data_logger_core, test_type_name_imu_accel)
+ZTEST(data_logger_core, test_type_name_accel)
 {
 	zassert_str_equal(data_logger_type_name(AURORA_DATA_IMU_ACCEL),
-			  "imu_accel", NULL);
+			  "accel", NULL);
 }
 
 ZTEST(data_logger_core, test_type_name_imu_gyro)
 {
 	zassert_str_equal(data_logger_type_name(AURORA_DATA_IMU_GYRO),
-			  "imu_gyro", NULL);
+			  "gyro", NULL);
 }
 
 ZTEST(data_logger_core, test_type_name_imu_mag)
 {
 	zassert_str_equal(data_logger_type_name(AURORA_DATA_IMU_MAG),
-			  "imu_mag", NULL);
+			  "mag", NULL);
 }
 
 ZTEST(data_logger_core, test_type_name_sentinel)
@@ -700,7 +700,7 @@ ZTEST(data_logger_csv, test_csv_baro_datapoint)
 /**
  * @brief IMU accelerometer datapoint (3 channels) is written correctly.
  */
-ZTEST(data_logger_csv, test_csv_imu_accel_datapoint)
+ZTEST(data_logger_csv, test_csv_accel_datapoint)
 {
 	char buf[CSV_BUF_SIZE];
 
@@ -722,7 +722,7 @@ ZTEST(data_logger_csv, test_csv_imu_accel_datapoint)
 	int n = read_file(CSV_FILE_PATH, buf, sizeof(buf));
 
 	zassert_true(n > 0, NULL);
-	zassert_not_null(strstr(buf, "imu_accel"), NULL);
+	zassert_not_null(strstr(buf, "accel"), NULL);
 	zassert_not_null(strstr(buf, "0.100000"), NULL);
 	zassert_not_null(strstr(buf, "0.200000"), NULL);
 	zassert_not_null(strstr(buf, "9.810000"), NULL);
@@ -837,7 +837,7 @@ ZTEST(data_logger_influx, test_influx_no_header)
  * @brief Barometer datapoint produces correct InfluxDB line.
  *
  * Expected format:
- *   telemetry,type=baro temperature=23.500000,pressure=101325.000000 1000\n
+ *   telemetry,type=baro temp=23.500000,pres=101325.000000 1000\n
  */
 ZTEST(data_logger_influx, test_influx_baro_line)
 {
@@ -866,10 +866,10 @@ ZTEST(data_logger_influx, test_influx_baro_line)
 			 "Line must start with \"telemetry,type=baro\"");
 
 	/* Field names */
-	zassert_not_null(strstr(buf, "temperature="),
-			 "Baro line must contain temperature field");
-	zassert_not_null(strstr(buf, "pressure="),
-			 "Baro line must contain pressure field");
+	zassert_not_null(strstr(buf, "temp="),
+			 "Baro line must contain temp field");
+	zassert_not_null(strstr(buf, "pres="),
+			 "Baro line must contain pres field");
 
 	/* Field values */
 	zassert_not_null(strstr(buf, "23.500000"), NULL);

@@ -7,16 +7,16 @@
  *   [measurement,type=name field=<val[,field=val...] timestamp_ms
  *
  * Example:
- *   telemetry,type=baro temperature=23.500000,pressure=101325.000000 1700000000000
+ *   telemetry,type=baro temp=23.500000,pres=101325.000000 1700000000000
  *
  * There is no header row; the measurement name is taken from
  * CONFIG_DATA_LOGGER_INFLUX_MEASUREMENT (default: "telemetry").
  *
  * Field names per sensor group:
- *   baro      → temperature, pressure
- *   imu_accel → x, y, z
- *   imu_gyro  → x, y, z
- *   imu_mag   → x, y, z
+ *   baro      → temp, pres
+ *   accel → x, y, z
+ *   gyro  → x, y, z
+ *   mag   → x, y, z
  *
  * Copyright (c) 2026 Auxspace e.V.
  *
@@ -41,8 +41,8 @@ LOG_MODULE_DECLARE(data_logger, CONFIG_DATA_LOGGER_LOG_LEVEL);
 
 static const char *field_names_for(enum aurora_data type, int channel)
 {
-	static const char *const baro_fields[]  = {"temperature",
-						   "pressure", NULL};
+	static const char *const baro_fields[]  = {"temp",
+						   "pres", NULL};
 	static const char *const xyz_fields[]   = {"x", "y", "z"};
 
 	switch (type) {
