@@ -81,12 +81,16 @@ static struct {
 	int write_datapoint_calls;
 	int flush_calls;
 	int close_calls;
+	int stop_calls;
+	int start_calls;
 
 	int fail_init;
 	int fail_write_header;
 	int fail_write_datapoint;
 	int fail_flush;
 	int fail_close;
+	int fail_stop;
+	int fail_start;
 
 	struct datapoint last_dp;
 	int ctx_token;
@@ -139,12 +143,28 @@ static int mock_close(struct data_logger *logger)
 	return mock_state.fail_close ? -EIO : 0;
 }
 
+static int mock_stop(struct data_logger *logger)
+{
+	(void)logger;
+	mock_state.stop_calls++;
+	return mock_state.fail_stop ? -EIO : 0;
+}
+
+static int mock_start(struct data_logger *logger)
+{
+	(void)logger;
+	mock_state.start_calls++;
+	return mock_state.fail_start ? -EIO : 0;
+}
+
 const struct data_logger_formatter data_logger_mock_formatter = {
 	.init            = mock_init,
 	.write_header    = mock_write_header,
 	.write_datapoint = mock_write_datapoint,
 	.flush           = mock_flush,
 	.close           = mock_close,
+	.stop            = mock_stop,
+	.start           = mock_start,
 	.file_ext        = "mock",
 };
 
@@ -259,6 +279,8 @@ ZTEST(data_logger_core, test_init_success)
 	zassert_equal(mock_state.write_header_calls, 1, NULL);
 	zassert_not_null(logger.fmt, NULL);
 	zassert_not_null(logger.ctx, NULL);
+
+	zassert_ok(data_logger_close(&logger), NULL);
 }
 
 /* ---- data_logger_log ----------------------------------------------------- */
@@ -275,6 +297,7 @@ ZTEST(data_logger_core, test_log_null_dp)
 	data_logger_init(&logger, "test");
 	zassert_equal(data_logger_log(&logger, NULL), -EINVAL, NULL);
 	zassert_equal(mock_state.write_datapoint_calls, 0, NULL);
+	zassert_ok(data_logger_close(&logger), NULL);
 }
 
 ZTEST(data_logger_core, test_log_after_close)
@@ -309,6 +332,8 @@ ZTEST(data_logger_core, test_log_delegates_datapoint)
 		      "timestamp must be forwarded unchanged");
 	zassert_equal(mock_state.last_dp.type, AURORA_DATA_IMU_ACCEL, NULL);
 	zassert_equal(mock_state.last_dp.channel_count, 3, NULL);
+
+	zassert_ok(data_logger_close(&logger), NULL);
 }
 
 ZTEST(data_logger_core, test_log_error_propagated)
@@ -319,6 +344,7 @@ ZTEST(data_logger_core, test_log_error_propagated)
 	struct datapoint dp = {.type = AURORA_DATA_BARO, .channel_count = 2};
 
 	zassert_equal(data_logger_log(&logger, &dp), -EIO, NULL);
+	zassert_ok(data_logger_close(&logger), NULL);
 }
 
 /* ---- data_logger_flush --------------------------------------------------- */
@@ -334,6 +360,8 @@ ZTEST(data_logger_core, test_flush_delegates)
 	int before = mock_state.flush_calls;
 	zassert_ok(data_logger_flush(&logger), NULL);
 	zassert_equal(mock_state.flush_calls, before + 1, NULL);
+
+	zassert_ok(data_logger_close(&logger), NULL);
 }
 
 ZTEST(data_logger_core, test_flush_error_propagated)
@@ -341,6 +369,8 @@ ZTEST(data_logger_core, test_flush_error_propagated)
 	data_logger_init(&logger, "test");
 	mock_state.fail_flush = 1;
 	zassert_equal(data_logger_flush(&logger), -EIO, NULL);
+
+	zassert_ok(data_logger_close(&logger), NULL);
 }
 
 /* ---- data_logger_close --------------------------------------------------- */
@@ -366,7 +396,63 @@ ZTEST(data_logger_core, test_close_error_propagated)
 	zassert_equal(data_logger_close(&logger), -EIO, NULL);
 	/* Fields must be reset even on error. */
 	zassert_is_null(logger.fmt, NULL);
+	zassert_is_null(logger.state, NULL);
 	zassert_is_null(logger.ctx, NULL);
+}
+
+/* ---- data_logger_stop --------------------------------------------------- */
+
+ZTEST(data_logger_core, test_stop_null_logger)
+{
+	zassert_equal(data_logger_stop(NULL), -EINVAL, NULL);
+}
+
+ZTEST(data_logger_core, test_stop_delegates)
+{
+	data_logger_init(&logger, "test");
+	int before = mock_state.stop_calls;
+	zassert_ok(data_logger_stop(&logger), NULL);
+	zassert_equal(mock_state.stop_calls, before + 1, NULL);
+
+	/* start again */
+	zassert_ok(data_logger_start(&logger), NULL);
+
+	zassert_ok(data_logger_close(&logger), NULL);
+}
+
+ZTEST(data_logger_core, test_stop_error_propagated)
+{
+	data_logger_init(&logger, "test");
+	mock_state.fail_stop = 1;
+	zassert_equal(data_logger_stop(&logger), -EIO, NULL);
+
+	zassert_ok(data_logger_close(&logger), NULL);
+}
+
+/* ---- data_logger_start --------------------------------------------------- */
+
+ZTEST(data_logger_core, test_start_null_logger)
+{
+	zassert_equal(data_logger_start(NULL), -EINVAL, NULL);
+}
+
+ZTEST(data_logger_core, test_start_delegates)
+{
+	data_logger_init(&logger, "test");
+	int before = mock_state.start_calls;
+	zassert_ok(data_logger_start(&logger), NULL);
+	zassert_equal(mock_state.start_calls, before + 1, NULL);
+
+	zassert_ok(data_logger_close(&logger), NULL);
+}
+
+ZTEST(data_logger_core, test_start_error_propagated)
+{
+	data_logger_init(&logger, "test");
+	mock_state.fail_start = 1;
+	zassert_equal(data_logger_start(&logger), -EIO, NULL);
+
+	zassert_ok(data_logger_close(&logger), NULL);
 }
 
 /* ---- Full lifecycle (mock) ----------------------------------------------- */
