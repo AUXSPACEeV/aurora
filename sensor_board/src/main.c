@@ -205,6 +205,7 @@ void state_machine_task(void *, void *, void *)
 
 #if defined(CONFIG_PYRO)
 	const struct device *pyro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_pyro));
+	enum sm_state pyro_state = SM_IDLE;
 	int ret;
 #endif /* CONFIG_PYRO */
 
@@ -217,7 +218,7 @@ void state_machine_task(void *, void *, void *)
 
 #if defined(CONFIG_PYRO)
 	while (!device_is_ready(pyro0)) {
-		LOG_ERR("Pyro device %s is not ready, trying again ...\n",
+		LOG_ERR("Pyro device %s is not ready, trying again ...",
 				pyro0->name);
 		k_sleep(K_SECONDS(1));
 	}
@@ -232,36 +233,34 @@ void state_machine_task(void *, void *, void *)
 	}
 
 	while (1) {
-		/* Check for new IMU or baro data and update inputs */
-		if (zbus_sub_wait_msg(&sm_sub, &data_chan, &msg_buf, K_FOREVER) == 0) {
+		/* Block until at least one message arrives */
+		if (zbus_sub_wait_msg(&sm_sub, &data_chan, &msg_buf, K_FOREVER) != 0) {
+			continue;
+		}
+
+		/* Process the first message, then drain any queued messages
+		 * so we always work with the latest sensor data.
+		 */
+		do {
 			if (data_chan == &imu_data_chan) {
 				if (imu_sensor_value_to_orientation(&msg_buf.imu, &orientation) == 0 &&
 				    imu_sensor_value_to_acceleration(&msg_buf.imu, &acceleration) == 0) {
-					LOG_INF("orientation: %f deg. acc: %f\n", (double)orientation,
-						(double)acceleration);
 					imu_ready = true;
 #if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
 					last_imu = msg_buf.imu;
 #endif /* CONFIG_DATA_LOGGER */
-				} else {
-					LOG_ERR("IMU conversion failed");
 				}
 			} else if (data_chan == &baro_data_chan) {
 				if (baro_sensor_value_to_altitude(&msg_buf.baro.pressure, &altitude) == 0) {
-					LOG_INF("Baro: pressure=%.2f kPa, altitude=%d.%02d m\n",
-						(double)msg_buf.baro.pressure.val1 + (double)msg_buf.baro.pressure.val2 / 1e6,
-						(int)altitude, abs((int)(altitude * 100) % 100));
 					baro_ready = true;
 #if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
 					last_baro = msg_buf.baro;
 #endif /* CONFIG_DATA_LOGGER */
-				} else {
-					LOG_ERR("Baro conversion failed");
 				}
 			}
-		}
+		} while (zbus_sub_wait_msg(&sm_sub, &data_chan, &msg_buf, K_NO_WAIT) == 0);
 
-		/* only update state machine if both sensors values where updated*/
+		/* Only update state machine once both sensors have fresh data */
 		if (!baro_ready || !imu_ready) {
 			continue;
 		}
@@ -282,7 +281,7 @@ void state_machine_task(void *, void *, void *)
 
 		sm_update(&inputs);
 		state = sm_get_state();
-		LOG_INF("STATE = %d\n", state);
+		LOG_DBG("STATE = %d", state);
 
 #if defined(CONFIG_AURORA_NOTIFY)
 		if (state != prev_state) {
@@ -296,26 +295,27 @@ void state_machine_task(void *, void *, void *)
 		imu_ready = false;
 
 #if defined(CONFIG_PYRO)
-		switch (state) {
-		case SM_IDLE:
-			break;
-		case SM_ARMED:
-			ret = pyro_arm(pyro0, 0);
-			if (ret)
-				LOG_ERR("Failed to arm pyro module.\n");
-			break;
-		case SM_MAIN:
-			ret = pyro_trigger_channel(pyro0, 0);
-			if (ret)
-				LOG_ERR("Failed to trigger pyro channel 0.\n");
-			break;
-		case SM_REDUNDAND:
-			ret = pyro_trigger_channel(pyro0, 1);
-			if (ret)
-				LOG_ERR("Failed to trigger pyro channel 1.\n");
-			break;
-		default:
-			break;
+		if (state != pyro_state) {
+			switch (state) {
+			case SM_ARMED:
+				ret = pyro_arm(pyro0, 0);
+				if (ret)
+					LOG_ERR("Failed to arm pyro module.");
+				break;
+			case SM_MAIN:
+				ret = pyro_trigger_channel(pyro0, 0);
+				if (ret)
+					LOG_ERR("Failed to trigger pyro channel 0.");
+				break;
+			case SM_REDUNDAND:
+				ret = pyro_trigger_channel(pyro0, 1);
+				if (ret)
+					LOG_ERR("Failed to trigger pyro channel 1.");
+				break;
+			default:
+				break;
+			}
+			pyro_state = state;
 		}
 #endif /* CONFIG_PYRO */
 
@@ -337,11 +337,15 @@ K_THREAD_DEFINE(state_machine_task_id, 4096, state_machine_task, NULL, NULL,
  * Subscribes to sm_snapshot_chan and writes one CSV entry per SM update cycle.
  * Receives the exact raw sensor pair the SM used — never newer readings.
  */
+/** Flush the data logger every N snapshot cycles. */
+#define DATA_LOGGER_FLUSH_INTERVAL 10
+
 void data_logger_task(void *, void *, void *)
 {
 	static struct data_logger logger;
 	const struct zbus_channel *chan;
 	struct sm_sensor_snapshot snap;
+	uint32_t flush_counter = 0;
 
 	#if defined(CONFIG_DATA_LOGGER_CSV)
 	if (data_logger_init(&logger, &data_logger_csv_formatter,
@@ -385,8 +389,10 @@ void data_logger_task(void *, void *, void *)
 		dp.channels[1] = snap.baro.pressure;
 		data_logger_log(&logger, &dp);
 
-		data_logger_flush(&logger);
-
+		if (++flush_counter >= DATA_LOGGER_FLUSH_INTERVAL) {
+			data_logger_flush(&logger);
+			flush_counter = 0;
+		}
 	}
 }
 

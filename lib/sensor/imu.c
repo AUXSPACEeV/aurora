@@ -57,26 +57,26 @@ static int fetch_and_send(const struct device *dev)
 
 	ret = sensor_sample_fetch(dev);
 	if ( ret != 0) {
-		LOG_ERR("Failed to fetch sensor data\n");
+		LOG_ERR("Failed to fetch sensor data");
 		return ret;
 	}
 
 	ret = sensor_channel_get(dev, SENSOR_CHAN_ACCEL_XYZ, msg.accel);
 	if (ret != 0) {
-		LOG_ERR("Failed to get accelerometer data\n");
+		LOG_ERR("Failed to get accelerometer data");
 		return ret;
 	}
 
 	ret = sensor_channel_get(dev, SENSOR_CHAN_GYRO_XYZ, msg.gyro);
 	if (ret != 0) {
-		LOG_ERR("Failed to get gyroscope data\n");
+		LOG_ERR("Failed to get gyroscope data");
 		return ret;
 	}
 
 	/* Publish the IMU data to the z-bus channel */
 	ret = zbus_chan_pub(&imu_data_chan, &msg, K_NO_WAIT);
 	if (ret != 0) {
-		LOG_ERR("Failed to publish IMU data\n");
+		LOG_ERR("Failed to publish IMU data");
 	}
 	return ret;
 }
@@ -107,7 +107,7 @@ static void run_trigger_mode(const struct device *dev)
 	trig.chan = SENSOR_CHAN_ACCEL_XYZ;
 
 	if (sensor_trigger_set(dev, &trig, trigger_handler) != 0) {
-		LOG_ERR("Could not set sensor type and channel\n");
+		LOG_ERR("Could not set sensor type and channel");
 		return;
 	}
 }
@@ -127,12 +127,12 @@ int imu_poll(const struct device *dev)
 int imu_init(const struct device *dev)
 {
 	if (!device_is_ready(dev)) {
-		LOG_ERR("%s: device not ready.\n", dev->name);
+		LOG_ERR("%s: device not ready.", dev->name);
 		return -ENODEV;
 	}
 
 #if defined(CONFIG_IMU_TRIGGER)
-	LOG_DBG("Enableing IMU in trigger mode.\n\n");
+	LOG_DBG("Enabling IMU in trigger mode.");
 	run_trigger_mode(dev);
 #endif
 

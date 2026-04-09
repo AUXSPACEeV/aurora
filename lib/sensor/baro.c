@@ -43,26 +43,26 @@ static int fetch_and_send(const struct device *dev)
 
 	ret = sensor_sample_fetch(dev);
 	if ( ret != 0) {
-		LOG_ERR("Failed to fetch sensor data\n");
+		LOG_ERR("Failed to fetch sensor data");
 		return ret;
 	}
 
 	ret = sensor_channel_get(dev, SENSOR_CHAN_AMBIENT_TEMP, &(msg.temperature));
 	if (ret != 0) {
-		LOG_ERR("Failed to get baro temperature\n");
+		LOG_ERR("Failed to get baro temperature");
 		return ret;
 	}
 
 	ret = sensor_channel_get(dev, SENSOR_CHAN_PRESS, &(msg.pressure));
 	if (ret != 0) {
-		LOG_ERR("Failed to get baro pressure\n");
+		LOG_ERR("Failed to get baro pressure");
 		return ret;
 	}
 
 	/* Publish the baro data to the z-bus channel */
 	ret = zbus_chan_pub(&baro_data_chan, &msg, K_NO_WAIT);
 	if (ret != 0) {
-		LOG_ERR("Failed to publish baro data\n");
+		LOG_ERR("Failed to publish baro data");
 	}
 	return ret;
 }
@@ -94,7 +94,7 @@ static void run_trigger_mode(const struct device *dev)
 	trig.chan = SENSOR_CHAN_ALL;
 
 	if (sensor_trigger_set(dev, &trig, trigger_handler) != 0) {
-		LOG_ERR("Could not set sensor type and channel\n");
+		LOG_ERR("Could not set sensor type and channel");
 		return;
 	}
 }
