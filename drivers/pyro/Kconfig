@@ -18,6 +18,13 @@ config PYRO_INIT_PRIORITY
 	default 80
 	depends on PYRO
 
+config PYRO_SHELL
+	bool "Pyro shell commands"
+	default y
+	depends on SHELL
+	help
+	  Enable shell commands for pyro devices.
+
 menu "Auxspace Pyro Drivers"
 rsource "auxspaceev/Kconfig"
 endmenu
