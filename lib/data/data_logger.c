@@ -75,9 +75,9 @@ struct data_logger *data_logger_get(const char *name)
 
 static const char *const aurora_data_names[AURORA_DATA_COUNT] = {
 	[AURORA_DATA_BARO]      = "baro",
-	[AURORA_DATA_IMU_ACCEL] = "imu_accel",
-	[AURORA_DATA_IMU_GYRO]  = "imu_gyro",
-	[AURORA_DATA_IMU_MAG]   = "imu_mag",
+	[AURORA_DATA_IMU_ACCEL] = "accel",
+	[AURORA_DATA_IMU_GYRO]  = "gyro",
+	[AURORA_DATA_IMU_MAG]   = "mag",
 };
 
 /* data_logger_type_name – see data_logger.h */
