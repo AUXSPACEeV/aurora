@@ -47,6 +47,8 @@ static int buzzer_on_state_change(enum sm_state prev, enum sm_state next)
 	switch (next) {
 	case SM_ARMED:
 		return buzz(PWM_HZ(2000), 200);
+	case SM_IDLE:
+		return buzz(PWM_HZ(1000), 100);
 	case SM_APOGEE:
 		return buzz(PWM_HZ(3000), 300);
 	case SM_LANDED:

@@ -21,9 +21,9 @@
 
 #include <aurora/lib/state/state.h>
 
-#if defined(CONFIG_STATE_MACHINE_AUDIT)
+#if defined(CONFIG_AURORA_STATE_MACHINE_AUDIT)
 #include <aurora/lib/state/audit.h>
-#endif /* CONFIG_STATE_MACHINE_AUDIT */
+#endif /* CONFIG_AURORA_STATE_MACHINE_AUDIT */
 
 #if defined(CONFIG_APOGEE_DETECTION)
 #include <aurora/lib/filter.h>
@@ -118,7 +118,7 @@ static int running_timers[NUM_TIMERS] = {0}; /**< Per-timer running flag. */
  */
 #define TIMER_EXPIRED(tmr) (k_timer_status_get(tmr) > 0)
 
-#if defined(CONFIG_STATE_MACHINE_AUDIT)
+#if defined(CONFIG_AURORA_STATE_MACHINE_AUDIT)
 #define SM_TRANSITION(new_state) do {				\
 	sm_audit_transition(current_state, (new_state));	\
 	current_state = (new_state);				\
@@ -127,7 +127,7 @@ static int running_timers[NUM_TIMERS] = {0}; /**< Per-timer running flag. */
 #else
 #define SM_TRANSITION(new_state) do { current_state = (new_state); } while (0)
 #define SM_EVENT(msg)
-#endif /* CONFIG_STATE_MACHINE_AUDIT */
+#endif /* CONFIG_AURORA_STATE_MACHINE_AUDIT */
 
 static void init_timers(void)
 {

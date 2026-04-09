@@ -56,7 +56,7 @@ void sm_audit_event(enum sm_state state, const char *event);
 /**
  * @brief Get the number of entries currently stored in the audit log.
  *
- * @return Number of entries (up to CONFIG_STATE_MACHINE_AUDIT_LOG_SIZE).
+ * @return Number of entries (up to CONFIG_AURORA_STATE_MACHINE_AUDIT_LOG_SIZE).
  */
 uint32_t sm_audit_count(void);
 

@@ -27,7 +27,7 @@ state machine and the data logger:
 ## State Machine
 
 AURORA features a dynamic selection of state machine types via Kconfig
-`CONFIG_STATE_MACHINE_TYPE`.
+`CONFIG_AURORA_STATE_MACHINE_TYPE`.
 Currently only the simple state machine is implemented and it uses the
 following flight sequence:
 
