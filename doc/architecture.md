@@ -110,11 +110,3 @@ Filter apogee:       496.4 m (t = 12.56 s)
 
 The filter and its hypsometric pipeline are covered by a ztest suite under
 ([`aurora/tests/lib/apogee/`](https://github.com/AUXSPACEeV/aurora/tree/main/tests/lib/apogee)).
-
-## Supported Boards
-
-| Board | MCU | Notes |
-|---|---|---|
-| `sensor_board_v2/rp2040` | RP2040 (Cortex-M0+) | Primary target |
-| `sensor_board_v2/rp2350a/hazard3` | RP2350 (RISC-V Hazard3) | |
-| `esp32s3_micrometer/esp32s3/procpu` | ESP32-S3 | Custom Auxspace board |

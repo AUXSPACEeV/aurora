@@ -131,7 +131,7 @@ struct data_logger {
  * @brief Initialise a logger.
  *
  * The output file is placed at
- * @c CONFIG_DATA_LOGGER_BASE_PATH/<filename>.<file_ext>, where file_ext
+ * @c CONFIG_DATA_LOGGER_BASE_PATH/[ @p filename ].file_ext, where file_ext
  * comes from the active formatter.  Calls @c fmt->init then
  * @c fmt->write_header.  On any failure the logger is left in an invalid
  * state and should not be used.
