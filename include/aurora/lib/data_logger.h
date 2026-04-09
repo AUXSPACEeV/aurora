@@ -66,7 +66,7 @@ struct data_logger;
 /**
  * @brief Formatter vtable.
  *
- * Implement all five callbacks and export a
+ * Implement all mandatory callbacks and export a
  * @c const @c struct @c data_logger_formatter to create a new backend.
  *
  * Every callback receives the logger instance so it can reach its opaque
@@ -90,8 +90,25 @@ struct data_logger_formatter {
 	/** Finalise the file and free the formatter context. */
 	int (*close)(struct data_logger *logger);
 
+	/** Optional preparation before logging stop and fsync. */
+	int (*stop)(struct data_logger *logger);
+
+	/** Optional preparation to start logging. */
+	int (*start)(struct data_logger *logger);
+
 	/** File suffix */
 	char file_ext[8];
+};
+
+/**
+ * @brief Formatter state.
+ */
+struct data_logger_state {
+	/** Mutex for thread safety in concurrent access */
+	struct k_mutex mutex;
+
+	/** Data logger is running and logging */
+	int running;
 };
 
 /**
@@ -99,6 +116,7 @@ struct data_logger_formatter {
  */
 struct data_logger {
 	const struct data_logger_formatter *fmt; /**< Active formatter vtable  */
+	struct data_logger_state *state;         /**< Active formatter state */
 	void *ctx;                               /**< Opaque formatter context */
 };
 
@@ -143,6 +161,26 @@ int data_logger_flush(struct data_logger *logger);
  * @retval 0 on success, negative errno on failure.
  */
 int data_logger_close(struct data_logger *logger);
+
+/**
+ * @brief Temporary stop the data logger and flush the fs caches.
+ *
+ * After this call @p logger is stopped and must be re-started before use.
+ *
+ * @param logger  Initialised logger instance.
+ * @retval 0 on success, negative errno on failure.
+ */
+int data_logger_stop(struct data_logger *logger);
+
+/**
+ * @brief Restart the data logger.
+ *
+ * After this call @p logger is started and running.
+ *
+ * @param logger  Initialized but stopped logger instance.
+ * @retval 0 on success, negative errno on failure.
+ */
+int data_logger_start(struct data_logger *logger);
 
 /**
  * @brief Return the human-readable name for an @ref aurora_data value.

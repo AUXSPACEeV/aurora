@@ -53,6 +53,7 @@ int data_logger_init(struct data_logger *logger, const char *filename)
 	char dir[64];
 	char *sep;
 	int rc;
+	struct data_logger_state *state = k_malloc(sizeof(*state));
 #if defined(CONFIG_DATA_LOGGER_CSV)
 	const struct data_logger_formatter *fmt = &data_logger_csv_formatter;
 #elif defined(CONFIG_DATA_LOGGER_INFLUX)
@@ -64,17 +65,25 @@ int data_logger_init(struct data_logger *logger, const char *filename)
 #endif /* CONFIG_DATA_LOGGER */
 	char full_path[64];
 
-	if (logger == NULL || fmt == NULL || filename == NULL)
-		return -EINVAL;
+	if (logger == NULL || fmt == NULL || filename == NULL) {
+		rc = -EINVAL;
+		goto out_err;
+	}
 
 	/* Build "<base_path>/<filename>.<file_ext>" */
 	rc = snprintf(full_path, sizeof(full_path), "%s/%s.%s",
 		      CONFIG_DATA_LOGGER_BASE_PATH, filename, fmt->file_ext);
-	if (rc < 0 || rc >= (int)sizeof(full_path))
-		return -ENAMETOOLONG;
+	if (rc < 0 || rc >= (int)sizeof(full_path)) {
+
+		rc = -ENAMETOOLONG;
+		goto out_err;
+	}
 
 	logger->fmt = fmt;
 	logger->ctx = NULL;
+
+	logger->state = state;
+	k_mutex_init(&logger->state->mutex);
 
 	/* Ensure parent directory exists (fs_open creates files, not dirs). */
 	strncpy(dir, full_path, sizeof(dir) - 1);
@@ -94,31 +103,48 @@ int data_logger_init(struct data_logger *logger, const char *filename)
 
 	if (rc != 0) {
 		LOG_ERR("formatter init failed (%d)", rc);
-		return rc;
+		goto out_err;
 	}
 
 	rc = fmt->write_header(logger);
 	if (rc != 0) {
 		LOG_ERR("formatter write_header failed (%d)", rc);
-		fmt->close(logger);
-		return rc;
+		goto out_err_close;
 	}
 
 	rc = fmt->flush(logger);
 	if (rc != 0) {
 		LOG_ERR("formatter flush after header failed (%d)", rc);
-		fmt->close(logger);
-		return rc;
+		goto out_err_close;
+	}
+
+	rc = data_logger_start(logger);
+	if (rc) {
+		LOG_ERR("logger starting failed (%d)", rc);
+		goto out_err_close;
 	}
 
 	return 0;
+
+out_err_close:
+	fmt->close(logger);
+out_err:
+	k_free(state);
+	return rc;
 }
 
 /* data_logger_log – see data_logger.h */
 int data_logger_log(struct data_logger *logger, const struct datapoint *dp)
 {
-	if (logger == NULL || dp == NULL || logger->fmt == NULL)
+	if (logger == NULL || dp == NULL || logger->fmt == NULL ||
+		logger->state == NULL)
 		return -EINVAL;
+
+	// silently ignore if not running
+	if (logger->state->running == 0) {
+		LOG_WRN("logger->state->running is 0");
+		return 0;
+	}
 
 	return logger->fmt->write_datapoint(logger, dp);
 }
@@ -135,13 +161,85 @@ int data_logger_flush(struct data_logger *logger)
 /* data_logger_close – see data_logger.h */
 int data_logger_close(struct data_logger *logger)
 {
-	if (logger == NULL || logger->fmt == NULL)
+	int rc_lock, rc_close;
+
+	if (logger == NULL || logger->fmt == NULL || logger->state == NULL)
 		return -EINVAL;
 
-	int rc = logger->fmt->close(logger);
+	rc_close = logger->fmt->close(logger);
+	if (rc_close)
+		LOG_ERR("formatter close failed (%d)", rc_close);
+
+	rc_lock = k_mutex_lock(&logger->state->mutex, K_MSEC(500));
+	if (rc_lock == 0) {
+		k_free(logger->state);
+	} else {
+		LOG_ERR("formatter close could not lock state mutex (%d)",
+			rc_lock);
+		return rc_lock;
+	}
+
+	registry_remove(logger);
 
 	logger->fmt = NULL;
 	logger->ctx = NULL;
+	logger->state = NULL;
 
-	return rc;
+	return rc_close;
+}
+
+/* data_logger_stop – see data_logger.h */
+int data_logger_stop(struct data_logger *logger)
+{
+	int rc;
+
+	if (logger == NULL || logger->fmt == NULL || logger->state == NULL)
+		return -EINVAL;
+
+	if (logger->fmt->stop != NULL) {
+		rc = logger->fmt->stop(logger);
+		if (rc) {
+			LOG_ERR("formatter stop preparation failed (%d)", rc);
+			return rc;
+		}
+	}
+
+	rc = k_mutex_lock(&logger->state->mutex, K_MSEC(100));
+	if (rc == 0) {
+		logger->state->running = 0;
+		k_mutex_unlock(&logger->state->mutex);
+	} else {
+		LOG_ERR("formatter stop could not lock state mutex (%d)", rc);
+		return rc;
+	}
+
+	return data_logger_flush(logger);
+}
+
+/* data_logger_start – see data_logger.h */
+int data_logger_start(struct data_logger *logger)
+{
+	int rc;
+
+	if (logger == NULL || logger->fmt == NULL || logger->state == NULL)
+		return -EINVAL;
+
+	if (logger->fmt->start != NULL) {
+		rc = logger->fmt->start(logger);
+		if (rc) {
+			LOG_ERR("formatter start preparation failed (%d)", rc);
+			return rc;
+		}
+	}
+
+	rc = k_mutex_lock(&logger->state->mutex, K_MSEC(100));
+	if (rc == 0) {
+		logger->state->running = 1;
+		k_mutex_unlock(&logger->state->mutex);
+	} else {
+		LOG_ERR("formatter start could not lock state mutex (%d)", rc);
+		return rc;
+	}
+
+	return 0;
 }
