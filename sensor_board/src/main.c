@@ -223,17 +223,9 @@ void state_machine_task(void *, void *, void *)
 
 #if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
 	k_work_init(&flush_work, flush_work_handler);
-#if defined(CONFIG_DATA_LOGGER_CSV)
-	if (data_logger_init(&sm_logger, &data_logger_csv_formatter,
-			     "/MMC:/data/flight.csv") != 0) {
+	if (data_logger_init(&sm_logger, "flight") != 0) {
 		LOG_ERR("data_logger_init failed");
 	}
-#elif defined(CONFIG_DATA_LOGGER_INFLUX)
-	if (data_logger_init(&sm_logger, &data_logger_influx_formatter,
-			     "/MMC:/data/flight.influx") != 0) {
-		LOG_ERR("data_logger_init failed");
-	}
-#endif /* Formatter selection */
 #endif /* CONFIG_DATA_LOGGER */
 
 	// TODO: Add idling

@@ -190,4 +190,5 @@ const struct data_logger_formatter data_logger_csv_formatter = {
 	.write_datapoint = csv_write_datapoint,
 	.flush           = csv_flush,
 	.close           = csv_close,
+	.file_ext        = "csv",
 };

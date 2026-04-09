@@ -3,6 +3,16 @@ common:
     - fatfs
 
 tests:
+  aurora.lib.data.core:
+    integration_platforms:
+      - qemu_x86
+    platform_allow:
+      - qemu_x86
+    tags: test_data_logger
+    extra_configs:
+      - CONFIG_DATA_LOGGER_MOCK=y
+      - CONFIG_DATA_LOGGER_BASE_PATH="/RAM:/test"
+
   aurora.lib.data.csv:
     integration_platforms:
       - qemu_x86
@@ -11,6 +21,7 @@ tests:
     tags: test_data_logger
     extra_configs:
       - CONFIG_DATA_LOGGER_CSV=y
+      - CONFIG_DATA_LOGGER_BASE_PATH="/RAM:/test"
 
   aurora.lib.data.influx:
     integration_platforms:
@@ -20,3 +31,4 @@ tests:
     tags: test_data_logger
     extra_configs:
       - CONFIG_DATA_LOGGER_INFLUX=y
+      - CONFIG_DATA_LOGGER_BASE_PATH="/RAM:/test"

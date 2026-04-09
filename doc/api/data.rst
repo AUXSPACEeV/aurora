@@ -22,7 +22,7 @@ Example Usage
 
    static struct data_logger logger;
 
-   data_logger_init(&logger, &data_logger_csv_formatter, "/lfs/log.csv");
+   data_logger_init(&logger, "flight");
 
    struct datapoint dp = {
        .timestamp_ms = k_uptime_get(),
