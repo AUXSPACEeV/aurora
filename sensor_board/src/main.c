@@ -69,24 +69,17 @@ ZBUS_CHAN_ADD_OBS(imu_data_chan, sm_sub, 1);
 ZBUS_CHAN_ADD_OBS(baro_data_chan, sm_sub, 1);
 
 #if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
-/**
- * @brief Snapshot of the exact raw sensor pair used in one SM update cycle.
- *
- * Published by the SM task before each sm_update(). The logger subscribes
- * here so it always logs the same data the SM processed — never newer readings.
- */
-struct sm_sensor_snapshot {
-	struct imu_data imu;
-	struct baro_data baro;
-};
+/** Flush the data logger every N SM update cycles via the system workqueue. */
+#define DATA_LOGGER_FLUSH_INTERVAL 10
 
-ZBUS_MSG_SUBSCRIBER_DEFINE(log_sub);
-ZBUS_CHAN_DEFINE(sm_snapshot_chan,
-		struct sm_sensor_snapshot,
-		NULL, NULL,
-		ZBUS_OBSERVERS(log_sub),
-		ZBUS_MSG_INIT(0));
+static struct data_logger sm_logger;
+static struct k_work flush_work;
 
+static void flush_work_handler(struct k_work *work)
+{
+	ARG_UNUSED(work);
+	data_logger_flush(&sm_logger);
+}
 #endif /* CONFIG_DATA_LOGGER */
 
 static bool baro_active = false; /**< True once the barometer thread has initialized. */
@@ -201,6 +194,7 @@ void state_machine_task(void *, void *, void *)
 #if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
 	struct imu_data last_imu = {0};
 	struct baro_data last_baro = {0};
+	uint32_t log_count = 0;
 #endif /* CONFIG_DATA_LOGGER */
 
 #if defined(CONFIG_PYRO)
@@ -226,6 +220,21 @@ void state_machine_task(void *, void *, void *)
 
 	sm_init(&state_cfg, NULL);
 	sm_active = true;
+
+#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
+	k_work_init(&flush_work, flush_work_handler);
+#if defined(CONFIG_DATA_LOGGER_CSV)
+	if (data_logger_init(&sm_logger, &data_logger_csv_formatter,
+			     "/MMC:/data/flight.csv") != 0) {
+		LOG_ERR("data_logger_init failed");
+	}
+#elif defined(CONFIG_DATA_LOGGER_INFLUX)
+	if (data_logger_init(&sm_logger, &data_logger_influx_formatter,
+			     "/MMC:/data/flight.influx") != 0) {
+		LOG_ERR("data_logger_init failed");
+	}
+#endif /* Formatter selection */
+#endif /* CONFIG_DATA_LOGGER */
 
 	// TODO: Add idling
 	while (!baro_active || !imu_active) {
@@ -267,8 +276,33 @@ void state_machine_task(void *, void *, void *)
 
 #if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
 		{
-			struct sm_sensor_snapshot snap = { .imu = last_imu, .baro = last_baro };
-			zbus_chan_pub(&sm_snapshot_chan, &snap, K_NO_WAIT);
+			int64_t ts = k_uptime_get();
+			struct datapoint dp = {
+				.timestamp_ms = ts,
+				.type = AURORA_DATA_IMU_ACCEL,
+				.channel_count = 3,
+				.channels = { last_imu.accel[0],
+					      last_imu.accel[1],
+					      last_imu.accel[2] },
+			};
+			data_logger_log(&sm_logger, &dp);
+
+			dp.type = AURORA_DATA_IMU_GYRO;
+			dp.channels[0] = last_imu.gyro[0];
+			dp.channels[1] = last_imu.gyro[1];
+			dp.channels[2] = last_imu.gyro[2];
+			data_logger_log(&sm_logger, &dp);
+
+			dp.type = AURORA_DATA_BARO;
+			dp.channel_count = 2;
+			dp.channels[0] = last_baro.temperature;
+			dp.channels[1] = last_baro.pressure;
+			data_logger_log(&sm_logger, &dp);
+
+			if (++log_count >= DATA_LOGGER_FLUSH_INTERVAL) {
+				k_work_submit(&flush_work);
+				log_count = 0;
+			}
 		}
 #endif /* CONFIG_DATA_LOGGER */
 
@@ -327,79 +361,6 @@ K_THREAD_DEFINE(state_machine_task_id, 4096, state_machine_task, NULL, NULL,
 				NULL, 5, 0, 0);
 #endif /* CONFIG_AURORA_STATE_MACHINE */
 
-/* ============================================================
- *                     DATA LOGGER TASK
- * ============================================================ */
-#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
-/**
- * @brief Data logger thread.
- *
- * Subscribes to sm_snapshot_chan and writes one CSV entry per SM update cycle.
- * Receives the exact raw sensor pair the SM used — never newer readings.
- */
-/** Flush the data logger every N snapshot cycles. */
-#define DATA_LOGGER_FLUSH_INTERVAL 10
-
-void data_logger_task(void *, void *, void *)
-{
-	static struct data_logger logger;
-	const struct zbus_channel *chan;
-	struct sm_sensor_snapshot snap;
-	uint32_t flush_counter = 0;
-
-	#if defined(CONFIG_DATA_LOGGER_CSV)
-	if (data_logger_init(&logger, &data_logger_csv_formatter,
-			     "/MMC:/data/flight.csv") != 0) {
-		LOG_ERR("data_logger_init failed");
-		return;
-	}
-	#elif defined(CONFIG_DATA_LOGGER_INFLUX)
-	if (data_logger_init(&logger, &data_logger_influx_formatter,
-					"/MMC:/data/flight.influx") != 0) {
-		LOG_ERR("data_logger_init failed");
-		return;
-	}
-	#endif /* Formatter selection */
-
-	while (1) {
-		if (zbus_sub_wait_msg(&log_sub, &chan, &snap, K_FOREVER) != 0) {
-			LOG_ERR("Failed to receive SM sensor snapshot");
-			continue;
-		}
-
-		int64_t ts = k_uptime_get();
-
-		struct datapoint dp = {
-			.timestamp_ms = ts,
-			.type = AURORA_DATA_IMU_ACCEL,
-			.channel_count = 3,
-			.channels = { snap.imu.accel[0], snap.imu.accel[1], snap.imu.accel[2] },
-		};
-		data_logger_log(&logger, &dp);
-
-		dp.type = AURORA_DATA_IMU_GYRO;
-		dp.channels[0] = snap.imu.gyro[0];
-		dp.channels[1] = snap.imu.gyro[1];
-		dp.channels[2] = snap.imu.gyro[2];
-		data_logger_log(&logger, &dp);
-
-		dp.type = AURORA_DATA_BARO;
-		dp.channel_count = 2;
-		dp.channels[0] = snap.baro.temperature;
-		dp.channels[1] = snap.baro.pressure;
-		data_logger_log(&logger, &dp);
-
-		if (++flush_counter >= DATA_LOGGER_FLUSH_INTERVAL) {
-			data_logger_flush(&logger);
-			flush_counter = 0;
-		}
-	}
-}
-
-/* Create the data logger task */
-K_THREAD_DEFINE(data_logger_task_id, 4096, data_logger_task, NULL, NULL, NULL,
-		6, 0, 0);
-#endif /* CONFIG_DATA_LOGGER */
 
 /* ============================================================
  *                     MAIN INITIALIZATION
