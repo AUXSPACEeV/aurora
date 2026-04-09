@@ -196,4 +196,5 @@ const struct data_logger_formatter data_logger_influx_formatter = {
 	.flush           = influx_flush,
 	.close           = influx_close,
 	.file_ext        = "influx",
+	.name            = "influx",
 };

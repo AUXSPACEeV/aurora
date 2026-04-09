@@ -23,6 +23,53 @@
 LOG_MODULE_REGISTER(data_logger, CONFIG_DATA_LOGGER_LOG_LEVEL);
 
 /* -------------------------------------------------------------------------- */
+/*  Logger registry                                                           */
+/* -------------------------------------------------------------------------- */
+
+static struct data_logger *registry[CONFIG_DATA_LOGGER_MAX_LOGGERS];
+
+static int registry_add(struct data_logger *logger)
+{
+	for (int i = 0; i < CONFIG_DATA_LOGGER_MAX_LOGGERS; i++) {
+		if (registry[i] == NULL) {
+			registry[i] = logger;
+			return 0;
+		}
+	}
+	return -ENOMEM;
+}
+
+static void registry_remove(struct data_logger *logger)
+{
+	for (int i = 0; i < CONFIG_DATA_LOGGER_MAX_LOGGERS; i++) {
+		if (registry[i] == logger) {
+			registry[i] = NULL;
+			return;
+		}
+	}
+}
+
+void data_logger_foreach(data_logger_cb_t cb, void *user_data)
+{
+	for (int i = 0; i < CONFIG_DATA_LOGGER_MAX_LOGGERS; i++) {
+		if (registry[i] != NULL) {
+			cb(registry[i], user_data);
+		}
+	}
+}
+
+struct data_logger *data_logger_get(const char *name)
+{
+	for (int i = 0; i < CONFIG_DATA_LOGGER_MAX_LOGGERS; i++) {
+		if (registry[i] != NULL &&
+		    strcmp(registry[i]->name, name) == 0) {
+			return registry[i];
+		}
+	}
+	return NULL;
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Sensor-group name table                                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -82,6 +129,9 @@ int data_logger_init(struct data_logger *logger, const char *filename)
 	logger->fmt = fmt;
 	logger->ctx = NULL;
 
+	strncpy(logger->name, filename, sizeof(logger->name) - 1);
+	logger->name[sizeof(logger->name) - 1] = '\0';
+
 	logger->state = state;
 	k_mutex_init(&logger->state->mutex);
 
@@ -116,6 +166,13 @@ int data_logger_init(struct data_logger *logger, const char *filename)
 	if (rc != 0) {
 		LOG_ERR("formatter flush after header failed (%d)", rc);
 		goto out_err_close;
+	}
+
+	rc = registry_add(logger);
+	if (rc != 0) {
+		LOG_ERR("logger registry full (%d)", rc);
+		fmt->close(logger);
+		return rc;
 	}
 
 	rc = data_logger_start(logger);
@@ -165,6 +222,8 @@ int data_logger_close(struct data_logger *logger)
 
 	if (logger == NULL || logger->fmt == NULL || logger->state == NULL)
 		return -EINVAL;
+
+	registry_remove(logger);
 
 	rc_close = logger->fmt->close(logger);
 	if (rc_close)

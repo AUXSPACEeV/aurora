@@ -12,3 +12,7 @@ endif()
 if(CONFIG_DATA_LOGGER_INFLUX)
     zephyr_library_sources(fmt_influx.c)
 endif()
+
+if(CONFIG_DATA_LOGGER_SHELL)
+    zephyr_library_sources(data_shell.c)
+endif()

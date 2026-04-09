@@ -191,4 +191,5 @@ const struct data_logger_formatter data_logger_csv_formatter = {
 	.flush           = csv_flush,
 	.close           = csv_close,
 	.file_ext        = "csv",
+	.name            = "csv",
 };

@@ -98,6 +98,9 @@ struct data_logger_formatter {
 
 	/** File suffix */
 	char file_ext[8];
+
+	/** Human-readable formatter name (e.g. "csv", "influx", "mock") */
+	char name[8];
 };
 
 /**
@@ -111,6 +114,9 @@ struct data_logger_state {
 	int running;
 };
 
+/** Maximum length of a data logger name (including NUL). */
+#define DATA_LOGGER_NAME_MAX 16
+
 /**
  * @brief Logger instance (caller-allocated, typically stack or static).
  */
@@ -118,6 +124,7 @@ struct data_logger {
 	const struct data_logger_formatter *fmt; /**< Active formatter vtable  */
 	struct data_logger_state *state;         /**< Active formatter state */
 	void *ctx;                               /**< Opaque formatter context */
+	char name[DATA_LOGGER_NAME_MAX];        /**< Logger name (set by init) */
 };
 
 /**
@@ -189,6 +196,34 @@ int data_logger_start(struct data_logger *logger);
  * @return Null-terminated ASCII string, or @c "unknown" for out-of-range values.
  */
 const char *data_logger_type_name(enum aurora_data type);
+
+/* -------------------------------------------------------------------------- */
+/*  Logger registry                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Callback type for @ref data_logger_foreach.
+ *
+ * @param logger  Registered logger instance.
+ * @param user_data  Opaque context passed through from the caller.
+ */
+typedef void (*data_logger_cb_t)(struct data_logger *logger, void *user_data);
+
+/**
+ * @brief Iterate over all registered data loggers.
+ *
+ * @param cb         Callback invoked for each registered logger.
+ * @param user_data  Opaque pointer forwarded to @p cb.
+ */
+void data_logger_foreach(data_logger_cb_t cb, void *user_data);
+
+/**
+ * @brief Look up a registered data logger by name.
+ *
+ * @param name  Logger name (as passed to @ref data_logger_init).
+ * @return Pointer to the logger, or NULL if not found.
+ */
+struct data_logger *data_logger_get(const char *name);
 
 /* -------------------------------------------------------------------------- */
 /*  Built-in formatters                                                       */
