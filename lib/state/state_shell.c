@@ -17,9 +17,9 @@
 
 #include <aurora/lib/state/state.h>
 
-#if defined(CONFIG_STATE_MACHINE_AUDIT)
+#if defined(CONFIG_AURORA_STATE_MACHINE_AUDIT)
 #include <aurora/lib/state/audit.h>
-#endif /* CONFIG_STATE_MACHINE_AUDIT */
+#endif /* CONFIG_AURORA_STATE_MACHINE_AUDIT */
 
 /*-----------------------------------------------------------
  * State machine type name (derived from Kconfig)
@@ -126,7 +126,7 @@ static int cmd_transition(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
-#if defined(CONFIG_STATE_MACHINE_AUDIT)
+#if defined(CONFIG_AURORA_STATE_MACHINE_AUDIT)
 
 /** @brief Dump the audit log. */
 static int cmd_audit(const struct shell *sh, size_t argc, char **argv)
@@ -181,7 +181,7 @@ static int cmd_audit_clear(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
-#endif /* CONFIG_STATE_MACHINE_AUDIT */
+#endif /* CONFIG_AURORA_STATE_MACHINE_AUDIT */
 
 /*-----------------------------------------------------------
  * Dynamic completion for state names
@@ -211,13 +211,13 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 	SHELL_CMD_ARG(transition, &dsub_state_name,
 		      "Force a state transition (ground test only)",
 		      cmd_transition, 2, 0),
-#if defined(CONFIG_STATE_MACHINE_AUDIT)
+#if defined(CONFIG_AURORA_STATE_MACHINE_AUDIT)
 	SHELL_CMD(audit, NULL,
 		  "Show audit log of state transitions and events",
 		  cmd_audit),
 	SHELL_CMD(audit_clear, NULL,
 		  "Clear the audit log", cmd_audit_clear),
-#endif /* CONFIG_STATE_MACHINE_AUDIT */
+#endif /* CONFIG_AURORA_STATE_MACHINE_AUDIT */
 	SHELL_SUBCMD_SET_END);
 
 SHELL_CMD_REGISTER(state_machine, &sub_state_machine,

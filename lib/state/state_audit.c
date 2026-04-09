@@ -13,7 +13,7 @@
 
 #include <aurora/lib/state/audit.h>
 
-#define AUDIT_SIZE CONFIG_STATE_MACHINE_AUDIT_LOG_SIZE
+#define AUDIT_SIZE CONFIG_AURORA_STATE_MACHINE_AUDIT_LOG_SIZE
 
 static struct sm_audit_entry ring[AUDIT_SIZE];
 static uint32_t head;	/* next write position */

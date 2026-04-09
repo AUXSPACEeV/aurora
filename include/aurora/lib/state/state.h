@@ -17,7 +17,7 @@
 #if defined(CONFIG_SIMPLE_STATE)
 #include <aurora/lib/state/simple.h>
 #else
-#error "Unknown state machine type! Make sure CONFIG_STATE_MACHINE_TYPE is set."
+#error "Unknown state machine type! Make sure CONFIG_AURORA_STATE_MACHINE_TYPE is set."
 #endif /* CONFIG_SIMPLE_STATE */
 
 /*-----------------------------------------------------------

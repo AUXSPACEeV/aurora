@@ -13,7 +13,7 @@ module = STATE_MACHINE
 module-str = STATE_MACHINE
 source "subsys/logging/Kconfig.template.log_config"
 
-choice STATE_MACHINE_TYPE
+choice AURORA_STATE_MACHINE_TYPE
 	bool "State Machine Type"
 	depends on AURORA_STATE_MACHINE
 	default SIMPLE_STATE
@@ -27,7 +27,7 @@ config SIMPLE_STATE
 
 endchoice
 
-config STATE_MACHINE_AUDIT
+config AURORA_STATE_MACHINE_AUDIT
 	bool "State machine audit log"
 	default y
 	help
@@ -35,15 +35,15 @@ config STATE_MACHINE_AUDIT
 	  transitions and notable events.  Useful for post-flight analysis
 	  and shell diagnostics.
 
-config STATE_MACHINE_AUDIT_LOG_SIZE
+config AURORA_STATE_MACHINE_AUDIT_LOG_SIZE
 	int "Maximum number of audit log entries"
 	default 32
-	depends on STATE_MACHINE_AUDIT
+	depends on AURORA_STATE_MACHINE_AUDIT
 	help
 	  Size of the ring buffer used for the audit log.  Oldest entries
 	  are silently overwritten when full.
 
-config STATE_MACHINE_SHELL
+config AURORA_STATE_MACHINE_SHELL
 	bool "State machine shell commands"
 	depends on SHELL
 	help
