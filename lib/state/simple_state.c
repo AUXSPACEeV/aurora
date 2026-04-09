@@ -230,10 +230,10 @@ static inline bool arm_to_boost_conditions_met(const struct sm_inputs *in)
  * State Machine Update
  *----------------------------------------------------------*/
 static inline void _sm_update(const struct sm_inputs *in,
-							  double previous_altitude)
+			      double previous_altitude)
 {
-	/* No matter the state, go to IDLE if disarmed */
-	if (!in->armed) {
+	/* go to IDLE if disarmed */
+	if (!in->armed && current_state != SM_IDLE) {
 		stop_timers();
 		SM_TRANSITION(SM_IDLE);
 		LOG_INF("-[DISARM]-> IDLE");

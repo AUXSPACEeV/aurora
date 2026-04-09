@@ -192,7 +192,8 @@ void state_machine_task(void *, void *, void *)
 	} msg_buf;
 	double altitude = 0.0;
 	double acceleration = 0.0;
-	double orientation = 0.0;
+	double roll = 0.0;
+	double pitch = 0.0;
 	bool baro_ready = false;
 	bool imu_ready = false;
 
@@ -204,7 +205,7 @@ void state_machine_task(void *, void *, void *)
 
 	struct sm_inputs inputs = (struct sm_inputs){
 		.armed = 1,
-		.orientation = orientation,
+		.orientation = roll,
 		.acceleration = acceleration,
 	};
 
@@ -235,7 +236,7 @@ void state_machine_task(void *, void *, void *)
 		 */
 		do {
 			if (data_chan == &imu_data_chan) {
-				if (imu_sensor_value_to_orientation(&msg_buf.imu, &orientation) == 0 &&
+				if (imu_sensor_value_to_orientation(&msg_buf.imu, &roll, &pitch) == 0 &&
 				    imu_sensor_value_to_acceleration(&msg_buf.imu, &acceleration) == 0) {
 					imu_ready = true;
 				}
@@ -282,7 +283,8 @@ void state_machine_task(void *, void *, void *)
 		}
 
 		inputs = (struct sm_inputs){
-			.orientation = orientation,
+			.armed = 1,
+			.orientation = roll,
 			.acceleration = acceleration,
 			.altitude = altitude,
 		};
@@ -355,7 +357,7 @@ int main(void)
 		LOG_ERR("data_logger_init failed");
 	} else {
 		data_logger_set_default(&sm_logger);
-		k_timer_start(&data_logger_flush_timer, K_SECONDS(1), K_SECONDS(1));
+		k_timer_start(&data_logger_flush_timer, K_MSEC(1000), K_MSEC(1000));
 	}
 #endif /* CONFIG_DATA_LOGGER */
 

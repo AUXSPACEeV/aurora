@@ -154,13 +154,17 @@ int imu_sensor_value_to_acceleration(const struct imu_data *data, double *acc_ou
 
 /* imu_sensor_value_to_orientation – see imu.h */
 int imu_sensor_value_to_orientation(const struct imu_data *data,
-				    double *orientation_out)
+				    double *roll_out, double *pitch_out)
 {
-	if (data == NULL || orientation_out == NULL)
+	if (data == NULL || roll_out == NULL || pitch_out == NULL)
 		return -EINVAL;
 
+	/* TODO: set which way is up */
 	double x = out_ev(&data->accel[0]);
 	double y = out_ev(&data->accel[1]);
-	*orientation_out = atan2(y, x) * (180.0 / M_PI);
+	double z = out_ev(&data->accel[2]);
+
+	*roll_out = atan2(y, sqrt(x*x + z*z)) * (180.0 / M_PI);
+	*pitch_out = atan2(-x, sqrt(y*y + z*z)) * (180.0 / M_PI);
 	return 0;
 }

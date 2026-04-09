@@ -88,12 +88,13 @@ int imu_sensor_value_to_acceleration(const struct imu_data *data,
  * @brief calculate the orientation angle in degrees from IMU sensor values.
  *
  * @param data  Pointer to the IMU sensor data
- * @param orientation_out Calculated orientation angle. Must be valid pointer to a double.
+ * @param roll_out Calculated roll angle around x axis. Must be valid pointer to a double.
+ * @param pitch_out Calculated pitch angle around y axis. Must be valid pointer to a double.
  * @retval 0 on success.
- * @retval -EINVAL if @p data or @p orientation_out is NULL
+ * @retval -EINVAL if @p data or @p roll_out or @p is pitch_out NULL
  */
 int imu_sensor_value_to_orientation(const struct imu_data *data,
-				    double *orientation_out);
+				    double *roll_out, double *pitch_out);
 
 /** @} */
 
