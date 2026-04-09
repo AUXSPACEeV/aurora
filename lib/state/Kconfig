@@ -27,4 +27,27 @@ config SIMPLE_STATE
 
 endchoice
 
+config STATE_MACHINE_AUDIT
+	bool "State machine audit log"
+	default y
+	help
+	  Enable a ring-buffer audit log that records timestamped state
+	  transitions and notable events.  Useful for post-flight analysis
+	  and shell diagnostics.
+
+config STATE_MACHINE_AUDIT_LOG_SIZE
+	int "Maximum number of audit log entries"
+	default 32
+	depends on STATE_MACHINE_AUDIT
+	help
+	  Size of the ring buffer used for the audit log.  Oldest entries
+	  are silently overwritten when full.
+
+config STATE_MACHINE_SHELL
+	bool "State machine shell commands"
+	depends on SHELL
+	help
+	  Enable shell commands for inspecting state machine type,
+	  current state, forcing transitions, and viewing the audit log.
+
 endif

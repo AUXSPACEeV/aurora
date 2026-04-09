@@ -82,6 +82,14 @@ struct sm_inputs {
 	double altitude;			/**< Current altitude measurement. */
 };
 
+/**
+ * @brief Return a human-readable name for the given state.
+ *
+ * @param state State value.
+ * @return Pointer to a static string, or "UNKNOWN" if invalid.
+ */
+const char *sm_state_str(enum sm_state state);
+
 /** @} */
 
 #endif /* APP_LIB_STATE_SIMPLE_H_ */
