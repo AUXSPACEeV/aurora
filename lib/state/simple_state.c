@@ -21,6 +21,10 @@
 
 #include <aurora/lib/state/state.h>
 
+#if defined(CONFIG_STATE_MACHINE_AUDIT)
+#include <aurora/lib/state/audit.h>
+#endif /* CONFIG_STATE_MACHINE_AUDIT */
+
 #if defined(CONFIG_APOGEE_DETECTION)
 #include <aurora/lib/filter.h>
 static struct filter filter;
@@ -114,6 +118,17 @@ static int running_timers[NUM_TIMERS] = {0}; /**< Per-timer running flag. */
  */
 #define TIMER_EXPIRED(tmr) (k_timer_status_get(tmr) > 0)
 
+#if defined(CONFIG_STATE_MACHINE_AUDIT)
+#define SM_TRANSITION(new_state) do {				\
+	sm_audit_transition(current_state, (new_state));	\
+	current_state = (new_state);				\
+} while (0)
+#define SM_EVENT(msg) sm_audit_event(current_state, (msg))
+#else
+#define SM_TRANSITION(new_state) do { current_state = (new_state); } while (0)
+#define SM_EVENT(msg)
+#endif /* CONFIG_STATE_MACHINE_AUDIT */
+
 static void init_timers(void)
 {
 	k_timer_init(&dt_ab, NULL, NULL);
@@ -150,7 +165,7 @@ static void sm_do_error_handling(void)
 	int ret;
 	k_spinlock_key_t key = k_spin_lock(&err_lock);
 
-	current_state = SM_ERROR;
+	SM_TRANSITION(SM_ERROR);
 	if (err_hdl.cb != NULL) {
 		ret = err_hdl.cb(err_hdl.args);
 		if (ret != 0)
@@ -181,6 +196,7 @@ void sm_init(const struct sm_thresholds *cfg,
 	th = *(struct sm_thresholds *)cfg;
 	init_timers();
 	current_state = SM_IDLE;
+	SM_EVENT("state machine initialized");
 
 	if (sm_err_hdl != NULL) {
 		err_hdl.cb = sm_err_hdl->cb;
@@ -195,6 +211,7 @@ void sm_deinit(void)
 {
 	memset(&th, 0, sizeof(th));
 	stop_timers();
+	SM_EVENT("state machine reset");
 	current_state = SM_IDLE;
 
 	LOG_INF("State machine reset (DISARMED, IDLE)");
@@ -218,7 +235,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 	/* No matter the state, go to IDLE if disarmed */
 	if (!in->armed) {
 		stop_timers();
-		current_state = SM_IDLE;
+		SM_TRANSITION(SM_IDLE);
 		LOG_INF("-[DISARM]-> IDLE");
 	}
 
@@ -230,7 +247,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 	*----------------------------------------------------------*/
 	case SM_IDLE:
 		if (in->armed && in->orientation >= th.T_OA) {
-			current_state = SM_ARMED;
+			SM_TRANSITION(SM_ARMED);
 			LOG_INF("-[ARM]-> ARMED");
 		}
 		break;
@@ -243,7 +260,8 @@ static inline void _sm_update(const struct sm_inputs *in,
 			/* Go back to IDLE if orientation is bad */
 			running_timers[TIMER_DT_AB] = 0;
 			k_timer_stop(&dt_ab);
-			current_state = SM_IDLE;
+			SM_EVENT("orientation below threshold");
+			SM_TRANSITION(SM_IDLE);
 			LOG_INF("-[ORIENTATION]-> IDLE");
 			break;
 		}
@@ -261,7 +279,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 			/* At this point, conditions are met. Is the timer done as well? */
 			if (TIMER_EXPIRED(&dt_ab)) {
 				/* Congrats! BOOST detected! */
-				current_state = SM_BOOST;
+				SM_TRANSITION(SM_BOOST);
 				k_timer_stop(&dt_ab);
 				running_timers[TIMER_DT_AB] = 0;
 				LOG_INF("-> BOOST");
@@ -284,7 +302,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 	*----------------------------------------------------------*/
 	case SM_BOOST:
 		if (in->acceleration < th.T_BB) {
-			current_state = SM_BURNOUT;
+			SM_TRANSITION(SM_BURNOUT);
 			LOG_INF("-> BURNOUT");
 		}
 		break;
@@ -296,13 +314,13 @@ static inline void _sm_update(const struct sm_inputs *in,
 #if defined(CONFIG_APOGEE_DETECTION)
 		if (filter_detect_apogee(&filter) == 1) {
 			k_timer_start(&to_a, K_MSEC(th.TO_A), K_NO_WAIT);
-			current_state = SM_APOGEE;
+			SM_TRANSITION(SM_APOGEE);
 			LOG_INF("-> APOGEE (filter)");
 		}
 #else
 		if (in->velocity <= 0.0 && in->altitude < previous_altitude) {
 			k_timer_start(&to_a, K_MSEC(th.TO_A), K_NO_WAIT);
-			current_state = SM_APOGEE;
+			SM_TRANSITION(SM_APOGEE);
 			LOG_INF("-> APOGEE");
 		}
 #endif /* CONFIG_APOGEE_DETECTION */
@@ -314,12 +332,13 @@ static inline void _sm_update(const struct sm_inputs *in,
 	case SM_APOGEE:
 		if (in->altitude < th.T_M) {
 			k_timer_stop(&to_a);
-			current_state = SM_MAIN;
+			SM_TRANSITION(SM_MAIN);
 			LOG_INF("-> MAIN");
 		} else if (TIMER_EXPIRED(&to_a)) {
 			/* Timeout expired, abort to ERROR */
 			k_timer_stop(&to_a);
 			k_timer_start(&to_m, K_MSEC(th.TO_M), K_NO_WAIT);
+			SM_EVENT("apogee timeout expired");
 			LOG_INF("-[TIMEOUT]-> ERROR");
 			sm_do_error_handling();
 		}
@@ -332,7 +351,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 		if (TIMER_EXPIRED(&to_m)) {
 			k_timer_stop(&to_m);
 			k_timer_start(&to_r, K_MSEC(th.TO_R), K_NO_WAIT);
-			current_state = SM_REDUNDAND;
+			SM_TRANSITION(SM_REDUNDAND);
 			LOG_INF("-> REDUNDAND");
 		}
 		break;
@@ -353,7 +372,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 			/* At this point, conditions are met. Is the timer done as well? */
 			if (TIMER_EXPIRED(&dt_l)) {
 				/* Congrats! LANDING detected! */
-				current_state = SM_LANDED;
+				SM_TRANSITION(SM_LANDED);
 				k_timer_stop(&dt_l);
 				running_timers[TIMER_DT_L] = 0;
 				LOG_INF("-> LANDED");
@@ -378,6 +397,7 @@ _check_timeout:
 			k_timer_stop(&dt_l);
 			running_timers[TIMER_DT_L] = 0;
 			k_timer_stop(&to_r);
+			SM_EVENT("redundant timeout expired");
 			LOG_INF("-[TIMEOUT]-> ERROR");
 			sm_do_error_handling();
 		}
@@ -437,4 +457,21 @@ void sm_update(const struct sm_inputs *inputs)
 enum sm_state sm_get_state(void)
 {
 	return current_state;
+}
+
+/* sm_state_str – see simple.h */
+const char *sm_state_str(enum sm_state state)
+{
+	switch (state) {
+	case SM_IDLE:		return "IDLE";
+	case SM_ARMED:		return "ARMED";
+	case SM_BOOST:		return "BOOST";
+	case SM_BURNOUT:	return "BURNOUT";
+	case SM_APOGEE:		return "APOGEE";
+	case SM_MAIN:		return "MAIN";
+	case SM_REDUNDAND:	return "REDUNDAND";
+	case SM_LANDED:		return "LANDED";
+	case SM_ERROR:		return "ERROR";
+	default:		return "UNKNOWN";
+	}
 }
