@@ -31,7 +31,7 @@ sys.path.insert(0, str(_ZEPHYR_BASE / "scripts" / "dts" / "python-devicetree" / 
 project = 'AURORA'
 copyright = '2025-2026, Auxspace e.V.'
 author = 'Auxspace e.V.'
-release = '1.2.0'
+release = '1.2.1'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -315,7 +315,7 @@ _zd.BINDING_TYPE_TO_DOCUTILS_NODE["pyro"] = _nodes.Text("Pyrotechnic Ignition")
 # Extend this dict when new boards are added or maintenance status changes.
 _AURORA_BOARD_STATUS = {
     "sensor_board_v2":      ("Auxspace Sensor Board V2", "Actively maintained"),
-    "esp32s3_micrometer":   ("ESP32-S3 Micrometer",      "Not actively maintained"),
+    "esp32s3_micrometer":   ("ESP32-S3 Micrometer",      "Actively maintained"),
 }
 
 # Patch ConvertBoardNode to ensure the Board Overview sidebar always has a
