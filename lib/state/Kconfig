@@ -43,6 +43,23 @@ config AURORA_STATE_MACHINE_AUDIT_LOG_SIZE
 	  Size of the ring buffer used for the audit log.  Oldest entries
 	  are silently overwritten when full.
 
+config AURORA_STATE_MACHINE_AUDIT_BASE_PATH
+	string "Output directory for state machine audit files"
+	default "/state"
+	depends on AURORA_STATE_MACHINE_AUDIT
+	help
+	  Directory where the state machine audit writes output files.
+	  The final path is <base_path>/audit.<index>.
+
+config AURORA_STATE_MACHINE_AUDIT_MAX_FILES
+	int "Maximum number of files in AURORA_STATE_MACHINE_AUDIT_BASE_PATH"
+	default 200
+	depends on AURORA_STATE_MACHINE_AUDIT
+	help
+	  Maximum number of files in the directory where the audit writes
+	  output files.
+	  If the maximum is reached, old files are overwritten.
+
 config AURORA_STATE_MACHINE_SHELL
 	bool "State machine shell commands"
 	depends on SHELL
