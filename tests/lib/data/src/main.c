@@ -627,7 +627,7 @@ ZTEST(data_logger_core, test_full_lifecycle)
 
 #if defined(CONFIG_DATA_LOGGER_CSV)
 
-#define CSV_FILE_PATH CONFIG_DATA_LOGGER_BASE_PATH "/test.csv"
+#define CSV_FILE_PATH CONFIG_DATA_LOGGER_BASE_PATH "/test_0.csv"
 #define CSV_BUF_SIZE 512
 
 static struct data_logger csv_logger;
@@ -804,7 +804,7 @@ ZTEST(data_logger_csv, test_csv_multiple_rows)
 
 #if defined(CONFIG_DATA_LOGGER_INFLUX)
 
-#define INFLUX_FILE_PATH CONFIG_DATA_LOGGER_BASE_PATH "/test.influx"
+#define INFLUX_FILE_PATH CONFIG_DATA_LOGGER_BASE_PATH "/test_0.influx"
 #define INFLUX_BUF_SIZE 512
 
 static struct data_logger influx_logger;
@@ -904,7 +904,7 @@ ZTEST(data_logger_influx, test_influx_imu_gyro_fields)
 
 	read_file(INFLUX_FILE_PATH, buf, sizeof(buf));
 
-	zassert_not_null(strstr(buf, "type=imu_gyro"), NULL);
+	zassert_not_null(strstr(buf, "type=gyro"), NULL);
 	zassert_not_null(strstr(buf, "x="), "IMU line must contain x field");
 	zassert_not_null(strstr(buf, "y="), "IMU line must contain y field");
 	zassert_not_null(strstr(buf, "z="), "IMU line must contain z field");

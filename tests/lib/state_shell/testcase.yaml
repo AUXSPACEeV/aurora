@@ -1,3 +1,6 @@
+common:
+  modules:
+    - fatfs
 tests:
   aurora.lib.state_shell:
     integration_platforms:
