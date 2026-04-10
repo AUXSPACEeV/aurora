@@ -307,6 +307,11 @@ void state_machine_task(void *, void *, void *)
 #if defined(CONFIG_PYRO)
 		if (state != pyro_state) {
 			switch (state) {
+			case SM_IDLE:
+				ret = pyro_disarm(pyro0, 0);
+				if (ret)
+					LOG_ERR("Failed to disarm pyro module.");
+				break;
 			case SM_ARMED:
 				ret = pyro_arm(pyro0, 0);
 				if (ret)
