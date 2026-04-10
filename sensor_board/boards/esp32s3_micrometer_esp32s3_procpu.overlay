@@ -60,7 +60,7 @@
 };
 
 &led0 {
-	status = "okay";
+	status = "disabled";
 };
 
 &pyro0 {
