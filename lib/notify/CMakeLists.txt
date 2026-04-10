@@ -9,3 +9,7 @@ zephyr_library_sources(notify.c)
 if(CONFIG_AURORA_NOTIFY_BUZZER)
   zephyr_library_sources(buzzer/buzzer.c)
 endif()
+
+if(CONFIG_AURORA_NOTIFY_LED)
+  zephyr_library_sources(led/led.c)
+endif()

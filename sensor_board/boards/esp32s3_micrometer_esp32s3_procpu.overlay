@@ -12,6 +12,7 @@
 		auxspace,pyro = &pyro0;
 		auxspace,ffs = &ffs0;
 		auxspace,buzzer = &buzzer0;
+		auxspace,led = &led0;
 	};
 
 	fstab {
@@ -51,6 +52,14 @@
 };
 
 &lsm6dso320 {
+	status = "okay";
+};
+
+&buzzer0 {
+	status = "okay";
+};
+
+&led0 {
 	status = "okay";
 };
 
