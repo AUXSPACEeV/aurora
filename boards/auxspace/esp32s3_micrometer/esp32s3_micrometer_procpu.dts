@@ -52,6 +52,13 @@
 	buzzer0: buzzer_0 {
 		compatible = "auxspaceev,pwm-buzzer";
 		pwms = <&ledc0 0 PWM_MSEC(200) PWM_POLARITY_NORMAL>;
+		status = "disabled";
+	};
+
+	led0: led_0 {
+		compatible = "auxspaceev,pwm-led";
+		pwms = <&ledc0 1 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
+		status = "disabled";
 	};
 
 	pyro0: pyro_0 {
@@ -61,6 +68,7 @@
 				<&gpio1 16 GPIO_ACTIVE_HIGH>;
 		arm-gpios = <&gpio0 21 GPIO_ACTIVE_HIGH>;
 		capv-adcs = <&adc1 3>;
+		status = "disabled";
 	};
 };
 
@@ -223,6 +231,11 @@
 
 	channel0@0 {
 		reg = <0x0>;
+		timer = <0>;
+	};
+
+	channel1@1 {
+		reg = <0x1>;
 		timer = <0>;
 	};
 };

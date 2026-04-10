@@ -22,4 +22,11 @@ config AURORA_NOTIFY_BUZZER
 	  Drive a passive buzzer via PWM to signal boot, state changes,
 	  and errors.
 
+config AURORA_NOTIFY_LED
+	bool "PWM LED notifications"
+	depends on PWM
+	depends on DT_HAS_AUXSPACEEV_PWM_LED_ENABLED
+	help
+	  Drive an LED via PWM to signal boot, state changes, and errors.
+
 endif # AURORA_NOTIFY

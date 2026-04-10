@@ -59,9 +59,9 @@ struct notify_backend {
  * @param _name  Unique C identifier for this backend.
  * @param _api   Pointer to a @ref notify_backend_api vtable.
  */
-#define NOTIFY_BACKEND_DEFINE(_name, _api)				\
-	static const STRUCT_SECTION_ITERABLE(notify_backend, _name) = {	\
-		.api = (_api),						\
+#define NOTIFY_BACKEND_DEFINE(_name, _api)			\
+	STRUCT_SECTION_ITERABLE(notify_backend, _name) = {	\
+		.api = (_api),					\
 	}
 
 /**

@@ -14,6 +14,10 @@ int notify_init(void)
 	int rc = 0;
 
 	STRUCT_SECTION_FOREACH(notify_backend, backend) {
+		if (!backend->api) {
+			LOG_ERR("Backend with NULL api pointer: %p", backend);
+			continue;
+		}
 		if (backend->api->init) {
 			int ret = backend->api->init();
 
@@ -33,6 +37,10 @@ int notify_boot(void)
 	int rc = 0;
 
 	STRUCT_SECTION_FOREACH(notify_backend, backend) {
+		if (!backend->api) {
+			LOG_ERR("Backend with NULL api pointer: %p", backend);
+			continue;
+		}
 		if (backend->api->on_boot) {
 			int ret = backend->api->on_boot();
 
@@ -52,6 +60,10 @@ int notify_state_change(enum sm_state prev, enum sm_state next)
 	int rc = 0;
 
 	STRUCT_SECTION_FOREACH(notify_backend, backend) {
+		if (!backend->api) {
+			LOG_ERR("Backend with NULL api pointer: %p", backend);
+			continue;
+		}
 		if (backend->api->on_state_change) {
 			int ret = backend->api->on_state_change(prev, next);
 
@@ -71,6 +83,10 @@ int notify_error(void)
 	int rc = 0;
 
 	STRUCT_SECTION_FOREACH(notify_backend, backend) {
+		if (!backend->api) {
+			LOG_ERR("Backend with NULL api pointer: %p", backend);
+			continue;
+		}
 		if (backend->api->on_error) {
 			int ret = backend->api->on_error();
 

@@ -105,6 +105,10 @@
 			pinmux = <LEDC_CH0_GPIO47>;
 			output-enable;
 		};
+		group2 {
+			pinmux = <LEDC_CH1_GPIO3>;
+			output-enable;
+		};
 	};
 
 	twai_default: twai_default {
