@@ -12,7 +12,7 @@
 		auxspace,pyro = &pyro0;
 		auxspace,ffs = &ffs0;
 		auxspace,buzzer = &buzzer0;
-		auxspace,led = &led0;
+		auxspace,led = &pwmleds;
 		auxspace,pfm = &button0;
 	};
 
@@ -57,11 +57,11 @@
 };
 
 &buzzer0 {
-	status = "okay";
+	status = "disabled";
 };
 
-&led0 {
-	status = "disabled";
+&pwmleds {
+	status = "okay";
 };
 
 &pyro0 {

@@ -55,10 +55,14 @@
 		status = "disabled";
 	};
 
-	led0: led_0 {
-		compatible = "auxspaceev,pwm-led";
-		pwms = <&ledc0 1 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
+	pwmleds: pwmleds {
+		compatible = "pwm-leds";
 		status = "disabled";
+
+		red_pwm_led: led_pwm_0 {
+			pwms = <&ledc0 1 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
+			label = "RED Notifier LED";
+		};
 	};
 
 	pyro0: pyro_0 {
@@ -199,15 +203,15 @@
 };
 
 &timer1 {
-	status = "disabled";
+	status = "okay";
 };
 
 &timer2 {
-	status = "disabled";
+	status = "okay";
 };
 
 &timer3 {
-	status = "disabled";
+	status = "okay";
 };
 
 &wdt0 {

@@ -4,40 +4,114 @@
  */
 
 #include <aurora/lib/notify.h>
-#include <zephyr/drivers/pwm.h>
+#include <zephyr/drivers/led.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(notify_led, CONFIG_AURORA_NOTIFY_LOG_LEVEL);
 
-static const struct pwm_dt_spec led =
-	PWM_DT_SPEC_GET(DT_CHOSEN(auxspace_led));
+#define MAX_BRIGHTNESS 100
 
-/** @brief Play a tone for @p duration_ms then silence. */
-static int blink(uint32_t period_ns, uint32_t duration_ms)
+#define LED_PWM_NODE_ID	 DT_CHOSEN(auxspace_led)
+
+static const struct device *pwm_leds = DEVICE_DT_GET(LED_PWM_NODE_ID);
+static const char *led_labels[] = {
+	DT_FOREACH_CHILD_SEP_VARGS(LED_PWM_NODE_ID, DT_PROP_OR, (,), label, NULL)
+};
+const int num_leds = ARRAY_SIZE(led_labels);
+
+/** @brief Blink with @p delay_on and @p delay_off in ms. */
+static int blink(uint32_t delay_on, uint32_t delay_off)
 {
-	int ret;
-
-	ret = pwm_set_dt(&led, period_ns, period_ns / 2);
-	if (ret) {
-		return ret;
+	int rc = 0;
+	for (int led = 0; led < num_leds; led++) {
+		int err = led_blink(pwm_leds, led, delay_on, delay_off);
+		if (err < 0) {
+			LOG_ERR("Could not blink %s (%d)", led_labels[led], err);
+			rc = err;
+		}
 	}
-	k_sleep(K_MSEC(duration_ms));
-	return pwm_set_dt(&led, period_ns, 0);
+	return rc;
 }
 
+/** @brief Turn on all LEDs with brightness @p level */
+static int all_leds_on(int level)
+{
+	int rc = 0;
+
+	if (level > MAX_BRIGHTNESS) {
+		LOG_ERR("Brightness level too high (%d > %d)",
+			level, MAX_BRIGHTNESS);
+		return -EINVAL;
+	}
+
+	for (int led = 0; led < num_leds; led++) {
+		int err = led_on(pwm_leds, led);
+		if (err < 0) {
+			LOG_ERR("Could not turn %s on (%d)", led_labels[led], err);
+			rc = err;
+		}
+		err = led_set_brightness(pwm_leds, led, level);
+		if (err < 0) {
+			LOG_ERR("Could not set LED %s brightness to %d (%d)",
+				led_labels[led], level, err);
+			rc = err;
+		}
+	}
+	return rc;
+}
+
+/** @brief Turn off all LEDs */
+static int all_leds_off(void)
+{
+	int rc = 0;
+	for (int led = 0; led < num_leds; led++) {
+		int err = led_off(pwm_leds, led);
+		if (err < 0) {
+			LOG_ERR("Could not turn %s off (%d)", led_labels[led], err);
+			rc = err;
+		}
+	}
+	return rc;
+}
+
+/** @brief Initialize all LEDs */
 static int led_init(void)
 {
-	if (!pwm_is_ready_dt(&led)) {
-		LOG_ERR("Buzzer PWM device not ready");
+	if (!device_is_ready(pwm_leds)) {
+		LOG_ERR("Device %s is not ready", pwm_leds->name);
 		return -ENODEV;
 	}
+
+	if (!num_leds) {
+		LOG_ERR("No LEDs found for %s", pwm_leds->name);
+		return 0;
+	}
+
 	return 0;
 }
 
 static int led_on_boot(void)
 {
-	return blink(PWM_HZ(4000), 500);
+	int rc = 0;
+	int err = 0;
+
+	err = all_leds_on(MAX_BRIGHTNESS);
+	if (err)
+		rc = err;
+
+	k_sleep(K_MSEC(200));
+
+	err = all_leds_off();
+	if (err)
+		rc = err;
+
+	return rc;
+}
+
+static int led_on_error(void)
+{
+	return all_leds_on(MAX_BRIGHTNESS);
 }
 
 static int led_on_state_change(enum sm_state prev, enum sm_state next)
@@ -46,30 +120,16 @@ static int led_on_state_change(enum sm_state prev, enum sm_state next)
 
 	switch (next) {
 	case SM_ARMED:
-		return blink(PWM_HZ(2000), 200);
+		return blink(200, 200);
 	case SM_IDLE:
-		return blink(PWM_HZ(1000), 100);
-	case SM_APOGEE:
-		return blink(PWM_HZ(3000), 300);
+		return blink(50, 450);
 	case SM_LANDED:
-		return blink(PWM_HZ(1000), 1000);
+		return blink(400, 100);
+	case SM_ERROR:
+		return led_on_error();
 	default:
-		return 0;
+		return all_leds_off();
 	}
-}
-
-static int led_on_error(void)
-{
-	/* Three short high-pitched beeps. */
-	for (int i = 0; i < 3; i++) {
-		int ret = blink(PWM_HZ(4000), 100);
-
-		if (ret) {
-			return ret;
-		}
-		k_sleep(K_MSEC(100));
-	}
-	return 0;
 }
 
 static const struct notify_backend_api led_api = {
