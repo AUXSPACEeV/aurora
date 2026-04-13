@@ -315,6 +315,7 @@ ZTEST(data_logger_core, test_log_after_close)
 ZTEST(data_logger_core, test_log_delegates_datapoint)
 {
 	data_logger_init(&logger, "test");
+	data_logger_start(&logger);
 
 	struct datapoint dp = {
 		.timestamp_ms  = 12345LL,
@@ -340,6 +341,7 @@ ZTEST(data_logger_core, test_log_delegates_datapoint)
 ZTEST(data_logger_core, test_log_error_propagated)
 {
 	data_logger_init(&logger, "test");
+	data_logger_start(&logger);
 	mock_state.fail_write_datapoint = 1;
 
 	struct datapoint dp = {.type = AURORA_DATA_BARO, .channel_count = 2};
@@ -589,6 +591,7 @@ ZTEST(data_logger_core, test_registry_full)
 ZTEST(data_logger_core, test_full_lifecycle)
 {
 	zassert_ok(data_logger_init(&logger, "test"), NULL);
+	zassert_ok(data_logger_start(&logger), NULL);
 
 	static const struct {
 		enum aurora_data type;
@@ -681,6 +684,7 @@ ZTEST(data_logger_csv, test_csv_baro_datapoint)
 	};
 
 	zassert_ok(data_logger_init(&csv_logger, "test"), NULL);
+	zassert_ok(data_logger_start(&csv_logger), NULL);
 	zassert_ok(data_logger_write(&csv_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&csv_logger), NULL);
 
@@ -716,6 +720,7 @@ ZTEST(data_logger_csv, test_csv_accel_datapoint)
 	};
 
 	zassert_ok(data_logger_init(&csv_logger, "test"), NULL);
+	zassert_ok(data_logger_start(&csv_logger), NULL);
 	zassert_ok(data_logger_write(&csv_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&csv_logger), NULL);
 
@@ -745,6 +750,7 @@ ZTEST(data_logger_csv, test_csv_negative_value)
 	};
 
 	zassert_ok(data_logger_init(&csv_logger, "test"), NULL);
+	zassert_ok(data_logger_start(&csv_logger), NULL);
 	zassert_ok(data_logger_write(&csv_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&csv_logger), NULL);
 
@@ -763,6 +769,7 @@ ZTEST(data_logger_csv, test_csv_multiple_rows)
 	char buf[CSV_BUF_SIZE];
 
 	zassert_ok(data_logger_init(&csv_logger, "test"), NULL);
+	zassert_ok(data_logger_start(&csv_logger), NULL);
 
 	for (int i = 0; i < 3; i++) {
 		struct datapoint dp = {
@@ -854,6 +861,7 @@ ZTEST(data_logger_influx, test_influx_baro_line)
 	};
 
 	zassert_ok(data_logger_init(&influx_logger, "test"), NULL);
+	zassert_ok(data_logger_start(&influx_logger), NULL);
 	zassert_ok(data_logger_write(&influx_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&influx_logger), NULL);
 
@@ -899,6 +907,7 @@ ZTEST(data_logger_influx, test_influx_imu_gyro_fields)
 	};
 
 	zassert_ok(data_logger_init(&influx_logger, "test"), NULL);
+	zassert_ok(data_logger_start(&influx_logger), NULL);
 	zassert_ok(data_logger_write(&influx_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&influx_logger), NULL);
 
@@ -930,6 +939,7 @@ ZTEST(data_logger_influx, test_influx_negative_value)
 	};
 
 	zassert_ok(data_logger_init(&influx_logger, "test"), NULL);
+	zassert_ok(data_logger_start(&influx_logger), NULL);
 	zassert_ok(data_logger_write(&influx_logger, &dp), NULL);
 	zassert_ok(data_logger_close(&influx_logger), NULL);
 
@@ -947,6 +957,7 @@ ZTEST(data_logger_influx, test_influx_multiple_lines)
 	char buf[INFLUX_BUF_SIZE];
 
 	zassert_ok(data_logger_init(&influx_logger, "test"), NULL);
+	zassert_ok(data_logger_start(&influx_logger), NULL);
 
 	static const enum aurora_data types[] = {
 		AURORA_DATA_BARO,

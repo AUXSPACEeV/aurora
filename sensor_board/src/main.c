@@ -38,8 +38,13 @@
 #include <aurora/lib/notify.h>
 #endif /* CONFIG_AURORA_NOTIFY */
 
+#if defined(CONFIG_AURORA_POWERFAIL)
+#include <aurora/lib/powerfail.h>
+#endif /* CONFIG_AURORA_POWERFAIL */
+
 #if defined(CONFIG_AURORA_STATE_MACHINE)
 #include <aurora/lib/state/state.h>
+static int armed = 0;
 
 /** @brief Flight state machine thresholds loaded from Kconfig. */
 static const struct sm_thresholds state_cfg = {
@@ -86,6 +91,22 @@ static void flush_timer_handler(struct k_timer *timer)
 
 K_TIMER_DEFINE(data_logger_flush_timer, flush_timer_handler, NULL);
 #endif /* CONFIG_DATA_LOGGER */
+
+#if defined(CONFIG_AURORA_POWERFAIL)
+static void powerfail_assert()
+{
+#if defined(CONFIG_AURORA_STATE_MACHINE)
+	armed = 0;
+#endif /* CONFIG_AURORA_STATE_MACHINE */
+}
+
+static void powerfail_deassert()
+{
+#if defined(CONFIG_AURORA_STATE_MACHINE)
+	armed = 1;
+#endif /* CONFIG_AURORA_STATE_MACHINE */
+}
+#endif /* CONFIG_AURORA_POWERFAIL */
 
 static bool baro_active = false; /**< True once the barometer thread has initialized. */
 static bool imu_active = false;  /**< True once the IMU thread has initialized. */
@@ -204,7 +225,7 @@ void state_machine_task(void *, void *, void *)
 #endif /* CONFIG_PYRO */
 
 	struct sm_inputs inputs = (struct sm_inputs){
-		.armed = 1,
+		.armed = armed,
 		.orientation = roll,
 		.acceleration = acceleration,
 	};
@@ -283,7 +304,7 @@ void state_machine_task(void *, void *, void *)
 		}
 
 		inputs = (struct sm_inputs){
-			.armed = 1,
+			.armed = armed,
 			.orientation = roll,
 			.acceleration = acceleration,
 			.altitude = altitude,
@@ -356,15 +377,19 @@ int main(void)
 {
 	LOG_INF("Auxspace AURORA %s", APP_VERSION_STRING);
 
-#if defined(CONFIG_DATA_LOGGER) && defined(CONFIG_IMU) && defined(CONFIG_BARO)
+#if defined(CONFIG_DATA_LOGGER)
 	k_work_init(&flush_work, flush_work_handler);
 	if (data_logger_init(&sm_logger, "flight") != 0) {
 		LOG_ERR("data_logger_init failed");
 	} else {
 		data_logger_set_default(&sm_logger);
-		k_timer_start(&data_logger_flush_timer, K_MSEC(1000), K_MSEC(1000));
+		k_timer_start(&data_logger_flush_timer, K_SECONDS(1), K_SECONDS(1));
 	}
 #endif /* CONFIG_DATA_LOGGER */
+
+#if defined(CONFIG_AURORA_POWERFAIL)
+	powerfail_setup(&powerfail_assert, &powerfail_deassert);
+#endif /* CONFIG_AURORA_POWERFAIL */
 
 #if defined(CONFIG_AURORA_NOTIFY)
 	notify_init();

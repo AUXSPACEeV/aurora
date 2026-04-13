@@ -13,6 +13,7 @@
 		auxspace,ffs = &ffs0;
 		auxspace,buzzer = &buzzer0;
 		auxspace,led = &led0;
+		auxspace,pfm = &button0;
 	};
 
 	fstab {

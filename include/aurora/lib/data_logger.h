@@ -107,11 +107,11 @@ struct data_logger_formatter {
  * @brief Formatter state.
  */
 struct data_logger_state {
-	/** Mutex for thread safety in concurrent access */
+	/** Mutex for thread safety around I/O operations */
 	struct k_mutex mutex;
 
-	/** Data logger is running and logging */
-	int running;
+	/** Data logger is running and logging (atomic for ISR access) */
+	atomic_t running;
 };
 
 /** Maximum length of a data logger name (including NUL). */
