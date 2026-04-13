@@ -101,7 +101,7 @@ int data_logger_init(struct data_logger *logger, const char *filename)
 	char dir[64];
 	char *sep;
 	int rc;
-	struct data_logger_state *state = k_malloc(sizeof(*state));
+	struct data_logger_state *state = k_calloc(1, sizeof(*state));
 
 	if (state == NULL) {
 		LOG_ERR("failed to allocate logger state");
@@ -200,12 +200,6 @@ int data_logger_init(struct data_logger *logger, const char *filename)
 		return rc;
 	}
 
-	rc = data_logger_start(logger);
-	if (rc) {
-		LOG_ERR("logger starting failed (%d)", rc);
-		goto out_err_close;
-	}
-
 	return 0;
 
 out_err_close:
@@ -242,12 +236,14 @@ int data_logger_write(struct data_logger *logger, const struct datapoint *dp)
 		logger->state == NULL)
 		return -EINVAL;
 
-	rc = k_mutex_lock(&logger->state->mutex, K_MSEC(100));
-	if (rc != 0) {
-		return rc;
-	}
+	if (atomic_get(&logger->state->running) == 0)
+		return 0;
 
-	if (logger->state->running == 0) {
+	rc = k_mutex_lock(&logger->state->mutex, K_MSEC(100));
+	if (rc != 0)
+		return rc;
+
+	if (atomic_get(&logger->state->running) == 0) {
 		k_mutex_unlock(&logger->state->mutex);
 		return 0;
 	}
@@ -266,9 +262,8 @@ int data_logger_flush(struct data_logger *logger)
 		return -EINVAL;
 
 	rc = k_mutex_lock(&logger->state->mutex, K_MSEC(500));
-	if (rc != 0) {
+	if (rc != 0)
 		return rc;
-	}
 
 	rc = logger->fmt->flush(logger);
 	k_mutex_unlock(&logger->state->mutex);
@@ -278,7 +273,7 @@ int data_logger_flush(struct data_logger *logger)
 /* data_logger_close – see data_logger.h */
 int data_logger_close(struct data_logger *logger)
 {
-	int rc_lock, rc_close;
+	int rc_close;
 	struct data_logger_state *state;
 
 	if (logger == NULL || logger->fmt == NULL || logger->state == NULL)
@@ -286,15 +281,15 @@ int data_logger_close(struct data_logger *logger)
 
 	state = logger->state;
 
-	rc_lock = k_mutex_lock(&state->mutex, K_MSEC(500));
-	if (rc_lock != 0) {
+	rc_close = k_mutex_lock(&state->mutex, K_MSEC(500));
+	if (rc_close != 0) {
 		LOG_ERR("formatter close could not lock state mutex (%d)",
-			rc_lock);
-		return rc_lock;
+			rc_close);
+		return rc_close;
 	}
 
 	registry_remove(logger);
-	state->running = 0;
+	atomic_set(&state->running, 0);
 
 	rc_close = logger->fmt->close(logger);
 	if (rc_close)
@@ -318,6 +313,8 @@ int data_logger_stop(struct data_logger *logger)
 	if (logger == NULL || logger->fmt == NULL || logger->state == NULL)
 		return -EINVAL;
 
+	atomic_set(&logger->state->running, 0);
+
 	rc = k_mutex_lock(&logger->state->mutex, K_MSEC(100));
 	if (rc != 0) {
 		LOG_ERR("formatter stop could not lock state mutex (%d)", rc);
@@ -333,7 +330,6 @@ int data_logger_stop(struct data_logger *logger)
 		}
 	}
 
-	logger->state->running = 0;
 	rc = logger->fmt->flush(logger);
 	k_mutex_unlock(&logger->state->mutex);
 	return rc;
@@ -362,7 +358,7 @@ int data_logger_start(struct data_logger *logger)
 		}
 	}
 
-	logger->state->running = 1;
+	atomic_set(&logger->state->running, 1);
 	k_mutex_unlock(&logger->state->mutex);
 	return 0;
 }

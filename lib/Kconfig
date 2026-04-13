@@ -15,12 +15,16 @@ menu "Data Storing"
 rsource "data/Kconfig"
 endmenu
 
-menu "State Machine"
-rsource "state/Kconfig"
-endmenu
-
 menu "Notifications"
 rsource "notify/Kconfig"
+endmenu
+
+menu "Powerfail"
+rsource "powerfail/Kconfig"
+endmenu
+
+menu "State Machine"
+rsource "state/Kconfig"
 endmenu
 
 endmenu

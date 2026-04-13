@@ -23,6 +23,7 @@ Example Usage
    static struct data_logger logger;
 
    data_logger_init(&logger, "flight");
+   data_logger_start(&logger);
 
    struct datapoint dp = {
        .timestamp_ms = k_uptime_get(),

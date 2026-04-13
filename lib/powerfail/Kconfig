@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+config AURORA_POWERFAIL
+	bool "Powerfail mitigation subsystem"
+	help
+	  Enable the powerfail mitigation subsystem.
+	  When enabled, aurora will stop file i/o to protect memory cards and
+	  perform configured powerfail actions (e.g. shutdown).
+	  The GPIO trigger is configured in the auxspace,pfm dt chosen node.
+
+if AURORA_POWERFAIL
+
+module = AURORA_POWERFAIL
+module-str = AURORA_POWERFAIL
+source "subsys/logging/Kconfig.template.log_config"
+
+config AURORA_POWERFAIL_SHUTDOWN
+	bool "Shut down on powerfail"
+	depends on AURORA_POWERFAIL
+	select POWEROFF
+
+endif # AURORA_POWERFAIL
