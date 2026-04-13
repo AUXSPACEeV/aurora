@@ -240,7 +240,7 @@
 
 	channel1@1 {
 		reg = <0x1>;
-		timer = <0>;
+		timer = <1>;
 	};
 };
 
