@@ -4,6 +4,7 @@
  */
 
 #include <aurora/lib/notify.h>
+#include <aurora/lib/pwm_melody.h>
 #include <zephyr/drivers/pwm.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -12,6 +13,8 @@ LOG_MODULE_REGISTER(notify_buzzer, CONFIG_AURORA_NOTIFY_LOG_LEVEL);
 
 static const struct pwm_dt_spec buzzer =
 	PWM_DT_SPEC_GET(DT_CHOSEN(auxspace_buzzer));
+
+PWM_MELODY_CTX_DEFINE(melody_ctx, &buzzer, astronomia, 1024);
 
 /** @brief Play a tone for @p duration_ms then silence. */
 static int buzz(uint32_t period_ns, uint32_t duration_ms)
@@ -44,15 +47,17 @@ static int buzzer_on_state_change(enum sm_state prev, enum sm_state next)
 {
 	ARG_UNUSED(prev);
 
+	pwm_melody_stop(&melody_ctx);
+
 	switch (next) {
 	case SM_ARMED:
 		return buzz(PWM_HZ(2000), 200);
 	case SM_IDLE:
-		return buzz(PWM_HZ(1000), 100);
+		return buzz(PWM_HZ(500), 50);
 	case SM_APOGEE:
 		return buzz(PWM_HZ(3000), 300);
 	case SM_LANDED:
-		return buzz(PWM_HZ(1000), 1000);
+		return pwm_melody_start(&melody_ctx);
 	default:
 		return 0;
 	}

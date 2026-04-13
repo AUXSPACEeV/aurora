@@ -18,9 +18,10 @@ config AURORA_NOTIFY_BUZZER
 	bool "PWM buzzer notifications"
 	depends on PWM
 	depends on DT_HAS_AUXSPACEEV_PWM_BUZZER_ENABLED
+	select AURORA_PWM_MELODY
 	help
 	  Drive a passive buzzer via PWM to signal boot, state changes,
-	  and errors.
+	  and errors. Plays a melody when landed.
 
 config AURORA_NOTIFY_LED
 	bool "PWM LED notifications"

@@ -1,0 +1,15 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+config AURORA_PWM_MELODY
+	bool "API for playing music with PWM devices"
+	help
+	  Enable the pwm melody api.
+
+if AURORA_PWM_MELODY
+
+module = AURORA_PWM_MELODY
+module-str = AURORA_PWM_MELODY
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # AURORA_NOTIFY

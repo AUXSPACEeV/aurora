@@ -16,5 +16,8 @@ add_subdirectory_ifdef(CONFIG_AURORA_NOTIFY notify)
 # powerfail lib
 add_subdirectory_ifdef(CONFIG_AURORA_POWERFAIL powerfail)
 
+# pwm melodies
+add_subdirectory_ifdef(CONFIG_AURORA_PWM_MELODY pwm_melody)
+
 # state machine lib
 add_subdirectory_ifdef(CONFIG_AURORA_STATE_MACHINE state)
