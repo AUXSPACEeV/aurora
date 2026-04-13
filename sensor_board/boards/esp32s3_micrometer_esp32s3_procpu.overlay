@@ -57,7 +57,7 @@
 };
 
 &buzzer0 {
-	status = "disabled";
+	status = "okay";
 };
 
 &pwmleds {
