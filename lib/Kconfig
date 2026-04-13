@@ -23,6 +23,10 @@ menu "Powerfail"
 rsource "powerfail/Kconfig"
 endmenu
 
+menu "PWM Melody"
+rsource "pwm_melody/Kconfig"
+endmenu
+
 menu "State Machine"
 rsource "state/Kconfig"
 endmenu
