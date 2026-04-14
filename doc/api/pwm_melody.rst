@@ -39,5 +39,8 @@ Instead, use the PWM Melody API to play music of your liking:
       pwm_melody_stop(&melody_ctx);
    }
 
+API Reference
+-------------
+
 .. doxygengroup:: lib_pwm_melody
    :content-only:

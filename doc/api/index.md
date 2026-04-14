@@ -11,6 +11,7 @@ drivers
 filter
 notify
 powerfail
+pwm_melody
 sensors
 state
 ```
