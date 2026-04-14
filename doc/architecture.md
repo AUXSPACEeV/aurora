@@ -14,6 +14,12 @@ sensor, flight state machine, and pyrotechnic ignition.
 | `baro_task` | `CONFIG_BARO` | Measures pressure/temperature, computes altitude. |
 | `state_machine_task` | `CONFIG_AURORA_STATE_MACHINE` | Runs at 10 Hz. Feeds sensor data into the state machine and fires pyro channels on state transitions. |
 
+### Viewing Threads
+
+To see all currently running threads, run this command on the Zephyr shell:
+
+    kernel thread list
+
 ## Sensor Data Path
 
 It's a tricky situation trying to fetch data from all sensors at the exact same
