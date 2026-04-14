@@ -2337,7 +2337,7 @@ PREDEFINED             = __syscall= \
                          CONFIG_BARO \
                          CONFIG_PYRO \
                          CONFIG_AURORA_STATE_MACHINE \
-                         CONFIG_APOGEE_DETECTION
+                         CONFIG_FILTER
 
 # If the MACRO_EXPANSION and EXPAND_ONLY_PREDEF tags are set to YES then this
 # tag can be used to specify a list of macro names that should be expanded. The

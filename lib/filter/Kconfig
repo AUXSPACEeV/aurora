@@ -1,25 +1,19 @@
 # Copyright (c) 2026 Auxspace e.V.
 # SPDX-License-Identifier: Apache-2.0
 
-module = AURORA_APOGEE_DETECTION
-module-str = AURORA_APOGEE_DETECTION
-source "subsys/logging/Kconfig.template.log_config"
-
-menu "Apogee Detection"
-
-config APOGEE_DETECTION
-	bool "Support for apogee detection"
+config FILTER
+	bool "Support for input filtering"
 	help
-		This option enables apogee detection algorithms.
+		This option enables filter algorithms for input values.
 
-if APOGEE_DETECTION
+if FILTER
 
-module = APOGEE_DETECTION
-module-str = APOGEE_DETECTION
+module = AURORA_FILTER
+module-str = AURORA_FILTER
 source "subsys/logging/Kconfig.template.log_config"
 
-choice APOGEE_FILTER
-	bool "Apogee filter technique"
+choice FILTER_TYPE
+	bool "State machine filter technique"
 	default FILTER_KALMAN
 
 config FILTER_KALMAN
@@ -55,5 +49,3 @@ config FILTER_R_MILLISCALE
       Measurement noise variance scaled by 1000.
       Real value = FILTER_R_MILLISCALE / 1000.0
 endif
-
-endmenu

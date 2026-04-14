@@ -6,19 +6,21 @@
 #ifndef APP_LIB_FILTER_H_
 #define APP_LIB_FILTER_H_
 
+#include <inttypes.h>
+
 /**
- * @defgroup lib_filter Apogee detection filter
+ * @defgroup lib_filter Input filter
  * @ingroup lib
  * @{
  *
- * @brief Kalman filter library for rocket apogee detection.
+ * @brief Kalman filter library for state machine.
  */
 
 /** @brief Divisor applied to Kconfig milliscale noise parameters. */
 #define FILTER_SCALE_DIVISOR 1000.0
 
 /**
- * @brief 2-state Kalman filter structure for rocket apogee detection.
+ * @brief 2-state Kalman filter structure for rocket state machine.
  *
  * State vector:
  *      x[0] = altitude (m)

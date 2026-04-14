@@ -18,7 +18,7 @@
 
 #include <aurora/lib/filter.h>
 
-LOG_MODULE_REGISTER(kalman, CONFIG_AURORA_APOGEE_DETECTION_LOG_LEVEL);
+LOG_MODULE_REGISTER(kalman, CONFIG_AURORA_FILTER_LOG_LEVEL);
 
 /* filter_init – see filter.h */
 int filter_init(struct filter *filter)
