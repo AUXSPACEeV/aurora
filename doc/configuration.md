@@ -23,7 +23,7 @@ expecting)
 | `CONFIG_BARO` | `n` | Enable the barometric pressure sensor (requires `AURORA_SENSORS`). |
 | `CONFIG_AURORA_STATE_MACHINE` | `n` | Enable the flight state machine library. |
 | `CONFIG_SIMPLE_STATE` | `y` | Select the simple 9-state flight state machine (default when state machine is enabled). |
-| `CONFIG_APOGEE_DETECTION` | `n` | Enable Kalman-filter-based apogee detection. |
+| `CONFIG_FILTER` | `n` | Enable state machine filtering for sensor input values. |
 | `CONFIG_PYRO` | `n` | Enable pyrotechnic ignition drivers. |
 | `CONFIG_SERVO` | `n` | Enable servo control. |
 
@@ -67,7 +67,7 @@ These options are defined in `sensor_board/Kconfig` under the
 | `CONFIG_MAIN_TIMEOUT_MS` | ms | 2000 | Delay between MAIN and REDUNDAND pyro events. |
 | `CONFIG_REDUNDAND_TIMEOUT_MS` | ms | 900000 | Max time in REDUNDAND state before aborting. |
 
-## Apogee Detection (Kalman Filter)
+## Input Filtering
 
 Noise parameters are integer-scaled by 1000 in Kconfig.
 The actual float value is `CONFIG_FILTER_*_MILLISCALE / 1000.0`.

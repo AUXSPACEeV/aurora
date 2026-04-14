@@ -6,7 +6,7 @@
  * IDLE -> ARMED -> BOOST -> BURNOUT -> APOGEE -> MAIN -> REDUNDAND -> LANDED / ERROR
  *
  * State transitions are driven by sensor thresholds and timers.
- * Optionally integrates with the Kalman filter for apogee detection.
+ * Optionally integrates with the Kalman filter input filtering.
  *
  * Copyright (c) 2025-2026, Auxspace e.V.
  *
@@ -25,10 +25,10 @@
 #include <aurora/lib/state/audit.h>
 #endif /* CONFIG_AURORA_STATE_MACHINE_AUDIT */
 
-#if defined(CONFIG_APOGEE_DETECTION)
+#if defined(CONFIG_FILTER)
 #include <aurora/lib/filter.h>
 static struct filter filter;
-#endif /* CONFIG_APOGEE_DETECTION */
+#endif /* CONFIG_FILTER */
 
 LOG_MODULE_REGISTER(simple_state, CONFIG_STATE_MACHINE_LOG_LEVEL);
 
@@ -76,7 +76,8 @@ static inline bool arm_to_boost_conditions_met(const struct sm_inputs *in);
  * @param in                Pointer to the current sensor input values.
  * @param previous_altitude Altitude from the previous update cycle (m).
  */
-static inline void _sm_update(const struct sm_inputs *in, double previous_altitude);
+static inline void _sm_update(const struct sm_inputs *in,
+			      double previous_altitude);
 
 /*-----------------------------------------------------------
  * Internal State
@@ -185,13 +186,13 @@ static void sm_do_error_handling(void)
 void sm_init(const struct sm_thresholds *cfg,
 			 struct sm_error_handling_args *sm_err_hdl)
 {
-#if defined(CONFIG_APOGEE_DETECTION)
+#if defined(CONFIG_FILTER)
 	int ret = filter_init(&filter);
 	if (ret) {
 		LOG_ERR("Could not initialize filter (%d).\n", ret);
 		return;
 	}
-#endif /* CONFIG_APOGEE_DETECTION */
+#endif /* CONFIG_FILTER */
 
 	th = *(struct sm_thresholds *)cfg;
 	init_timers();
@@ -311,7 +312,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 	* APOGEE detection - BURNOUT -> APOGEE
 	*----------------------------------------------------------*/
 	case SM_BURNOUT:
-#if defined(CONFIG_APOGEE_DETECTION)
+#if defined(CONFIG_FILTER)
 		if (filter_detect_apogee(&filter) == 1) {
 			k_timer_start(&to_a, K_MSEC(th.TO_A), K_NO_WAIT);
 			SM_TRANSITION(SM_APOGEE);
@@ -323,7 +324,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 			SM_TRANSITION(SM_APOGEE);
 			LOG_INF("-> APOGEE");
 		}
-#endif /* CONFIG_APOGEE_DETECTION */
+#endif /* CONFIG_FILTER */
 		break;
 
 	/*-----------------------------------------------------------
@@ -424,7 +425,7 @@ void sm_update(const struct sm_inputs *inputs)
 {
 	static double previous_altitude = 0.0;
 
-#if defined(CONFIG_APOGEE_DETECTION)
+#if defined(CONFIG_FILTER)
 	static int64_t last_time_ns = 0;
 	struct sm_inputs filtered_inputs;
 
@@ -446,7 +447,7 @@ void sm_update(const struct sm_inputs *inputs)
 #else
 	_sm_update(inputs, previous_altitude);
 	previous_altitude = inputs->altitude;
-#endif /* CONFIG_APOGEE_DETECTION */
+#endif /* CONFIG_FILTER */
 }
 
 /*-----------------------------------------------------------

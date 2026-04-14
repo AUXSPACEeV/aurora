@@ -7,8 +7,8 @@ menu "Aurora Sensors"
 rsource "sensor/Kconfig"
 endmenu
 
-menu "Apogee Detection"
-rsource "apogee/Kconfig"
+menu "Input Filtering"
+rsource "filter/Kconfig"
 endmenu
 
 menu "Data Storing"

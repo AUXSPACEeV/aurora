@@ -1,8 +1,8 @@
 # Copyright (c) 2025-2026 Auxspace e.V.
 # SPDX-License-Identifier: Apache-2.0
 
-# apogee detection lib
-add_subdirectory_ifdef(CONFIG_APOGEE_DETECTION apogee)
+# filter lib
+add_subdirectory_ifdef(CONFIG_FILTER filter)
 
 # sensor lib
 add_subdirectory_ifdef(CONFIG_AURORA_SENSORS sensor)

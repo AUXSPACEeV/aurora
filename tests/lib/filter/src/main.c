@@ -1,7 +1,6 @@
 /**
  * @file main.c
- * @brief Unit tests for the Kalman filter apogee detection with
- *        hypsometric altitude conversion.
+ * @brief Unit tests for the Kalman filter hypsometric altitude conversion.
  *
  * Copyright (c) 2026 Auxspace e.V.
  *

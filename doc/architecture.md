@@ -17,8 +17,8 @@ sensor, flight state machine, and pyrotechnic ignition.
 ## Sensor Data Path
 
 It's a tricky situation trying to fetch data from all sensors at the exact same
-time and passing them on to the state machine, the apogee filer and the data
-logger.
+time and passing them on to the state machine, the state machine filer and the
+data logger.
 Here is a rough overview of how AURORA's data is passed between threads to the
 state machine and the data logger:
 
@@ -63,8 +63,11 @@ Other state machines may come soon, e.g. multi-stage with two boosting phases.
 
 ## Apogee detection
 
-AURORA detects apogee using a scalar constant-velocity Kalman filter
-(guarded by `CONFIG_APOGEE_DETECTION` and `CONFIG_FILTER_KALMAN`).
+AURORA is built to use different filter techniques for apogee detection,
+controlled by `CONFIG_FILTER_TYPE`.
+
+One implementation uses a scalar constant-velocity Kalman filter
+(guarded by `CONFIG_FILTER` and `CONFIG_FILTER_KALMAN`).
 The filter tracks a two-element state vector — altitude and vertical
 velocity — and is fed barometric altitude measurements that the baro
 library converts from pressure via the ISA hypsometric formula.
@@ -109,4 +112,4 @@ Filter apogee:       496.4 m (t = 12.56 s)
 ```
 
 The filter and its hypsometric pipeline are covered by a ztest suite under
-([`aurora/tests/lib/apogee/`](https://github.com/AUXSPACEeV/aurora/tree/main/tests/lib/apogee)).
+([`aurora/tests/lib/filter/`](https://github.com/AUXSPACEeV/aurora/tree/main/tests/lib/filter)).

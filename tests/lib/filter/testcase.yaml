@@ -1,9 +1,9 @@
 tests:
-  aurora.lib.apogee.kalman:
+  aurora.lib.filter.kalman:
     integration_platforms:
       - qemu_x86
     platform_allow:
       - qemu_x86
-    tags: test_apogee_detection
+    tags: test_kalman_filter
     extra_configs:
       - CONFIG_FILTER_KALMAN=y
