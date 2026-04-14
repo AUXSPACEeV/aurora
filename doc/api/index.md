@@ -10,6 +10,7 @@ data
 drivers
 filter
 notify
+powerfail
 sensors
 state
 ```
