@@ -64,14 +64,17 @@ jobs:
           mkdir -p dist/${{ matrix.artifact }}
           if [ -d "build/mcuboot" ]; then
             # sysbuild: collect mcuboot and signed app binaries
-            for f in build/mcuboot/zephyr/zephyr.{elf,bin}; do
+            for f in build/mcuboot/zephyr/zephyr.{elf,bin,hex}; do
               [ -f "${f}" ] && cp "${f}" "dist/${{ matrix.artifact }}/mcuboot.${f##*.}"
             done
             for f in build/sensor_board/zephyr/zephyr.signed.{elf,bin}; do
+              [ -f "${f}" ] && cp "${f}" "dist/${{ matrix.artifact }}/${{ matrix.artifact }}.signed.${f##*.}"
+            done
+            for f in build/sensor_board/zephyr/zephyr.{elf,bin,hex}; do
               [ -f "${f}" ] && cp "${f}" "dist/${{ matrix.artifact }}/${{ matrix.artifact }}.${f##*.}"
             done
           else
-            for ext in elf uf2 bin; do
+            for ext in elf uf2 bin hex; do
               src="build/zephyr/zephyr.${ext}"
               [ -f "${src}" ] && cp "${src}" "dist/${{ matrix.artifact }}/${{ matrix.artifact }}.${ext}"
             done
