@@ -38,6 +38,9 @@ struct notify_backend_api {
 
 	/** @brief Signal an error condition. */
 	int (*on_error)(void);
+
+	/** @brief Signal a power failure (or @p recover from a powerfail) */
+	void (*on_powerfail)(int recover);
 };
 
 /**
@@ -87,6 +90,13 @@ int notify_boot(void);
  * @retval 0 on success, or first non-zero return from a backend.
  */
 int notify_state_change(enum sm_state prev, enum sm_state next);
+
+/**
+ * @brief Notify all backends about a powerfail
+ *
+ * @param recover 1 if Power failure is being recovered.
+ */
+void notify_powerfail(int recover);
 
 /**
  * @brief Notify all backends of an error condition.

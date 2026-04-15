@@ -18,6 +18,10 @@
 #include <aurora/lib/data_logger.h>
 #endif /* CONFIG_DATA_LOGGER */
 
+#if defined(CONFIG_AURORA_NOTIFY)
+#include <aurora/lib/notify.h>
+#endif /* CONFIG_AURORA_NOTIFY */
+
 LOG_MODULE_REGISTER(powerfail, CONFIG_AURORA_POWERFAIL_LOG_LEVEL);
 
 #if defined(CONFIG_DATA_LOGGER)
@@ -48,6 +52,10 @@ static inline void emergency_state_save(void)
 #if defined(CONFIG_DATA_LOGGER)
 	data_logger_foreach(emergency_stop_data_logger, NULL);
 #endif /* CONFIG_DATA_LOGGER */
+
+#if defined(CONFIG_AURORA_NOTIFY)
+	notify_powerfail(0);
+#endif /* CONFIG_AURORA_NOTIFY */
 }
 
 static inline void emergency_state_recover(void)
@@ -55,6 +63,10 @@ static inline void emergency_state_recover(void)
 #if defined(CONFIG_DATA_LOGGER)
 	data_logger_foreach(emergency_recover_data_logger, NULL);
 #endif /* CONFIG_DATA_LOGGER */
+
+#if defined(CONFIG_AURORA_NOTIFY)
+	notify_powerfail(1);
+#endif /* CONFIG_AURORA_NOTIFY */
 }
 
 static void powerfail_isr(const struct device *dev, struct gpio_callback *cb,

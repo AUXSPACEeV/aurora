@@ -18,7 +18,8 @@ static const struct device *pwm_leds = DEVICE_DT_GET(LED_PWM_NODE_ID);
 static const char *led_labels[] = {
 	DT_FOREACH_CHILD_SEP_VARGS(LED_PWM_NODE_ID, DT_PROP_OR, (,), label, NULL)
 };
-const int num_leds = ARRAY_SIZE(led_labels);
+static const int num_leds = ARRAY_SIZE(led_labels);
+static int recovered = 0;
 
 /** @brief Blink with @p delay_on and @p delay_off in ms. */
 static int blink(uint32_t delay_on, uint32_t delay_off)
@@ -96,11 +97,13 @@ static int led_on_boot(void)
 	int rc = 0;
 	int err = 0;
 
+	recovered = 1;
+
 	err = all_leds_on(MAX_BRIGHTNESS);
 	if (err)
 		rc = err;
 
-	k_sleep(K_MSEC(200));
+	k_sleep(K_MSEC(500));
 
 	err = all_leds_off();
 	if (err)
@@ -111,12 +114,24 @@ static int led_on_boot(void)
 
 static int led_on_error(void)
 {
-	return all_leds_on(MAX_BRIGHTNESS);
+	return recovered == 1 ? all_leds_on(MAX_BRIGHTNESS) : 0;
+}
+
+static void led_on_powerfail(int recover)
+{
+	recovered = recover;
+
+	if(recover == 0)
+		all_leds_off();
 }
 
 static int led_on_state_change(enum sm_state prev, enum sm_state next)
 {
 	ARG_UNUSED(prev);
+
+	// in powerfail mode
+	if (recovered == 0)
+		return 0;
 
 	switch (next) {
 	case SM_ARMED:
@@ -137,6 +152,7 @@ static const struct notify_backend_api led_api = {
 	.on_boot = led_on_boot,
 	.on_state_change = led_on_state_change,
 	.on_error = led_on_error,
+	.on_powerfail = led_on_powerfail,
 };
 
 NOTIFY_BACKEND_DEFINE(notify_led, &led_api);

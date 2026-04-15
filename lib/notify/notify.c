@@ -100,3 +100,14 @@ int notify_error(void)
 	}
 	return rc;
 }
+
+void notify_powerfail(int recover) {
+	STRUCT_SECTION_FOREACH(notify_backend, backend) {
+		if (!backend->api) {
+			LOG_ERR("Backend with NULL api pointer: %p", backend);
+			continue;
+		}
+		if (backend->api->on_powerfail)
+			backend->api->on_powerfail(recover);
+	}
+}
