@@ -63,7 +63,7 @@ static const struct sm_thresholds state_cfg = {
 	/* Timeouts */
 	.TO_A = CONFIG_APOGEE_TIMEOUT_MS,
 	.TO_M = CONFIG_MAIN_TIMEOUT_MS,
-	.TO_R = CONFIG_REDUNDAND_TIMEOUT_MS,
+	.TO_R = CONFIG_REDUNDANT_TIMEOUT_MS,
 };
 #endif /* CONFIG_AURORA_STATE_MACHINE */
 
@@ -343,7 +343,7 @@ void state_machine_task(void *, void *, void *)
 				if (ret)
 					LOG_ERR("Failed to trigger pyro channel 0.");
 				break;
-			case SM_REDUNDAND:
+			case SM_REDUNDANT:
 				ret = pyro_trigger_channel(pyro0, 1);
 				if (ret)
 					LOG_ERR("Failed to trigger pyro channel 1.");

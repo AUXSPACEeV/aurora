@@ -3,7 +3,7 @@
  * @brief Simple 9-state flight state machine implementation.
  *
  * Implements the flight state sequence:
- * IDLE -> ARMED -> BOOST -> BURNOUT -> APOGEE -> MAIN -> REDUNDAND -> LANDED / ERROR
+ * IDLE -> ARMED -> BOOST -> BURNOUT -> APOGEE -> MAIN -> REDUNDANT -> LANDED / ERROR
  *
  * State transitions are driven by sensor thresholds and timers.
  * Optionally integrates with the Kalman filter input filtering.
@@ -96,7 +96,7 @@ static struct k_timer dt_l;  /**< Duration timer for landing velocity assertion.
 
 static struct k_timer to_a; /**< Timeout timer for APOGEE state. */
 static struct k_timer to_m; /**< Timeout timer for MAIN state. */
-static struct k_timer to_r; /**< Timeout timer for REDUNDAND state. */
+static struct k_timer to_r; /**< Timeout timer for REDUNDANT state. */
 
 /** @brief Indices into the @ref running_timers array. */
 enum timers {
@@ -346,21 +346,21 @@ static inline void _sm_update(const struct sm_inputs *in,
 		break;
 
 	/*-----------------------------------------------------------
-	* MAIN -> REDUNDAND
+	* MAIN -> REDUNDANT
 	*----------------------------------------------------------*/
 	case SM_MAIN:
 		if (TIMER_EXPIRED(&to_m)) {
 			k_timer_stop(&to_m);
 			k_timer_start(&to_r, K_MSEC(th.TO_R), K_NO_WAIT);
-			SM_TRANSITION(SM_REDUNDAND);
-			LOG_INF("-> REDUNDAND");
+			SM_TRANSITION(SM_REDUNDANT);
+			LOG_INF("-> REDUNDANT");
 		}
 		break;
 
 	/*-----------------------------------------------------------
-	* REDUNDAND -> LANDED
+	* REDUNDANT -> LANDED
 	*----------------------------------------------------------*/
-	case SM_REDUNDAND:
+	case SM_REDUNDANT:
 		/* Timer is running. Check conditions */
 		if (running_timers[TIMER_DT_L] == 1) {
 			/* conditions aren't met. Reset the timer */
@@ -470,7 +470,7 @@ const char *sm_state_str(enum sm_state state)
 	case SM_BURNOUT:	return "BURNOUT";
 	case SM_APOGEE:		return "APOGEE";
 	case SM_MAIN:		return "MAIN";
-	case SM_REDUNDAND:	return "REDUNDAND";
+	case SM_REDUNDANT:	return "REDUNDANT";
 	case SM_LANDED:		return "LANDED";
 	case SM_ERROR:		return "ERROR";
 	default:		return "UNKNOWN";

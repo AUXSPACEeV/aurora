@@ -375,18 +375,18 @@ ZTEST(simple_state_tests, test_state_apogee_timeout)
 }
 
 /**
- * @brief Test REDUNDAND -> LANDED transition
+ * @brief Test REDUNDANT -> LANDED transition
  *
- * Verifies that REDUNDAND transitions to LANDED when velocity stays
+ * Verifies that REDUNDANT transitions to LANDED when velocity stays
  * at or below T_L for DT_L duration. Verifies timer reset when velocity
  * rises above T_L.
  *
- * Note: MAIN -> REDUNDAND requires the TO_M timer to be running.
+ * Note: MAIN -> REDUNDANT requires the TO_M timer to be running.
  * In the normal APOGEE -> MAIN path the TO_M timer is not started,
  * so this test reaches MAIN and waits for TO_M (which was started by
  * entering APOGEE and then timing out through the error path is not
  * suitable). Instead, this test uses the APOGEE timeout path which
- * starts TO_M, then verifies REDUNDAND behavior after the error handler
+ * starts TO_M, then verifies REDUNDANT behavior after the error handler
  * transitions through.
  */
 ZTEST(simple_state_tests, test_state_redundand_landed)
@@ -434,9 +434,9 @@ ZTEST(simple_state_tests, test_state_redundand_landed)
 }
 
 /**
- * @brief Test REDUNDAND -> ERROR on timeout
+ * @brief Test REDUNDANT -> ERROR on timeout
  *
- * Verifies that REDUNDAND transitions to ERROR when the TO_R timeout
+ * Verifies that REDUNDANT transitions to ERROR when the TO_R timeout
  * expires while landing conditions are not met.
  */
 ZTEST(simple_state_tests, test_state_redundand_timeout)
