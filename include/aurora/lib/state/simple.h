@@ -23,7 +23,7 @@ enum sm_state {
 	SM_BURNOUT,		/**< Motor burnout. */
 	SM_APOGEE,		/**< Apogee detected. */
 	SM_MAIN,		/**< Main descent phase. */
-	SM_REDUNDAND,	/**< Recovery devices are or should be deployed. */
+	SM_REDUNDANT,	/**< Recovery devices are or should be deployed. */
 	SM_LANDED,		/**< Rocket is confirmed landed. */
 	SM_ERROR,		/**< State machine error occurred. */
 };
@@ -59,8 +59,8 @@ enum sm_state {
 
 	/* Timeouts */
 	int TO_A;	/**< Max time allowed in APOGEE state before abort (ms). */
-	int TO_M;	/**< Time between MAIN and REDUNDAND (ms). */
-	int TO_R;	/**< Max time allowed in REDUNDAND state before abort (ms). */
+	int TO_M;	/**< Time between MAIN and REDUNDANT (ms). */
+	int TO_R;	/**< Max time allowed in REDUNDANT state before abort (ms). */
 };
 
 /*-----------------------------------------------------------

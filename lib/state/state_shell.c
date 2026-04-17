@@ -45,7 +45,7 @@ static const struct state_entry state_table[] = {
 	{ "BURNOUT",	SM_BURNOUT },
 	{ "APOGEE",	SM_APOGEE },
 	{ "MAIN",	SM_MAIN },
-	{ "REDUNDAND",	SM_REDUNDAND },
+	{ "REDUNDANT",	SM_REDUNDANT },
 	{ "LANDED",	SM_LANDED },
 	{ "ERROR",	SM_ERROR },
 };
