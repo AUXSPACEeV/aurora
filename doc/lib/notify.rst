@@ -13,7 +13,8 @@ Backends
 - **PWM Buzzer** (``CONFIG_AURORA_NOTIFY_BUZZER``): drives a passive
   buzzer via PWM to signal boot, state changes, and errors.
 - **PWM LED** (``CONFIG_AURORA_NOTIFY_LED``): drives an LED via PWM
-  to signal boot, state changes, and errors.
+  to signal boot, state changes, and errors. LED does not blink when data logger
+  is disabled.
 
 API Reference
 -------------

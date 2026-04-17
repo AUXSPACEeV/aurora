@@ -1,14 +1,14 @@
 Powerfail Mitigation
 ====================
 
-Flight computers often times log data on storage devices, like µSD-Cards, eMMCs
-or other NAND-flashes.
+Flight computers often log data on storage devices, like µSD-Cards, eMMCs or
+other NAND-flashes.
 To protect against broken file systems (or even blocks) on powerloss, we have
 a small powerfail mitigation subsystem to handle power failures in a way that
 preserves data.
 
 A power failure event is detected by a configured gpio pin.
-In a devicetree, the set up for a pulled-up GPIO pin would look like this:
+In a devicetree, the setup for a pulled-up GPIO pin would look like this:
 
 .. code-block:: devicetree
 
