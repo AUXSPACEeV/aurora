@@ -31,15 +31,24 @@ west build -b sensor_board_v2/rp2040 sensor_board
 west build -b sensor_board_v2/rp2350a/hazard3 sensor_board
 
 # ESP32-S3 Micrometer board
-west build -b esp32s3_micrometer/esp32s3/procpu sensor_board/
+west build -b esp32s3_micrometer/esp32s3/procpu --sysbuild sensor_board/
 ```
 
+````{note}
 Build output is located at `build/zephyr/zephyr.uf2` and
-`build/zephyr/zephyr.elf`.
+`build/zephyr/zephyr.elf` for the default builds, while `--sysbuild` generates
+subdirectories for `MCUBoot` and the application at
+`build/mcuboot/zephyr/zephyr.elf` and
+`build/sensor_board/zephyr/zephyr.signed.bin`.
+````
 
 ### Interactive Kconfig
 
 ```shell
+# Using west
+west build -b \<BOARD\> -t menuconfig \<APPLICATION\>
+
+# Using the wrapper
 ./run.sh -b sensor_board_v2/rp2040 menuconfig
 ```
 
@@ -48,28 +57,40 @@ Build output is located at `build/zephyr/zephyr.uf2` and
 ```shell
 # Open a shell inside the dev container
 ./run.sh -b sensor_board_v2/rp2040 shell
-
-# Clean build artefacts
-./run.sh clean
 ```
 
 ## Flashing
 
-### Via west
+### Zephyr's West
 
 ```shell
 west flash
 ```
 
-### Via OpenOCD (CMSIS-DAP)
+````{note}
+Boards like the esp32s3 that use an interactive download mechanism need to
+trigger the download mechanism **twice** for sysbuild binaries, since flashing
+multiple binaries require multiple reboots.
+
+In case of the esp32s3, start by booting in download mode, run the flashing
+command and wait for the first binary to be flashed.
+
+Reboot the board by cutting and re-establishing power to it, while still
+asserting the switch that activates download mode.
+
+Repeat until the flashing command has finished.
+````
+
+### OpenOCD (CMSIS-DAP)
 
 ```shell
+# e.g. sensor_board_v2/rp2040
 sudo openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg \
   -c "adapter speed 5000" \
   -c "program build/zephyr/zephyr.elf verify reset exit"
 ```
 
-### Via USB (RPi Pico BOOTSEL mode)
+### USB (on sensor_board_v2 via RPi Pico BOOTSEL mode)
 
 Hold BOOTSEL while connecting the board, then copy the UF2 file:
 

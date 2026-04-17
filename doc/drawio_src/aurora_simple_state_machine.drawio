@@ -130,7 +130,7 @@
             <mxPoint x="-22" y="-9" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="3qnBTR5j4vfztX5206rh-25" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;convertToSvg=1;labelBackgroundColor=none;" value="REDUNDAND" vertex="1">
+        <mxCell id="3qnBTR5j4vfztX5206rh-25" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;convertToSvg=1;labelBackgroundColor=none;" value="REDUNDANT" vertex="1">
           <mxGeometry height="40" width="84" x="372" y="801.72" as="geometry" />
         </mxCell>
         <mxCell id="3qnBTR5j4vfztX5206rh-28" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;convertToSvg=1;labelBackgroundColor=none;" value="LANDED" vertex="1">
