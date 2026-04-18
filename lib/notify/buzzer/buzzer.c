@@ -1,5 +1,14 @@
-/*
- * Copyright (c) 2026 Auxspace e.V.
+/**
+ * @file buzzer.c
+ * @brief PWM-Buzzer notification backend.
+ *
+ * Drives the board's PWM-backed passive buzzer (via @c auxspace_buzzer chosen
+ * node) to indicate boot, flight state-machine transitions, calibration
+ * completion and error.  Registered at link time as a @ref notify_backend via
+ * @ref NOTIFY_BACKEND_DEFINE.
+ *
+ * Copyright (c) 2026, Auxspace e.V.
+ *
  * SPDX-License-Identifier: Apache-2.0
  */
 

@@ -1,5 +1,14 @@
-/*
- * Copyright (c) 2026 Auxspace e.V.
+/**
+ * @file led.c
+ * @brief PWM-LED notification backend.
+ *
+ * Drives the board's PWM-backed LED array (via @c auxspace_led chosen
+ * node) to indicate boot, flight state-machine transitions, calibration
+ * completion, error, and powerfail events.  Registered at link time as
+ * a @ref notify_backend via @ref NOTIFY_BACKEND_DEFINE.
+ *
+ * Copyright (c) 2026, Auxspace e.V.
+ *
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -78,7 +87,6 @@ static int all_leds_off(void)
 	return rc;
 }
 
-/** @brief Initialize all LEDs */
 static int led_init(void)
 {
 	if (!device_is_ready(pwm_leds)) {
