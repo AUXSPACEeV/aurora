@@ -26,8 +26,10 @@
  *      x[0] = altitude (m)
  *      x[1] = vertical velocity (m/s)
  *
- * The filter assumes a constant-velocity model and uses
- * barometric altitude as the measurement input.
+ * The filter uses a constant-acceleration model with vertical acceleration
+ * supplied as a control input to filter_predict(), and barometric altitude
+ * as the measurement input.  Passing a_vert = 0.0 reduces the model to
+ * constant-velocity behavior.
  */
 struct filter {
     double state[2];         /**< State vector [altitude, velocity]. */
@@ -54,15 +56,18 @@ int filter_init(struct filter *filter);
  * @brief Perform the filter prediction step.
  *
  * Propagates state and covariance forward in time using a
- * constant-velocity model.
+ * constant-acceleration model with @p a_vert as the control input.
  *
  * @param filter Pointer to filter structure.
  * @param dt     Elapsed time in nanoseconds since last prediction.
+ * @param a_vert World-frame vertical acceleration (m/s^2), gravity-removed.
+ *               Pass 0.0 to fall back to constant-velocity behavior when
+ *               no acceleration input is available.
  *
  * @retval 0 on success.
  * @retval -EINVAL if @p filter is NULL or @p dt <= 0.
  */
-int filter_predict(struct filter *filter, int64_t dt);
+int filter_predict(struct filter *filter, int64_t dt, double a_vert);
 
 /**
  * @brief Perform the filter measurement update step.

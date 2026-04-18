@@ -20,6 +20,7 @@
 
 #if defined(CONFIG_IMU)
 #include <aurora/lib/imu.h>
+#include <aurora/lib/attitude.h>
 #endif /* CONFIG_IMU */
 
 #if defined(CONFIG_BARO)
@@ -203,9 +204,7 @@ K_THREAD_DEFINE(baro_polling, 2048, baro_task, NULL, NULL, NULL,
 void state_machine_task(void *, void *, void *)
 {
 	enum sm_state state;
-#if defined(CONFIG_AURORA_NOTIFY)
 	enum sm_state prev_state = SM_IDLE;
-#endif /* CONFIG_AURORA_NOTIFY */
 	const struct zbus_channel *data_chan;
 	union {
 		struct imu_data imu;
@@ -213,10 +212,19 @@ void state_machine_task(void *, void *, void *)
 	} msg_buf;
 	double altitude = 0.0;
 	double acceleration = 0.0;
+	double accel_vert = 0.0;
 	double roll = 0.0;
 	double pitch = 0.0;
 	bool baro_ready = false;
 	bool imu_ready = false;
+
+#if defined(CONFIG_IMU)
+	static struct attitude attitude_state;
+	int64_t last_imu_ns = 0;
+	bool calibration_notified = false;
+
+	attitude_init(&attitude_state);
+#endif /* CONFIG_IMU */
 
 #if defined(CONFIG_PYRO)
 	const struct device *pyro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_pyro));
@@ -228,6 +236,7 @@ void state_machine_task(void *, void *, void *)
 		.armed = armed,
 		.orientation = roll,
 		.acceleration = acceleration,
+		.accel_vert = accel_vert,
 	};
 
 #if defined(CONFIG_PYRO)
@@ -261,6 +270,52 @@ void state_machine_task(void *, void *, void *)
 				    imu_sensor_value_to_acceleration(&msg_buf.imu, &acceleration) == 0) {
 					imu_ready = true;
 				}
+
+#if defined(CONFIG_IMU)
+				{
+					double accel_b[ATTITUDE_NUM_AXES] = {
+						sensor_value_to_double(&msg_buf.imu.accel[0]),
+						sensor_value_to_double(&msg_buf.imu.accel[1]),
+						sensor_value_to_double(&msg_buf.imu.accel[2]),
+					};
+					double gyro_b[ATTITUDE_NUM_AXES] = {
+						sensor_value_to_double(&msg_buf.imu.gyro[0]),
+						sensor_value_to_double(&msg_buf.imu.gyro[1]),
+						sensor_value_to_double(&msg_buf.imu.gyro[2]),
+					};
+					int64_t now_ns = (k_uptime_ticks() * NSEC_PER_SEC)
+							 / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
+
+					if (!attitude_is_calibrated(&attitude_state)) {
+						if (sm_get_state() == SM_ARMED) {
+							attitude_calibrate_sample(&attitude_state,
+										  accel_b, gyro_b);
+							if (attitude_state.cal_samples >=
+							    CONFIG_IMU_CALIBRATION_SAMPLES) {
+								if (attitude_calibrate_finish(&attitude_state) == 0) {
+#if defined(CONFIG_AURORA_NOTIFY)
+									if (!calibration_notified) {
+										notify_calibration_complete();
+										calibration_notified = true;
+									}
+#endif /* CONFIG_AURORA_NOTIFY */
+								}
+							}
+						}
+						accel_vert = 0.0;
+					} else if (last_imu_ns != 0) {
+						double dt_s = (double)(now_ns - last_imu_ns) / 1e9;
+						if (dt_s > 0.0 && dt_s <= 1.0) {
+							double a_v;
+							if (attitude_update(&attitude_state, accel_b,
+									    gyro_b, dt_s, &a_v) == 0) {
+								accel_vert = a_v;
+							}
+						}
+					}
+					last_imu_ns = now_ns;
+				}
+#endif /* CONFIG_IMU */
 #if defined(CONFIG_DATA_LOGGER)
 				int64_t ts = k_uptime_get();
 				struct datapoint dp = {
@@ -307,6 +362,7 @@ void state_machine_task(void *, void *, void *)
 			.armed = armed,
 			.orientation = roll,
 			.acceleration = acceleration,
+			.accel_vert = accel_vert,
 			.altitude = altitude,
 		};
 
@@ -314,12 +370,22 @@ void state_machine_task(void *, void *, void *)
 		state = sm_get_state();
 		LOG_DBG("STATE = %d", state);
 
-#if defined(CONFIG_AURORA_NOTIFY)
 		if (state != prev_state) {
+#if defined(CONFIG_AURORA_NOTIFY)
 			notify_state_change(prev_state, state);
+#endif /* CONFIG_AURORA_NOTIFY */
+#if defined(CONFIG_IMU)
+			/* On return to IDLE, discard calibration so a re-arm
+			 * triggers a fresh stationary calibration window.
+			 */
+			if (state == SM_IDLE) {
+				attitude_init(&attitude_state);
+				last_imu_ns = 0;
+				calibration_notified = false;
+			}
+#endif /* CONFIG_IMU */
 			prev_state = state;
 		}
-#endif /* CONFIG_AURORA_NOTIFY */
 
 		/* reset the measurements */
 		baro_ready = false;

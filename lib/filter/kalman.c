@@ -55,7 +55,7 @@ int filter_init(struct filter *filter)
 }
 
 /* filter_predict – see filter.h */
-int filter_predict(struct filter *filter, int64_t dt)
+int filter_predict(struct filter *filter, int64_t dt, double a_vert)
 {
 	if (filter == NULL || dt <= 0)
 	return -EINVAL;
@@ -66,12 +66,13 @@ int filter_predict(struct filter *filter, int64_t dt)
 	if (dt_s > 1.0)
 	return -EINVAL;
 
-	/* State prediction */
+	/* State prediction with a_vert as control input
+	 * (F unchanged; B = [0.5*dt^2, dt]^T applied to a_vert) */
 	const double altitude = filter->state[0];
 	const double velocity = filter->state[1];
 
-	filter->state[0] = altitude + velocity * dt_s;
-	filter->state[1] = velocity;
+	filter->state[0] = altitude + velocity * dt_s + 0.5 * a_vert * dt_s * dt_s;
+	filter->state[1] = velocity + a_vert * dt_s;
 
 	/* Scale process noise with dt */
 	const double Q00 = filter->noise_p[0][0] * dt_s;

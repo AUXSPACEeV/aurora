@@ -154,7 +154,7 @@ ZTEST(kalman_filter_tests, test_init_values)
  */
 ZTEST(kalman_filter_tests, test_predict_null)
 {
-	int ret = filter_predict(NULL, 10 * NS_PER_MS);
+	int ret = filter_predict(NULL, 10 * NS_PER_MS, 0.0);
 	zassert_equal(ret, -EINVAL, "filter_predict(NULL) should return -EINVAL");
 }
 
@@ -163,7 +163,7 @@ ZTEST(kalman_filter_tests, test_predict_null)
  */
 ZTEST(kalman_filter_tests, test_predict_zero_dt)
 {
-	int ret = filter_predict(&filt, 0);
+	int ret = filter_predict(&filt, 0, 0.0);
 	zassert_equal(ret, -EINVAL, "filter_predict(dt=0) should return -EINVAL");
 }
 
@@ -172,7 +172,7 @@ ZTEST(kalman_filter_tests, test_predict_zero_dt)
  */
 ZTEST(kalman_filter_tests, test_predict_negative_dt)
 {
-	int ret = filter_predict(&filt, -100);
+	int ret = filter_predict(&filt, -100, 0.0);
 	zassert_equal(ret, -EINVAL, "filter_predict(dt<0) should return -EINVAL");
 }
 
@@ -188,7 +188,7 @@ ZTEST(kalman_filter_tests, test_predict_state_propagation)
 	filt.state[1] = 50.0;   /* velocity */
 
 	/* dt = 100ms = 100,000,000 ns -> dt_s = 0.1 */
-	int ret = filter_predict(&filt, 100 * NS_PER_MS);
+	int ret = filter_predict(&filt, 100 * NS_PER_MS, 0.0);
 	zassert_equal(ret, 0, "filter_predict should return 0");
 
 	zassert_near(filt.state[0], 105.0, FLOAT_TOL,
@@ -208,7 +208,7 @@ ZTEST(kalman_filter_tests, test_predict_small_dt)
 	filt.state[0] = 100.0;
 	filt.state[1] = 50.0;
 
-	int ret = filter_predict(&filt, 500000LL);  /* 0.5 ms */
+	int ret = filter_predict(&filt, 500000LL, 0.0);  /* 0.5 ms */
 	zassert_equal(ret, 0, "filter_predict should return 0");
 
 	zassert_near(filt.state[0], 100.025, FLOAT_TOL,
@@ -220,7 +220,7 @@ ZTEST(kalman_filter_tests, test_predict_small_dt)
  */
 ZTEST(kalman_filter_tests, test_predict_excessive_dt)
 {
-	int ret = filter_predict(&filt, 2000000000LL);  /* 2 seconds */
+	int ret = filter_predict(&filt, 2000000000LL, 0.0);  /* 2 seconds */
 	zassert_equal(ret, -EINVAL,
 		      "filter_predict should reject dt > 1s");
 }
@@ -233,7 +233,7 @@ ZTEST(kalman_filter_tests, test_predict_covariance_growth)
 	double P00_before = filt.covariance[0][0];
 	double P11_before = filt.covariance[1][1];
 
-	int ret = filter_predict(&filt, 1 * NS_PER_MS);
+	int ret = filter_predict(&filt, 1 * NS_PER_MS, 0.0);
 	zassert_equal(ret, 0, "filter_predict should return 0");
 
 	/* Covariance should grow due to process noise */
@@ -241,6 +241,46 @@ ZTEST(kalman_filter_tests, test_predict_covariance_growth)
 		     "P[0][0] should grow after predict");
 	zassert_true(filt.covariance[1][1] >= P11_before,
 		     "P[1][1] should grow after predict");
+}
+
+/**
+ * @brief Test filter_predict with positive acceleration (boost).
+ *
+ * With v=0 and a_vert=20 m/s^2, dt=0.1s -> v=2 m/s, h=0.5*20*0.01=0.1 m.
+ */
+ZTEST(kalman_filter_tests, test_predict_with_positive_accel)
+{
+	filt.state[0] = 0.0;
+	filt.state[1] = 0.0;
+
+	int ret = filter_predict(&filt, 100 * NS_PER_MS, 20.0);
+	zassert_equal(ret, 0, "filter_predict should return 0");
+
+	zassert_near(filt.state[0], 0.1, FLOAT_TOL,
+		     "Altitude should advance by 0.5*a*dt^2");
+	zassert_near(filt.state[1], 2.0, FLOAT_TOL,
+		     "Velocity should grow by a*dt");
+}
+
+/**
+ * @brief Test filter_predict with negative acceleration (coast/free-fall).
+ *
+ * With v=50, a_vert=-9.81, dt=0.1s ->
+ *   v = 50 - 9.81*0.1 = 49.019 m/s
+ *   h = 100 + 50*0.1 + 0.5*(-9.81)*0.01 = 104.95095 m
+ */
+ZTEST(kalman_filter_tests, test_predict_with_gravity)
+{
+	filt.state[0] = 100.0;
+	filt.state[1] = 50.0;
+
+	int ret = filter_predict(&filt, 100 * NS_PER_MS, -9.81);
+	zassert_equal(ret, 0, "filter_predict should return 0");
+
+	zassert_near(filt.state[0], 104.95095, FLOAT_TOL,
+		     "Altitude should advance by v*dt + 0.5*a*dt^2");
+	zassert_near(filt.state[1], 49.019, FLOAT_TOL,
+		     "Velocity should decrease by g*dt");
 }
 
 /* ----------------------------------------------------------------
@@ -473,7 +513,7 @@ ZTEST(hypsometric_pipeline_tests, test_convergence_from_pressure)
 	const double hyp_alt = pressure_to_altitude(press, ISA_P0_KPA);
 
 	for (int i = 0; i < 50; i++) {
-		filter_predict(&filt, 10 * NS_PER_MS);
+		filter_predict(&filt, 10 * NS_PER_MS, 0.0);
 		filter_update(&filt, hyp_alt);
 	}
 
@@ -508,7 +548,7 @@ ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_hypsometric)
 		double press = altitude_to_pressure(true_alt, ref_kpa);
 		double meas_alt = pressure_to_altitude(press, ref_kpa);
 
-		filter_predict(&filt, 100 * NS_PER_MS);
+		filter_predict(&filt, 100 * NS_PER_MS, 0.0);
 		filter_update(&filt, meas_alt);
 		if (filter_detect_apogee(&filt) == 1) {
 			apogee_detected = 1;
@@ -522,7 +562,7 @@ ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_hypsometric)
 		double press = altitude_to_pressure(true_alt, ref_kpa);
 		double meas_alt = pressure_to_altitude(press, ref_kpa);
 
-		filter_predict(&filt, 100 * NS_PER_MS);
+		filter_predict(&filt, 100 * NS_PER_MS, 0.0);
 		filter_update(&filt, meas_alt);
 		if (filter_detect_apogee(&filt) == 1) {
 			apogee_detected = 1;
@@ -549,7 +589,7 @@ ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_high_site)
 		double press = altitude_to_pressure(true_alt, ref_kpa);
 		double meas_alt = pressure_to_altitude(press, ref_kpa);
 
-		filter_predict(&filt, 100 * NS_PER_MS);
+		filter_predict(&filt, 100 * NS_PER_MS, 0.0);
 		filter_update(&filt, meas_alt);
 		if (filter_detect_apogee(&filt) == 1) {
 			apogee_detected = 1;
@@ -563,7 +603,7 @@ ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_high_site)
 		double press = altitude_to_pressure(true_alt, ref_kpa);
 		double meas_alt = pressure_to_altitude(press, ref_kpa);
 
-		filter_predict(&filt, 100 * NS_PER_MS);
+		filter_predict(&filt, 100 * NS_PER_MS, 0.0);
 		filter_update(&filt, meas_alt);
 		if (filter_detect_apogee(&filt) == 1) {
 			apogee_detected = 1;
@@ -595,7 +635,7 @@ ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_noisy)
 			noise_amp_kpa * sin((double)i * 1.7);
 		double meas_alt = pressure_to_altitude(noisy_press, ref_kpa);
 
-		filter_predict(&filt, 100 * NS_PER_MS);
+		filter_predict(&filt, 100 * NS_PER_MS, 0.0);
 		filter_update(&filt, meas_alt);
 		if (filter_detect_apogee(&filt) == 1) {
 			apogee_detected = 1;
@@ -612,7 +652,7 @@ ZTEST(hypsometric_pipeline_tests, test_flight_trajectory_noisy)
 			noise_amp_kpa * sin((double)(i + 50) * 1.7);
 		double meas_alt = pressure_to_altitude(noisy_press, ref_kpa);
 
-		filter_predict(&filt, 100 * NS_PER_MS);
+		filter_predict(&filt, 100 * NS_PER_MS, 0.0);
 		filter_update(&filt, meas_alt);
 		if (filter_detect_apogee(&filt) == 1) {
 			apogee_detected = 1;
@@ -645,7 +685,7 @@ ZTEST(hypsometric_pipeline_tests, test_numerical_stability_hypsometric)
 		double press = altitude_to_pressure(alt_var, ref_kpa);
 		double meas_alt = pressure_to_altitude(press, ref_kpa);
 
-		filter_predict(&filt, 10 * NS_PER_MS);
+		filter_predict(&filt, 10 * NS_PER_MS, 0.0);
 		filter_update(&filt, meas_alt);
 	}
 
@@ -674,7 +714,7 @@ ZTEST(hypsometric_pipeline_tests, test_steady_state_tracking)
 	const double meas_alt = pressure_to_altitude(press, ref_kpa);
 
 	for (int i = 0; i < 100; i++) {
-		filter_predict(&filt, 100 * NS_PER_MS);
+		filter_predict(&filt, 100 * NS_PER_MS, 0.0);
 		filter_update(&filt, meas_alt);
 	}
 

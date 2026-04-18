@@ -6,8 +6,8 @@
 """
 Simulated rocket flight through the AURORA Kalman filter.
 
-Replicates the 2-state (altitude, velocity) constant-velocity Kalman filter
-from aurora/lib/apogee/kalman.c.
+Replicates the 2-state (altitude, velocity) constant-acceleration Kalman
+filter from aurora/lib/apogee/kalman.c (a_vert=0 here -> constant-velocity).
 The simulation generates a realistic pressure signal from the ISA barometric
 formula, adds sensor noise in the pressure domain, then converts back to
 altitude via the hypsometric formula before feeding the Kalman filter, matching
@@ -70,9 +70,12 @@ class KalmanFilter:
 
         self.prev_velocity = 0.0
 
-    def predict(self, dt_s: float):
-        """filter_predict - constant-velocity state propagation."""
-        self.state[0] += self.state[1] * dt_s
+    def predict(self, dt_s: float, a_vert: float = 0.0):
+        """filter_predict - constant-acceleration propagation with a_vert
+        (gravity-removed world-frame vertical accel) as control input.
+        Default 0.0 reduces to constant-velocity behavior."""
+        self.state[0] += self.state[1] * dt_s + 0.5 * a_vert * dt_s**2
+        self.state[1] += a_vert * dt_s
 
         P = self.P
         Q00 = self.Q[0, 0] * dt_s

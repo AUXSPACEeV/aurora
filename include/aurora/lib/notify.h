@@ -36,6 +36,11 @@ struct notify_backend_api {
 	/** @brief Signal a flight state-machine transition. */
 	int (*on_state_change)(enum sm_state prev, enum sm_state next);
 
+	/** @brief Signal that IMU calibration has finished and the rocket
+	 *         is ready to launch.
+	 */
+	int (*on_calibration_complete)(void);
+
 	/** @brief Signal an error condition. */
 	int (*on_error)(void);
 
@@ -90,6 +95,14 @@ int notify_boot(void);
  * @retval 0 on success, or first non-zero return from a backend.
  */
 int notify_state_change(enum sm_state prev, enum sm_state next);
+
+/**
+ * @brief Notify all backends that IMU calibration has completed and the
+ *        rocket is ready to launch.
+ *
+ * @retval 0 on success, or first non-zero return from a backend.
+ */
+int notify_calibration_complete(void);
 
 /**
  * @brief Notify all backends about a powerfail

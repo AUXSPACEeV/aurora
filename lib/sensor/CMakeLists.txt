@@ -7,6 +7,10 @@ if(CONFIG_IMU)
     zephyr_library_sources(imu.c)
 endif()
 
+if(CONFIG_ATTITUDE)
+    zephyr_library_sources(attitude.c)
+endif()
+
 if(CONFIG_BARO)
     zephyr_library_sources(baro.c)
 endif()
