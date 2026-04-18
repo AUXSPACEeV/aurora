@@ -61,6 +61,63 @@ config IMU_FREQUENCY_VALUE
 	default 200 if IMU_FREQ_200HZ
 	default 400 if IMU_FREQ_400HZ
 
+choice IMU_UP_AXIS
+	prompt "IMU body axis pointing up the rocket's long axis"
+	depends on IMU || ATTITUDE
+	default IMU_UP_AXIS_POS_Z
+	help
+	  Selects which IMU body-frame axis points toward the rocket's nose
+	  when the rocket is vertical on the launch pad. Used to seed the
+	  gravity vector for body-to-world projection of accelerometer data.
+
+config IMU_UP_AXIS_POS_X
+	bool "+X"
+config IMU_UP_AXIS_NEG_X
+	bool "-X"
+config IMU_UP_AXIS_POS_Y
+	bool "+Y"
+config IMU_UP_AXIS_NEG_Y
+	bool "-Y"
+config IMU_UP_AXIS_POS_Z
+	bool "+Z"
+config IMU_UP_AXIS_NEG_Z
+	bool "-Z"
+
+endchoice
+
+config IMU_UP_AXIS_INDEX
+	int
+	depends on IMU || ATTITUDE
+	default 0 if IMU_UP_AXIS_POS_X || IMU_UP_AXIS_NEG_X
+	default 1 if IMU_UP_AXIS_POS_Y || IMU_UP_AXIS_NEG_Y
+	default 2 if IMU_UP_AXIS_POS_Z || IMU_UP_AXIS_NEG_Z
+
+config IMU_UP_AXIS_SIGN
+	int
+	depends on IMU || ATTITUDE
+	default 1  if IMU_UP_AXIS_POS_X || IMU_UP_AXIS_POS_Y || IMU_UP_AXIS_POS_Z
+	default -1 if IMU_UP_AXIS_NEG_X || IMU_UP_AXIS_NEG_Y || IMU_UP_AXIS_NEG_Z
+
+config IMU_CALIBRATION_SAMPLES
+	int "IMU calibration samples"
+	depends on IMU
+	default 200
+	range 10 10000
+	help
+	  Number of IMU samples to average while the rocket is stationary in
+	  ARMED for accelerometer/gyroscope bias estimation and gravity
+	  magnitude measurement. At IMU_FREQUENCY_VALUE Hz, the calibration
+	  window is roughly IMU_CALIBRATION_SAMPLES / IMU_FREQUENCY_VALUE
+	  seconds.
+
+config ATTITUDE
+	bool "Attitude tracker (body-frame gravity vector)"
+	default y if IMU
+	help
+	  Builds the gyro-integrated body-frame gravity tracker used to
+	  project accelerometer readings onto world vertical.  Requires
+	  CONFIG_IMU_UP_AXIS_* to be set.
+
 endmenu
 
 menu "Barometric Pressure Sensor (BARO)"

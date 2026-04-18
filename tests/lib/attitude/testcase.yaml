@@ -1,0 +1,9 @@
+tests:
+  aurora.lib.attitude:
+    integration_platforms:
+      - qemu_x86
+    platform_allow:
+      - qemu_x86
+    tags: test_attitude
+    extra_configs:
+      - CONFIG_ATTITUDE=y

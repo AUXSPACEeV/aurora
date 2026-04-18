@@ -433,7 +433,8 @@ void sm_update(const struct sm_inputs *inputs)
 				  / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
 
 	if (last_time_ns != 0) {
-		filter_predict(&filter, current_time_ns - last_time_ns);
+		filter_predict(&filter, current_time_ns - last_time_ns,
+			       inputs->accel_vert);
 		filter_update(&filter, inputs->altitude);
 	}
 	last_time_ns = current_time_ns;

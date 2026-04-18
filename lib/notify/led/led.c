@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <stdint.h>
+
 #include <aurora/lib/notify.h>
 #include <zephyr/drivers/led.h>
 #include <zephyr/kernel.h>
@@ -125,6 +127,15 @@ static void led_on_powerfail(int recover)
 		all_leds_off();
 }
 
+static int led_on_calibration_complete(void)
+{
+	int rc = all_leds_off();
+	rc |= all_leds_on();
+	k_sleep(K_MSEC(50));
+	rc |= all_leds_off();
+	return rc;
+}
+
 static int led_on_state_change(enum sm_state prev, enum sm_state next)
 {
 	ARG_UNUSED(prev);
@@ -152,6 +163,7 @@ static const struct notify_backend_api led_api = {
 	.on_boot = led_on_boot,
 	.on_state_change = led_on_state_change,
 	.on_error = led_on_error,
+	.on_calibration_complete = led_on_calibration_complete,
 	.on_powerfail = led_on_powerfail,
 };
 

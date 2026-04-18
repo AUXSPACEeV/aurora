@@ -77,10 +77,16 @@ static int buzzer_on_error(void)
 	return 0;
 }
 
+static int buzzer_on_calibration_complete(void)
+{
+	return buzz(PWM_HZ(1000), 500);
+}
+
 static const struct notify_backend_api buzzer_api = {
 	.init = buzzer_init,
 	.on_boot = buzzer_on_boot,
 	.on_state_change = buzzer_on_state_change,
+	.on_calibration_complete = buzzer_on_calibration_complete,
 	.on_error = buzzer_on_error,
 };
 
