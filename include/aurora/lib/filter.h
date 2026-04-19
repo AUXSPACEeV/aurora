@@ -36,7 +36,12 @@ struct filter {
     double covariance[2][2]; /**< State covariance matrix P. */
     double noise_p[2][2];    /**< Process noise covariance Q. */
     double noise_m;          /**< Measurement noise variance R. */
-    double prev_velocity;    /**< Previous velocity for apogee detection. */
+
+    /* Multi-criterion apogee detection state. */
+    double peak_altitude;    /**< Highest altitude estimate seen so far (m). */
+    double last_accel_vert;  /**< Most recent world-vertical accel (m/s^2). */
+    int consecutive_apogee;  /**< Count of consecutive samples meeting criteria. */
+    int apogee_latched;      /**< Non-zero once apogee has been reported. */
 };
 
 /**
@@ -84,10 +89,22 @@ int filter_predict(struct filter *filter, int64_t dt, double a_vert);
 int filter_update(struct filter *filter, double z);
 
 /**
- * @brief Detect apogee from the filter's velocity estimate.
+ * @brief Detect apogee using a multi-criterion vote.
  *
- * Returns 1 when the estimated vertical velocity crosses zero from
- * positive to non-positive, indicating apogee.
+ * Combines three independent signals to reject noise-driven false
+ * positives:
+ *   1. Filtered vertical velocity is non-positive.
+ *   2. Filtered altitude has descended at least
+ *      @c CONFIG_FILTER_APOGEE_DELTA_H_CM below the tracked peak.
+ *   3. Most recent world-frame vertical acceleration (passed to
+ *      @ref filter_predict as @p a_vert) is below
+ *      @c CONFIG_FILTER_APOGEE_ACCEL_MAX_MILLI, rejecting thrust
+ *      or vibration spikes.
+ *
+ * All three conditions must hold for
+ * @c CONFIG_FILTER_APOGEE_DEBOUNCE_SAMPLES consecutive calls before
+ * apogee is reported.  Apogee is latched – once reported, subsequent
+ * calls return 0 until @ref filter_init is called again.
  *
  * @param filter Pointer to filter structure.
  *

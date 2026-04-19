@@ -49,7 +49,11 @@ int filter_init(struct filter *filter)
 	filter->noise_p[1][1] = q_vel;
 
 	filter->noise_m = r_meas;
-	filter->prev_velocity = 0.0;
+
+	filter->peak_altitude = 0.0;
+	filter->last_accel_vert = 0.0;
+	filter->consecutive_apogee = 0;
+	filter->apogee_latched = 0;
 
 	return 0;
 }
@@ -73,6 +77,7 @@ int filter_predict(struct filter *filter, int64_t dt, double a_vert)
 
 	filter->state[0] = altitude + velocity * dt_s + 0.5 * a_vert * dt_s * dt_s;
 	filter->state[1] = velocity + a_vert * dt_s;
+	filter->last_accel_vert = a_vert;
 
 	/* Scale process noise with dt */
 	const double Q00 = filter->noise_p[0][0] * dt_s;
@@ -135,11 +140,35 @@ int filter_detect_apogee(struct filter *filter)
 	if (filter == NULL)
 	return -EINVAL;
 
-	const double current_velocity = filter->state[1];
-	const int apogee = filter->prev_velocity > 0.0 &&
-			   current_velocity <= 0.0;
+	const double altitude = filter->state[0];
+	const double velocity = filter->state[1];
 
-	filter->prev_velocity = current_velocity;
+	/* Always track peak, even after latching, so a re-init starts fresh. */
+	if (altitude > filter->peak_altitude)
+	filter->peak_altitude = altitude;
 
-	return apogee;
+	if (filter->apogee_latched)
+	return 0;
+
+	const double delta_h =
+	((double)CONFIG_FILTER_APOGEE_DELTA_H_CM) / 100.0;
+	const double accel_max =
+	((double)CONFIG_FILTER_APOGEE_ACCEL_MAX_MILLI) / FILTER_SCALE_DIVISOR;
+
+	const int velocity_ok = velocity <= 0.0;
+	const int descent_ok = altitude <= filter->peak_altitude - delta_h;
+	const int accel_ok = filter->last_accel_vert < accel_max;
+
+	if (velocity_ok && descent_ok && accel_ok) {
+	filter->consecutive_apogee++;
+	} else {
+	filter->consecutive_apogee = 0;
+	}
+
+	if (filter->consecutive_apogee >= CONFIG_FILTER_APOGEE_DEBOUNCE_SAMPLES) {
+	filter->apogee_latched = 1;
+	return 1;
+	}
+
+	return 0;
 }

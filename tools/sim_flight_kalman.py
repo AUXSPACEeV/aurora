@@ -53,7 +53,9 @@ def pressure_to_altitude(p, p_ref=P0):
 class KalmanFilter:
     """2-state Kalman filter identical to struct filter / kalman.c."""
 
-    def __init__(self, q_alt=0.1, q_vel=0.5, r_meas=4.0):
+    def __init__(self, q_alt=0.1, q_vel=0.5, r_meas=4.0,
+                 apogee_delta_h=2.0, apogee_debounce=3,
+                 apogee_accel_max=2.0):
         # State vector [altitude, velocity]
         self.state = np.array([0.0, 0.0])
 
@@ -68,7 +70,16 @@ class KalmanFilter:
         # Measurement noise variance R
         self.R = r_meas
 
-        self.prev_velocity = 0.0
+        # Multi-criterion apogee detection state
+        self.peak_altitude = 0.0
+        self.last_accel_vert = 0.0
+        self.consecutive_apogee = 0
+        self.apogee_latched = False
+
+        # Apogee detection parameters
+        self.apogee_delta_h = apogee_delta_h
+        self.apogee_debounce = apogee_debounce
+        self.apogee_accel_max = apogee_accel_max
 
     def predict(self, dt_s: float, a_vert: float = 0.0):
         """filter_predict - constant-acceleration propagation with a_vert
@@ -76,6 +87,7 @@ class KalmanFilter:
         Default 0.0 reduces to constant-velocity behavior."""
         self.state[0] += self.state[1] * dt_s + 0.5 * a_vert * dt_s**2
         self.state[1] += a_vert * dt_s
+        self.last_accel_vert = a_vert
 
         P = self.P
         Q00 = self.Q[0, 0] * dt_s
@@ -106,11 +118,32 @@ class KalmanFilter:
         self.P[1, 1] = P[1, 1] - K1 * P[0, 1]
 
     def detect_apogee(self) -> bool:
-        """filter_detect_apogee - velocity zero-crossing."""
-        current = self.state[1]
-        apogee = self.prev_velocity > 0.0 and current <= 0.0
-        self.prev_velocity = current
-        return apogee
+        """filter_detect_apogee - multi-criterion vote:
+           (velocity <= 0) AND (altitude <= peak - delta_h) AND
+           (last a_vert < accel_max), sustained for `apogee_debounce`
+           consecutive calls. Latched once fired."""
+        altitude = self.state[0]
+        velocity = self.state[1]
+
+        if altitude > self.peak_altitude:
+            self.peak_altitude = altitude
+
+        if self.apogee_latched:
+            return False
+
+        velocity_ok = velocity <= 0.0
+        descent_ok = altitude <= self.peak_altitude - self.apogee_delta_h
+        accel_ok = self.last_accel_vert < self.apogee_accel_max
+
+        if velocity_ok and descent_ok and accel_ok:
+            self.consecutive_apogee += 1
+        else:
+            self.consecutive_apogee = 0
+
+        if self.consecutive_apogee >= self.apogee_debounce:
+            self.apogee_latched = True
+            return True
+        return False
 
 
 # ---------------------------------------------------------------------------
