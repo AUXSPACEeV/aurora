@@ -16,11 +16,6 @@ module = SENSOR_BOARD
 module-str = SENSOR_BOARD
 source "subsys/logging/Kconfig.template.log_config"
 
-config USB_CONSOLE_SHELL
-	bool "Support for USB serial console"
-	help
-		This option enables functionality for the aurora serial console via USB.
-
 menu "State Machine Configuration"
 
 config BOOST_ACCELERATION
@@ -62,7 +57,7 @@ config ARM_ANGLE
 
 config DISARM_ANGLE
 	int "Angle threshold for disarming"
-	default 70
+	default 30
 	help
 		Angle threshold in degrees for disarming the system.
 		0 degrees is horizontal, 90 degrees is vertical.
