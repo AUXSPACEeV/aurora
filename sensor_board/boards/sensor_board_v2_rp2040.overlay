@@ -4,3 +4,7 @@
  */
 
 #include "sensor_board_v2.dtsi"
+
+&timer {
+	status = "okay";
+};
