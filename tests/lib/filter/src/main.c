@@ -140,9 +140,15 @@ ZTEST(kalman_filter_tests, test_init_values)
 	zassert_near(f.noise_m, EXPECTED_R, FLOAT_TOL,
 		     "R should match Kconfig");
 
-	/* Previous velocity for apogee detection */
-	zassert_near(f.prev_velocity, 0.0, FLOAT_TOL,
-		     "prev_velocity should be initialized to 0");
+	/* Apogee detection state should start cleared */
+	zassert_near(f.peak_altitude, 0.0, FLOAT_TOL,
+		     "peak_altitude should be initialized to 0");
+	zassert_near(f.last_accel_vert, 0.0, FLOAT_TOL,
+		     "last_accel_vert should be initialized to 0");
+	zassert_equal(f.consecutive_apogee, 0,
+		      "consecutive_apogee should be initialized to 0");
+	zassert_equal(f.apogee_latched, 0,
+		      "apogee_latched should be initialized to 0");
 }
 
 /* ----------------------------------------------------------------
@@ -344,17 +350,42 @@ ZTEST(kalman_filter_tests, test_detect_apogee_null)
 		      "filter_detect_apogee(NULL) should return -EINVAL");
 }
 
+/** @brief Descent delta in meters (derived from Kconfig, cm). */
+#define APOGEE_DELTA_H \
+	((double)CONFIG_FILTER_APOGEE_DELTA_H_CM / 100.0)
+
+/** @brief Debounce count from Kconfig. */
+#define APOGEE_DEBOUNCE CONFIG_FILTER_APOGEE_DEBOUNCE_SAMPLES
+
+/**
+ * @brief Drive the filter toward a post-apogee state and count calls
+ *        until apogee is latched.
+ */
+static int drive_apogee_descent(struct filter *f,
+				double peak, double descent, double a_vert)
+{
+	f->peak_altitude = peak;
+	f->state[0] = peak - descent;
+	f->state[1] = -1.0;
+	f->last_accel_vert = a_vert;
+
+	for (int i = 0; i < APOGEE_DEBOUNCE * 2; i++) {
+		if (filter_detect_apogee(f) == 1) {
+			return i + 1;
+		}
+	}
+	return -1;
+}
+
 /**
  * @brief Test apogee not detected with zero velocity.
- *
- * Starting from zero velocity (no positive->non-positive crossing).
  */
 ZTEST(kalman_filter_tests, test_detect_apogee_zero_velocity)
 {
 	filt.state[1] = 0.0;
 
 	int ret = filter_detect_apogee(&filt);
-	zassert_equal(ret, 0, "No apogee with initial zero velocity");
+	zassert_equal(ret, 0, "No apogee without descent below peak");
 }
 
 /**
@@ -369,67 +400,99 @@ ZTEST(kalman_filter_tests, test_detect_apogee_positive_velocity)
 }
 
 /**
- * @brief Test apogee detected on velocity zero-crossing.
- *
- * Velocity goes from positive to zero/negative -> apogee.
+ * @brief Velocity zero-crossing alone must not fire without descent.
  */
-ZTEST(kalman_filter_tests, test_detect_apogee_crossing)
+ZTEST(kalman_filter_tests, test_detect_apogee_requires_descent)
 {
-	/* First call: set prev_velocity to positive */
-	filt.state[1] = 10.0;
-	int ret = filter_detect_apogee(&filt);
-	zassert_equal(ret, 0, "No apogee yet while ascending");
+	/* Ascend to a peak. */
+	for (int i = 0; i < 10; i++) {
+		filt.state[0] = (double)i;
+		filt.state[1] = 10.0;
+		filt.last_accel_vert = 0.0;
+		zassert_equal(filter_detect_apogee(&filt), 0,
+			      "No apogee during ascent");
+	}
 
-	/* Second call: velocity crosses to zero -> apogee */
-	filt.state[1] = 0.0;
-	ret = filter_detect_apogee(&filt);
-	zassert_equal(ret, 1, "Apogee should be detected on zero-crossing");
+	/* Velocity crosses zero but altitude stays at the peak. */
+	filt.state[1] = -0.5;
+	for (int i = 0; i < APOGEE_DEBOUNCE + 2; i++) {
+		zassert_equal(filter_detect_apogee(&filt), 0,
+			      "No apogee without descent below peak");
+	}
 }
 
 /**
- * @brief Test apogee detected on velocity crossing to negative.
+ * @brief Sufficient descent + velocity + accel fires after debounce.
  */
-ZTEST(kalman_filter_tests, test_detect_apogee_crossing_negative)
+ZTEST(kalman_filter_tests, test_detect_apogee_debounced)
 {
-	filt.state[1] = 5.0;
-	filter_detect_apogee(&filt);
+	int n = drive_apogee_descent(&filt, 100.0,
+				     APOGEE_DELTA_H + 0.5, -1.0);
 
+	zassert_equal(n, APOGEE_DEBOUNCE,
+		      "Apogee should fire exactly after the debounce count");
+}
+
+/**
+ * @brief Brief criterion violation resets the debounce counter.
+ */
+ZTEST(kalman_filter_tests, test_detect_apogee_debounce_reset)
+{
+	filt.peak_altitude = 100.0;
+	filt.state[0] = 100.0 - (APOGEE_DELTA_H + 0.5);
 	filt.state[1] = -1.0;
-	int ret = filter_detect_apogee(&filt);
-	zassert_equal(ret, 1, "Apogee should be detected on crossing to negative");
-}
+	filt.last_accel_vert = -1.0;
 
-/**
- * @brief Test no apogee detected when velocity stays negative.
- */
-ZTEST(kalman_filter_tests, test_detect_apogee_stays_negative)
-{
-	filt.state[1] = -5.0;
-	filter_detect_apogee(&filt);
+	/* Partial progress, but not yet latched. */
+	for (int i = 0; i < APOGEE_DEBOUNCE - 1; i++) {
+		zassert_equal(filter_detect_apogee(&filt), 0,
+			      "Should not fire before debounce completes");
+	}
 
-	filt.state[1] = -10.0;
-	int ret = filter_detect_apogee(&filt);
-	zassert_equal(ret, 0, "No apogee when velocity stays negative");
-}
+	/* Break a criterion (positive velocity) to reset the counter. */
+	filt.state[1] = 1.0;
+	zassert_equal(filter_detect_apogee(&filt), 0,
+		      "Criterion violation resets counter");
 
-/**
- * @brief Test no repeat apogee after crossing.
- *
- * After apogee is detected, subsequent calls with negative velocity
- * should not trigger again.
- */
-ZTEST(kalman_filter_tests, test_detect_apogee_no_repeat)
-{
-	filt.state[1] = 10.0;
-	filter_detect_apogee(&filt);
-
+	/* Restore all criteria – must wait the full debounce again. */
 	filt.state[1] = -1.0;
-	int ret = filter_detect_apogee(&filt);
-	zassert_equal(ret, 1, "First crossing should detect apogee");
+	for (int i = 0; i < APOGEE_DEBOUNCE - 1; i++) {
+		zassert_equal(filter_detect_apogee(&filt), 0,
+			      "Counter restarted from zero");
+	}
+	zassert_equal(filter_detect_apogee(&filt), 1,
+		      "Apogee fires after second full debounce window");
+}
 
-	filt.state[1] = -2.0;
-	ret = filter_detect_apogee(&filt);
-	zassert_equal(ret, 0, "No repeat apogee detection");
+/**
+ * @brief High positive vertical acceleration blocks detection.
+ */
+ZTEST(kalman_filter_tests, test_detect_apogee_accel_gate)
+{
+	int n = drive_apogee_descent(&filt, 100.0,
+				     APOGEE_DELTA_H + 0.5,
+				     /* Above accel threshold (thrust/vib). */
+				     1.0 + (double)CONFIG_FILTER_APOGEE_ACCEL_MAX_MILLI
+				     / 1000.0);
+
+	zassert_equal(n, -1,
+		      "Apogee must not fire while accel_vert is above the gate");
+}
+
+/**
+ * @brief Latched apogee does not re-fire on subsequent calls.
+ */
+ZTEST(kalman_filter_tests, test_detect_apogee_latched)
+{
+	int n = drive_apogee_descent(&filt, 100.0,
+				     APOGEE_DELTA_H + 0.5, -1.0);
+	zassert_equal(n, APOGEE_DEBOUNCE,
+		      "Setup: apogee must fire after debounce");
+
+	for (int i = 0; i < 5; i++) {
+		zassert_equal(filter_detect_apogee(&filt), 0,
+			      "Latched apogee must not re-fire");
+	}
 }
 
 /* ================================================================

@@ -48,4 +48,32 @@ config FILTER_R_MILLISCALE
     help
       Measurement noise variance scaled by 1000.
       Real value = FILTER_R_MILLISCALE / 1000.0
+
+config FILTER_APOGEE_DELTA_H_CM
+    int "Apogee descent confirmation (cm)"
+    default 150
+    range 0 10000
+    help
+      Filtered altitude must have descended this many centimeters
+      below the tracked peak before apogee can be reported.  Guards
+      against noise-driven velocity zero-crossings near the peak.
+      Real value = FILTER_APOGEE_DELTA_H_CM / 100.0 meters.
+
+config FILTER_APOGEE_DEBOUNCE_SAMPLES
+    int "Apogee debounce samples"
+    default 3
+    range 1 100
+    help
+      Number of consecutive calls to filter_detect_apogee() for which
+      all apogee criteria must hold before apogee is reported.
+
+config FILTER_APOGEE_ACCEL_MAX_MILLI
+    int "Apogee max vertical acceleration (x1000, m/s^2)"
+    default 2000
+    range -100000 100000
+    help
+      Most recent world-frame vertical acceleration must be below
+      this threshold for apogee to be reported.  Rejects apparent
+      apogees during thrust or high-vibration events.
+      Real value = FILTER_APOGEE_ACCEL_MAX_MILLI / 1000.0 m/s^2.
 endif
