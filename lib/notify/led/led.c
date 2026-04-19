@@ -138,7 +138,7 @@ static void led_on_powerfail(int recover)
 static int led_on_calibration_complete(void)
 {
 	int rc = all_leds_off();
-	rc |= all_leds_on();
+	rc |= all_leds_on(MAX_BRIGHTNESS);
 	k_sleep(K_MSEC(50));
 	rc |= all_leds_off();
 	return rc;

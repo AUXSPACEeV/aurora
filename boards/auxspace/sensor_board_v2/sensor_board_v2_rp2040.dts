@@ -54,8 +54,6 @@
 };
 
 zephyr_udc0: &usbd {
-	status = "okay";
-
 	cdc_acm_uart: cdc_acm_uart {
 		compatible = "zephyr,cdc-acm-uart";
 	};
@@ -63,17 +61,11 @@ zephyr_udc0: &usbd {
 
 &uart0 {
 	current-speed = <115200>;
-	status = "okay";
 	pinctrl-0 = <&uart0_default>;
 	pinctrl-names = "default";
 };
 
-&gpio0 {
-	status = "okay";
-};
-
 &spi0 {
-	status = "okay";
 	clock-frequency = <DT_FREQ_M(25)>;
 	cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
 	pinctrl-0 = <&spi0_default>;
@@ -82,12 +74,12 @@ zephyr_udc0: &usbd {
 	sdhc0: sdhc@0 {
 		compatible = "zephyr,sdhc-spi-slot";
 		reg = <0>;
-		status = "okay";
+		status = "disabled";
 
 		mmc0: mmc {
 			compatible = "zephyr,sdmmc-disk";
 			disk-name = "MMC";
-			status = "okay";
+			status = "disabled";
 		};
 
 		spi-max-frequency = <25000000>;
@@ -95,7 +87,6 @@ zephyr_udc0: &usbd {
 };
 
 &spi1 {
-	status = "okay";
 	clock-frequency = <DT_FREQ_M(8)>;
 	cs-gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
 	pinctrl-0 = <&spi1_default>;
@@ -103,7 +94,6 @@ zephyr_udc0: &usbd {
 };
 
 &i2c0 {
-	status = "okay";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 	pinctrl-0 = <&i2c0_default>;
 	pinctrl-names = "default";
@@ -111,22 +101,12 @@ zephyr_udc0: &usbd {
 	lsm6dso32_0: lsm6dso32@6b {
 		compatible = "st,lsm6dso32";
 		reg = <0x6b>;
-		accel-odr = <LSM6DSO_DT_ODR_104Hz>;
-		gyro-odr = <LSM6DSO_DT_ODR_104Hz>;
-		status = "okay";
+		status = "disabled";
 	};
 
 	ms5607_0: ms5607@77 {
 		compatible = "meas,ms5607";
 		reg = <0x77>;
-		status = "okay";
+		status = "disabled";
 	};
-};
-
-&timer {
-	status = "okay";
-};
-
-&wdt0 {
-	status = "okay";
 };

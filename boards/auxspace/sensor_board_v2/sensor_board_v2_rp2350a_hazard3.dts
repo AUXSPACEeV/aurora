@@ -11,6 +11,7 @@
 #include <riscv/raspberrypi/hazard3.dtsi>
 #include "sensor_board_v2_rp2350a-pinctrl.dtsi"
 #include <zephyr/dt-bindings/i2c/i2c.h>
+#include <zephyr/dt-bindings/sensor/lsm6dso.h>
 #include <freq.h>
 
 / {
@@ -48,7 +49,7 @@
 };
 
 zephyr_udc0: &usbd {
-	status = "okay";
+	status = "disabled";
 
 	cdc_acm_uart: cdc_acm_uart {
 		compatible = "zephyr,cdc-acm-uart";
@@ -56,18 +57,14 @@ zephyr_udc0: &usbd {
 };
 
 &uart0 {
+	status = "disabled";
+
 	current-speed = <115200>;
-	status = "okay";
 	pinctrl-0 = <&uart0_default>;
 	pinctrl-names = "default";
 };
 
-&gpio0 {
-	status = "okay";
-};
-
 &spi0 {
-	status = "okay";
 	clock-frequency = <DT_FREQ_M(25)>;
 	cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
 	pinctrl-0 = <&spi0_default>;
@@ -76,18 +73,19 @@ zephyr_udc0: &usbd {
 	sdhc0: sdhc@0 {
 		compatible = "zephyr,sdhc-spi-slot";
 		reg = <0>;
-		status = "okay";
+		status = "disabled";
+
 		mmc0: mmc {
 			compatible = "zephyr,sdmmc-disk";
 			disk-name = "MMC";
-			status = "okay";
+			status = "disabled";
 		};
+
 		spi-max-frequency = <25000000>;
 	};
 };
 
 &spi1 {
-	status = "okay";
 	clock-frequency = <DT_FREQ_M(8)>;
 	cs-gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
 	pinctrl-0 = <&spi1_default>;
@@ -95,7 +93,6 @@ zephyr_udc0: &usbd {
 };
 
 &i2c0 {
-	status = "okay";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 	pinctrl-0 = <&i2c0_default>;
 	pinctrl-names = "default";
@@ -103,20 +100,12 @@ zephyr_udc0: &usbd {
 	lsm6dso32_0: lsm6dso32@6b {
 		compatible = "st,lsm6dso32";
 		reg = <0x6b>;
-		status = "okay";
+		status = "disabled";
 	};
 
 	ms5607_0: ms5607@77 {
 		compatible = "meas,ms5607";
 		reg = <0x77>;
-		status = "okay";
+		status = "disabled";
 	};
-};
-
-&timer0 {
-	status = "okay";
-};
-
-&wdt0 {
-	status = "okay";
 };

@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <zephyr/dt-bindings/sensor/lps22hh.h>
+#include <zephyr/dt-bindings/sensor/lsm6dso.h>
+
 / {
 	chosen {
 		/* Auxspace specific */
@@ -28,19 +31,20 @@
 	};
 };
 
+
 &adc1 {
 	status = "okay";
 };
 
-&spi2 {
+&buzzer0 {
 	status = "okay";
 };
 
-&sdhc2 {
+&gpio0 {
 	status = "okay";
 };
 
-&mmc0 {
+&gpio1 {
 	status = "okay";
 };
 
@@ -50,13 +54,18 @@
 
 &lps22hh0 {
 	status = "okay";
+	odr = <LPS22HH_DT_ODR_50HZ>;
 };
 
 &lsm6dso320 {
 	status = "okay";
+	accel-range = <LSM6DSO_DT_FS_16G>;
+	accel-odr = <LSM6DSO_DT_ODR_52Hz>;
+	gyro-range = <LSM6DSO_DT_FS_1000DPS>;
+	gyro-odr = <LSM6DSO_DT_ODR_52Hz>;
 };
 
-&buzzer0 {
+&mmc0 {
 	status = "okay";
 };
 
@@ -65,5 +74,49 @@
 };
 
 &pyro0 {
+	status = "okay";
+};
+
+&sdhc2 {
+	status = "okay";
+};
+
+&spi2 {
+	status = "okay";
+};
+
+&timer0 {
+	status = "okay";
+};
+
+&timer1 {
+	status = "okay";
+};
+
+&timer2 {
+	status = "okay";
+};
+
+&timer3 {
+	status = "okay";
+};
+
+&twai {
+	status = "okay";
+};
+
+&trng0 {
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&usb_serial {
+	status = "okay";
+};
+
+&wdt0 {
 	status = "okay";
 };

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <zephyr/dt-bindings/sensor/lsm6dso.h>
+
  / {
 	chosen {
 		auxspace,baro = &ms5607_0;
@@ -20,4 +22,48 @@
 			mount-point = "/MMC:";
 		};
 	};
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+&i2c0 {
+	status = "okay";
+};
+
+&lsm6dso32_0 {
+	status = "okay";
+	accel-range = <LSM6DSO_DT_FS_16G>;
+	accel-odr = <LSM6DSO_DT_ODR_52Hz>;
+	gyro-range = <LSM6DSO_DT_FS_1000DPS>;
+	gyro-odr = <LSM6DSO_DT_ODR_52Hz>;
+};
+
+&mmc0 {
+	status = "okay";
+};
+
+&ms5607_0 {
+	status = "okay";
+};
+
+&sdhc0 {
+	status = "okay";
+};
+
+&spi0 {
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&wdt0 {
+	status = "okay";
+};
+
+zephyr_udc0: &usbd {
+	status = "okay";
 };
