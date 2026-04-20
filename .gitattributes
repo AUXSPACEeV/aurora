@@ -1,0 +1,6 @@
+flight_logs/**/*.csv filter=lfs diff=lfs merge=lfs -text
+flight_logs/**/*.bin filter=lfs diff=lfs merge=lfs -text
+flight_logs/**/*.influx filter=lfs diff=lfs merge=lfs -text
+flight_logs/**/state_audit filter=lfs diff=lfs merge=lfs -text
+flight_logs/**/*.png filter=lfs diff=lfs merge=lfs -text
+flight_logs/**/plot/*.png filter=lfs diff=lfs merge=lfs -text
