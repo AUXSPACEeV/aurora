@@ -163,6 +163,28 @@ int attitude_update(struct attitude *att,
 	double ny = gy - (wz * gx - wx * gz);
 	double nz = gz - (wx * gy - wy * gx);
 
+	/* Complementary correction toward -a/|a|.  The correction is weighted
+	 * by a Gaussian in (|a| - g_mag)/g_mag so the anchor is strong during
+	 * quasi-static phases (pad, coast, terminal descent) and smoothly
+	 * vanishes during boost and deployment shocks — no hard gate to fall
+	 * off.  Gain is dt/tau so behavior is independent of sample rate.
+	 */
+	const double a_norm = sqrt(ax * ax + ay * ay + az * az);
+	if (a_norm > 1e-6) {
+		static const double tau_s = 0.5;     /* anchor time constant */
+		static const double sigma_r = 0.20;  /* 1-sigma mag band, x g_mag */
+		const double r = (a_norm - att->g_mag) / att->g_mag;
+		const double w = exp(-0.5 * r * r / (sigma_r * sigma_r));
+		const double gain = w * dt_s / tau_s;
+		const double inv = 1.0 / a_norm;
+		const double gmx = -ax * inv;
+		const double gmy = -ay * inv;
+		const double gmz = -az * inv;
+		nx += gain * (gmx - nx);
+		ny += gain * (gmy - ny);
+		nz += gain * (gmz - nz);
+	}
+
 	/* Renormalize to unit length. */
 	const double n = sqrt(nx * nx + ny * ny + nz * nz);
 	if (n < 1e-9) {

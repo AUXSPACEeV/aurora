@@ -22,6 +22,7 @@ produces one plot per flight with state transitions drawn as vertical lines.
 """
 
 import argparse
+import math
 import os
 import re
 import numpy as np
@@ -63,8 +64,7 @@ class KalmanFilter:
     """2-state Kalman filter identical to struct filter / kalman.c."""
 
     def __init__(self, q_alt=0.1, q_vel=0.5, r_meas=4.0,
-                 apogee_delta_h=2.0, apogee_debounce=3,
-                 apogee_accel_max=2.0):
+                 apogee_k_sigma=4.0, apogee_debounce=3):
         # State vector [altitude, velocity]
         self.state = np.array([0.0, 0.0])
 
@@ -86,12 +86,11 @@ class KalmanFilter:
         self.apogee_latched = False
 
         # Last vote values computed in detect_apogee() for plotting
-        self.last_votes = (False, False, False)
+        self.last_votes = (False, False)
 
         # Apogee detection parameters
-        self.apogee_delta_h = apogee_delta_h
+        self.apogee_k_sigma = apogee_k_sigma
         self.apogee_debounce = apogee_debounce
-        self.apogee_accel_max = apogee_accel_max
 
     def predict(self, dt_s: float, a_vert: float = 0.0):
         """filter_predict - constant-acceleration propagation with a_vert
@@ -130,25 +129,27 @@ class KalmanFilter:
         self.P[1, 1] = P[1, 1] - K1 * P[0, 1]
 
     def detect_apogee(self) -> bool:
-        """filter_detect_apogee - multi-criterion vote:
-           (velocity <= 0) AND (altitude <= peak - delta_h) AND
-           (last a_vert < accel_max), sustained for `apogee_debounce`
-           consecutive calls. Latched once fired."""
+        """filter_detect_apogee - two-vote detector:
+           (velocity <= 0) AND (altitude <= peak - k*sigma_alt),
+           sustained for `apogee_debounce` consecutive calls.
+           sigma_alt = sqrt(P[0,0]) is the KF's own altitude stddev,
+           so the descent threshold scales with measurement noise.
+           Latched once fired."""
         altitude = self.state[0]
         velocity = self.state[1]
 
         if altitude > self.peak_altitude:
             self.peak_altitude = altitude
 
+        sigma_alt = float(np.sqrt(max(self.P[0, 0], 0.0)))
         velocity_ok = velocity <= 0.0
-        descent_ok = altitude <= self.peak_altitude - self.apogee_delta_h
-        accel_ok = self.last_accel_vert < self.apogee_accel_max
-        self.last_votes = (velocity_ok, descent_ok, accel_ok)
+        descent_ok = altitude <= self.peak_altitude - self.apogee_k_sigma * sigma_alt
+        self.last_votes = (velocity_ok, descent_ok)
 
         if self.apogee_latched:
             return False
 
-        if velocity_ok and descent_ok and accel_ok:
+        if velocity_ok and descent_ok:
             self.consecutive_apogee += 1
         else:
             self.consecutive_apogee = 0
@@ -166,6 +167,13 @@ class KalmanFilter:
 class Attitude:
     """Gyro-integrated body-frame gravity tracker.  Defaults mirror the
     CONFIG_IMU_UP_AXIS_POS_Z Kconfig choice: g_b seeded to [0, 0, -1]."""
+
+    # Anchor time constant and relative magnitude 1-sigma band.  Fixed so
+    # there are no knobs to tune: tau_s sets how quickly the accel-aided
+    # correction cancels gyro drift; sigma_r shapes the Gaussian weight in
+    # (|a| - g_mag)/g_mag that fades the correction during boost/deploy.
+    TAU_S = 0.5
+    SIGMA_R = 0.20
 
     def __init__(self):
         self.g_b = np.array([0.0, 0.0, -1.0])
@@ -203,6 +211,19 @@ class Attitude:
                           w[2] * g[0] - w[0] * g[2],
                           w[0] * g[1] - w[1] * g[0]])
         new_g = g - cross
+
+        # Complementary correction toward -a/|a|, Gaussian-weighted by how
+        # close |a| is to g_mag.  Smooth weighting anchors during quasi-
+        # static phases and fades out during boost/deploy shocks; gain is
+        # dt/tau so behavior is independent of sample rate.
+        a_norm = float(np.linalg.norm(a))
+        if a_norm > 1e-6:
+            r = (a_norm - self.g_mag) / self.g_mag
+            weight = math.exp(-0.5 * (r / self.SIGMA_R) ** 2)
+            gain = weight * dt_s / self.TAU_S
+            g_meas = -a / a_norm
+            new_g = new_g + gain * (g_meas - new_g)
+
         self.g_b = new_g / np.linalg.norm(new_g)
         f_vert = -float(np.dot(a, self.g_b))
         return f_vert - self.g_mag
@@ -406,8 +427,7 @@ def process_real_flight(streams, events, boost_ms, end_ms,
                         post_end_s=2.0, post_main_s=5.0,
                         default_duration_s=120.0,
                         q_alt=0.1, q_vel=0.5, r_meas=4.0,
-                        apogee_delta_h=1.5, apogee_debounce=3,
-                        apogee_accel_max=2.0):
+                        apogee_k_sigma=4.0, apogee_debounce=3):
     """Run the real flight window through Attitude + KalmanFilter.
 
     Aligns t=0 to ``boost_ms - pre_boost_s*1000`` so that the first
@@ -470,9 +490,8 @@ def process_real_flight(streams, events, boost_ms, end_ms,
     baro_alt = pressure_to_altitude(pressure_pa, p_ref)
 
     kf = KalmanFilter(q_alt=q_alt, q_vel=q_vel, r_meas=r_meas,
-                      apogee_delta_h=apogee_delta_h,
-                      apogee_debounce=apogee_debounce,
-                      apogee_accel_max=apogee_accel_max)
+                      apogee_k_sigma=apogee_k_sigma,
+                      apogee_debounce=apogee_debounce)
     att = Attitude()
 
     for i in range(cal_samples):
@@ -483,7 +502,7 @@ def process_real_flight(streams, events, boost_ms, end_ms,
     filtered_vel = np.zeros_like(t)
     accel_vert_hist = np.zeros_like(t)
     g_b_hist = np.tile(att.g_b, (len(t), 1))
-    vote_hist = np.zeros((len(t), 3), dtype=bool)
+    vote_hist = np.zeros((len(t), 2), dtype=bool)
     apogee_idx = None
 
     # Skip apogee detection until the KF settles past calibration.
@@ -791,11 +810,11 @@ def plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
     mark_states(ax_acc)
 
     # 7) Apogee votes - step plots at stacked y-levels
-    vote_labels = ["velocity <= 0", "altitude <= peak - Δh",
-                   "a_vert < accel_max"]
-    vote_colors = [c["vote_vel"], c["vote_desc"], c["vote_acc"]]
+    vote_labels = ["velocity <= 0", "altitude <= peak - k·σ_alt"]
+    vote_colors = [c["vote_vel"], c["vote_desc"]]
+    n_votes = len(vote_labels)
     for row, (label, color) in enumerate(zip(vote_labels, vote_colors)):
-        base = 2 - row
+        base = (n_votes - 1) - row
         ax_vote.fill_between(t, base, base + vote_hist[:, row].astype(float) * 0.8,
                              step="pre", color=color, alpha=0.55, linewidth=0,
                              label=label)
@@ -803,9 +822,9 @@ def plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
     mark_apogee(ax_vote)
     ax_vote.set_xlabel("Time (s)")
     ax_vote.set_ylabel("Apogee votes")
-    ax_vote.set_yticks([0.4, 1.4, 2.4])
+    ax_vote.set_yticks([0.4 + i for i in range(n_votes)])
     ax_vote.set_yticklabels(list(reversed(vote_labels)))
-    ax_vote.set_ylim(-0.1, 3.0)
+    ax_vote.set_ylim(-0.1, n_votes)
     ax_vote.legend(loc="upper right", ncol=3, fontsize=8)
     ax_vote.grid(True, color=c["grid"], alpha=0.5, axis="x")
     mark_states(ax_vote)
@@ -837,7 +856,7 @@ def run_simulation(args):
     filtered_vel = np.zeros_like(t)
     accel_vert_hist = np.zeros_like(t)
     g_b_hist = np.tile(att.g_b, (len(t), 1))
-    vote_hist = np.zeros((len(t), 3), dtype=bool)
+    vote_hist = np.zeros((len(t), 2), dtype=bool)
     apogee_idx = None
 
     cal_samples = int(pre_launch_s / dt)
@@ -925,9 +944,8 @@ def run_real_flight(args):
                                      post_main_s=args.post_main,
                                      q_alt=args.q_alt, q_vel=args.q_vel,
                                      r_meas=args.r_meas,
-                                     apogee_delta_h=args.delta_h,
-                                     apogee_debounce=args.debounce,
-                                     apogee_accel_max=args.accel_max)
+                                     apogee_k_sigma=args.k_sigma,
+                                     apogee_debounce=args.debounce)
 
         apogee_idx = result["apogee_idx"]
         computed_idx = result["computed_apogee_idx"]
@@ -1000,16 +1018,13 @@ def main():
     parser.add_argument("--r-meas", type=float, default=4.0, dest="r_meas",
                         help="KF measurement noise variance "
                              "(default 4.0, matches Kconfig)")
-    parser.add_argument("--delta-h", type=float, default=1.5, dest="delta_h",
-                        help="Apogee descent confirmation in m "
-                             "(default 1.5, matches Kconfig)")
+    parser.add_argument("--k-sigma", type=float, default=4.0, dest="k_sigma",
+                        help="Apogee descent confirmation in multiples of "
+                             "sqrt(P[0,0]) — the KF's altitude stddev "
+                             "(default 4.0)")
     parser.add_argument("--debounce", type=int, default=3,
                         help="Apogee debounce ticks (default 3, "
                              "matches Kconfig)")
-    parser.add_argument("--accel-max", type=float, default=2.0,
-                        dest="accel_max",
-                        help="Apogee max a_vert in m/s² "
-                             "(default 2.0, matches Kconfig)")
     args = parser.parse_args()
 
     if args.flight:
