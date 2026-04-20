@@ -89,19 +89,16 @@ int filter_predict(struct filter *filter, int64_t dt, double a_vert);
 int filter_update(struct filter *filter, double z);
 
 /**
- * @brief Detect apogee using a multi-criterion vote.
+ * @brief Detect apogee using a two-criterion vote.
  *
- * Combines three independent signals to reject noise-driven false
- * positives:
+ * Combines two signals to reject noise-driven false positives:
  *   1. Filtered vertical velocity is non-positive.
  *   2. Filtered altitude has descended at least
- *      @c CONFIG_FILTER_APOGEE_DELTA_H_CM below the tracked peak.
- *   3. Most recent world-frame vertical acceleration (passed to
- *      @ref filter_predict as @p a_vert) is below
- *      @c CONFIG_FILTER_APOGEE_ACCEL_MAX_MILLI, rejecting thrust
- *      or vibration spikes.
+ *      @c CONFIG_FILTER_APOGEE_K_SIGMA_MILLI * sqrt(P[0][0]) below
+ *      the tracked peak, i.e. the threshold scales with the KF's own
+ *      altitude uncertainty and self-tunes to measurement noise.
  *
- * All three conditions must hold for
+ * Both conditions must hold for
  * @c CONFIG_FILTER_APOGEE_DEBOUNCE_SAMPLES consecutive calls before
  * apogee is reported.  Apogee is latched – once reported, subsequent
  * calls return 0 until @ref filter_init is called again.

@@ -279,6 +279,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 
 			/* At this point, conditions are met. Is the timer done as well? */
 			if (TIMER_EXPIRED(&dt_ab)) {
+				SM_EVENT("orientation, altitude and timing threshold reached");
 				/* Congrats! BOOST detected! */
 				SM_TRANSITION(SM_BOOST);
 				k_timer_stop(&dt_ab);
@@ -293,6 +294,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 		if (!arm_to_boost_conditions_met(in))
 			break;
 
+		SM_EVENT("orientation and altitude threshold reached");
 		/* Conditions are met, so start the timer. */
 		k_timer_start(&dt_ab, K_MSEC(th.DT_AB), K_NO_WAIT);
 		running_timers[TIMER_DT_AB] = 1;

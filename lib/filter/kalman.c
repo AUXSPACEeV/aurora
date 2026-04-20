@@ -150,16 +150,20 @@ int filter_detect_apogee(struct filter *filter)
 	if (filter->apogee_latched)
 	return 0;
 
-	const double delta_h =
-	((double)CONFIG_FILTER_APOGEE_DELTA_H_CM) / 100.0;
-	const double accel_max =
-	((double)CONFIG_FILTER_APOGEE_ACCEL_MAX_MILLI) / FILTER_SCALE_DIVISOR;
+	/* Self-tuning descent threshold: scale by the KF's own altitude
+	 * standard deviation so the gate adapts to measurement noise.
+	 * sigma_alt^2 = P[0][0]; clamped to 0 for numerical safety.
+	 */
+	const double p00 = filter->covariance[0][0];
+	const double sigma_alt = (p00 > 0.0) ? sqrt(p00) : 0.0;
+	const double k_sigma =
+	((double)CONFIG_FILTER_APOGEE_K_SIGMA_MILLI) / FILTER_SCALE_DIVISOR;
 
 	const int velocity_ok = velocity <= 0.0;
-	const int descent_ok = altitude <= filter->peak_altitude - delta_h;
-	const int accel_ok = filter->last_accel_vert < accel_max;
+	const int descent_ok =
+	altitude <= filter->peak_altitude - k_sigma * sigma_alt;
 
-	if (velocity_ok && descent_ok && accel_ok) {
+	if (velocity_ok && descent_ok) {
 	filter->consecutive_apogee++;
 	} else {
 	filter->consecutive_apogee = 0;

@@ -155,17 +155,25 @@ ZTEST(attitude_tests, test_update_rotation_redirects_gravity_vector)
 	attitude_calibrate_finish(&att);
 
 	double omega = M_PI / 2.0;
+	double dt = 0.01;
 	double gyro[3] = {0.0, omega, 0.0};
 
-	/* Accel during pure rotation: the vector that was [0,0,+g] in world
-	 * is still [0,0,+g] in world, but expressed in the rotating body frame
-	 * it sweeps. To keep the test deterministic we just feed a constant
-	 * accel and check g_b propagation direction, not magnitude of a_v.
+	/* Under a pure rotation, the accelerometer reading in body frame must
+	 * rotate with the body: a_b = -g_mag * g_b_expected. Feed a consistent
+	 * reading so the complementary anchor agrees with the gyro integration
+	 * instead of fighting it. Sign convention matches the integrator:
+	 * starting g_b = [0,0,-1], omega_y > 0 sweeps g_b toward [+1,0,0], so
+	 * g_b(t) = [sin(theta), 0, -cos(theta)] and a_b = [-g sin, 0, g cos].
 	 */
-	double dummy_accel[3] = {0.0, 0.0, 9.81};
 	double a_v;
 	for (int i = 0; i < 100; i++) {
-		attitude_update(&att, dummy_accel, gyro, 0.01, &a_v);
+		double theta = omega * dt * (double)(i + 1);
+		double accel[3] = {
+			-9.81 * sin(theta),
+			0.0,
+			 9.81 * cos(theta),
+		};
+		attitude_update(&att, accel, gyro, dt, &a_v);
 	}
 
 	/* After 90 deg rotation about +Y, body +Z (was up) is now body -X

@@ -350,24 +350,31 @@ ZTEST(kalman_filter_tests, test_detect_apogee_null)
 		      "filter_detect_apogee(NULL) should return -EINVAL");
 }
 
-/** @brief Descent delta in meters (derived from Kconfig, cm). */
-#define APOGEE_DELTA_H \
-	((double)CONFIG_FILTER_APOGEE_DELTA_H_CM / 100.0)
+/** @brief k_sigma from Kconfig (dimensionless multiplier on sqrt(P[0][0])). */
+#define APOGEE_K_SIGMA \
+	((double)CONFIG_FILTER_APOGEE_K_SIGMA_MILLI / 1000.0)
 
 /** @brief Debounce count from Kconfig. */
 #define APOGEE_DEBOUNCE CONFIG_FILTER_APOGEE_DEBOUNCE_SAMPLES
 
+/** @brief Altitude stddev used by the helpers. Tests pin P[0][0] = 1. */
+#define APOGEE_SIGMA_ALT 1.0
+
+/** @brief Equivalent descent in meters for the tests' fixed sigma. */
+#define APOGEE_DESCENT_THRESH (APOGEE_K_SIGMA * APOGEE_SIGMA_ALT)
+
 /**
  * @brief Drive the filter toward a post-apogee state and count calls
- *        until apogee is latched.
+ *        until apogee is latched.  Pins P[0][0] so the sigma-scaled
+ *        descent threshold is deterministic.
  */
 static int drive_apogee_descent(struct filter *f,
-				double peak, double descent, double a_vert)
+				double peak, double descent)
 {
 	f->peak_altitude = peak;
 	f->state[0] = peak - descent;
 	f->state[1] = -1.0;
-	f->last_accel_vert = a_vert;
+	f->covariance[0][0] = APOGEE_SIGMA_ALT * APOGEE_SIGMA_ALT;
 
 	for (int i = 0; i < APOGEE_DEBOUNCE * 2; i++) {
 		if (filter_detect_apogee(f) == 1) {
@@ -405,10 +412,10 @@ ZTEST(kalman_filter_tests, test_detect_apogee_positive_velocity)
 ZTEST(kalman_filter_tests, test_detect_apogee_requires_descent)
 {
 	/* Ascend to a peak. */
+	filt.covariance[0][0] = APOGEE_SIGMA_ALT * APOGEE_SIGMA_ALT;
 	for (int i = 0; i < 10; i++) {
 		filt.state[0] = (double)i;
 		filt.state[1] = 10.0;
-		filt.last_accel_vert = 0.0;
 		zassert_equal(filter_detect_apogee(&filt), 0,
 			      "No apogee during ascent");
 	}
@@ -422,12 +429,12 @@ ZTEST(kalman_filter_tests, test_detect_apogee_requires_descent)
 }
 
 /**
- * @brief Sufficient descent + velocity + accel fires after debounce.
+ * @brief Sufficient descent + velocity fires after debounce.
  */
 ZTEST(kalman_filter_tests, test_detect_apogee_debounced)
 {
 	int n = drive_apogee_descent(&filt, 100.0,
-				     APOGEE_DELTA_H + 0.5, -1.0);
+				     APOGEE_DESCENT_THRESH + 0.5);
 
 	zassert_equal(n, APOGEE_DEBOUNCE,
 		      "Apogee should fire exactly after the debounce count");
@@ -439,9 +446,9 @@ ZTEST(kalman_filter_tests, test_detect_apogee_debounced)
 ZTEST(kalman_filter_tests, test_detect_apogee_debounce_reset)
 {
 	filt.peak_altitude = 100.0;
-	filt.state[0] = 100.0 - (APOGEE_DELTA_H + 0.5);
+	filt.state[0] = 100.0 - (APOGEE_DESCENT_THRESH + 0.5);
 	filt.state[1] = -1.0;
-	filt.last_accel_vert = -1.0;
+	filt.covariance[0][0] = APOGEE_SIGMA_ALT * APOGEE_SIGMA_ALT;
 
 	/* Partial progress, but not yet latched. */
 	for (int i = 0; i < APOGEE_DEBOUNCE - 1; i++) {
@@ -465,18 +472,24 @@ ZTEST(kalman_filter_tests, test_detect_apogee_debounce_reset)
 }
 
 /**
- * @brief High positive vertical acceleration blocks detection.
+ * @brief High altitude uncertainty widens the gate and blocks detection.
+ *
+ * With P[0][0] inflated so that k_sigma * sqrt(P[0][0]) exceeds the
+ * actual descent, the descent vote must stay low.
  */
-ZTEST(kalman_filter_tests, test_detect_apogee_accel_gate)
+ZTEST(kalman_filter_tests, test_detect_apogee_sigma_gate)
 {
-	int n = drive_apogee_descent(&filt, 100.0,
-				     APOGEE_DELTA_H + 0.5,
-				     /* Above accel threshold (thrust/vib). */
-				     1.0 + (double)CONFIG_FILTER_APOGEE_ACCEL_MAX_MILLI
-				     / 1000.0);
+	filt.peak_altitude = 100.0;
+	filt.state[0] = 100.0 - (APOGEE_DESCENT_THRESH + 0.5);
+	filt.state[1] = -1.0;
+	/* Blow up sigma so threshold >> descent. */
+	const double big_sigma = APOGEE_SIGMA_ALT * 100.0;
+	filt.covariance[0][0] = big_sigma * big_sigma;
 
-	zassert_equal(n, -1,
-		      "Apogee must not fire while accel_vert is above the gate");
+	for (int i = 0; i < APOGEE_DEBOUNCE * 2; i++) {
+		zassert_equal(filter_detect_apogee(&filt), 0,
+			      "Apogee must not fire while sigma gate is wider than descent");
+	}
 }
 
 /**
@@ -485,7 +498,7 @@ ZTEST(kalman_filter_tests, test_detect_apogee_accel_gate)
 ZTEST(kalman_filter_tests, test_detect_apogee_latched)
 {
 	int n = drive_apogee_descent(&filt, 100.0,
-				     APOGEE_DELTA_H + 0.5, -1.0);
+				     APOGEE_DESCENT_THRESH + 0.5);
 	zassert_equal(n, APOGEE_DEBOUNCE,
 		      "Setup: apogee must fire after debounce");
 
