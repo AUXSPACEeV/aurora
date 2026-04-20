@@ -526,6 +526,8 @@ def process_real_flight(streams, events, boost_ms, end_ms,
         "filtered_vel": filtered_vel,
         "g_b_hist": g_b_hist,
         "accel_vert_hist": accel_vert_hist,
+        "accel_body": accel,
+        "gyro_body": gyro,
         "vote_hist": vote_hist,
         "apogee_idx": apogee_idx,
         "computed_apogee_idx": computed_apogee_idx,
@@ -617,7 +619,8 @@ def plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
                 g_b_hist, accel_vert_hist, vote_hist, apogee_idx,
                 theme_name, out_path, true_alt=None, true_press=None,
                 true_vel=None, state_transitions=None, title=None,
-                computed_apogee_idx=None):
+                computed_apogee_idx=None, accel_body=None,
+                gyro_body=None):
     """Generate the 6-panel flight plot using the given theme.
 
     Optional overlays:
@@ -631,10 +634,10 @@ def plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
     c = apply_theme(theme_name)
 
     fig, axes = plt.subplots(
-        6, 1, figsize=(12, 16), sharex=True,
-        gridspec_kw={"height_ratios": [1.5, 2.5, 1.5, 1.5, 1.5, 1.2]},
+        7, 1, figsize=(12, 18), sharex=True,
+        gridspec_kw={"height_ratios": [1.5, 2.5, 1.5, 1.5, 1.5, 1.5, 1.2]},
     )
-    ax_press, ax_alt, ax_vel, ax_att, ax_acc, ax_vote = axes
+    ax_press, ax_alt, ax_vel, ax_att, ax_gyro, ax_acc, ax_vote = axes
 
     state_palette = {
         "IDLE":      "#9a9996",
@@ -753,7 +756,30 @@ def plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
     ax_att.grid(True, color=c["grid"], alpha=0.5)
     mark_states(ax_att)
 
-    # 5) Gravity-removed world-vertical accel (attitude.update output)
+    # 5) Body-frame gyro rates
+    if gyro_body is not None:
+        ax_gyro.plot(t, gyro_body[:, 0], color=c["g_x"], linewidth=1.0,
+                     label="ω_body[x]")
+        ax_gyro.plot(t, gyro_body[:, 1], color=c["g_y"], linewidth=1.0,
+                     label="ω_body[y]")
+        ax_gyro.plot(t, gyro_body[:, 2], color=c["g_z"], linewidth=1.0,
+                     label="ω_body[z]")
+    ax_gyro.axhline(0, color=c["zero_line"], linewidth=0.5)
+    mark_computed_apogee(ax_gyro)
+    mark_apogee(ax_gyro)
+    ax_gyro.set_ylabel("ω (rad/s)")
+    ax_gyro.legend(loc="upper right", ncol=3)
+    ax_gyro.grid(True, color=c["grid"], alpha=0.5)
+    mark_states(ax_gyro)
+
+    # 6) Gravity-removed world-vertical accel (attitude.update output)
+    if accel_body is not None:
+        ax_acc.plot(t, accel_body[:, 0], color=c["g_x"], linewidth=0.8,
+                    alpha=0.35, label="a_body[x]")
+        ax_acc.plot(t, accel_body[:, 1], color=c["g_y"], linewidth=0.8,
+                    alpha=0.35, label="a_body[y]")
+        ax_acc.plot(t, accel_body[:, 2], color=c["g_z"], linewidth=0.8,
+                    alpha=0.35, label="a_body[z]")
     ax_acc.plot(t, accel_vert_hist, color=c["accel_vert"], linewidth=1.2,
                 label="a_vert (world, g-removed)")
     ax_acc.axhline(0, color=c["zero_line"], linewidth=0.5)
@@ -764,7 +790,7 @@ def plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
     ax_acc.grid(True, color=c["grid"], alpha=0.5)
     mark_states(ax_acc)
 
-    # 6) Apogee votes - step plots at stacked y-levels
+    # 7) Apogee votes - step plots at stacked y-levels
     vote_labels = ["velocity <= 0", "altitude <= peak - Δh",
                    "a_vert < accel_max"]
     vote_colors = [c["vote_vel"], c["vote_desc"], c["vote_acc"]]
@@ -861,6 +887,7 @@ def run_simulation(args):
                     theme, out_path,
                     true_alt=true_alt, true_press=true_press, true_vel=true_vel,
                     computed_apogee_idx=computed_apogee_idx,
+                    accel_body=accel_body, gyro_body=gyro_body,
                     title="AURORA Kalman Filter - Simulated 500 m Rocket Flight")
 
 
@@ -932,6 +959,8 @@ def run_real_flight(args):
                         apogee_idx, theme, out_path,
                         state_transitions=result["state_transitions"],
                         computed_apogee_idx=result["computed_apogee_idx"],
+                        accel_body=result["accel_body"],
+                        gyro_body=result["gyro_body"],
                         title=title)
 
 
