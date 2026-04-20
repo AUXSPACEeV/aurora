@@ -7,14 +7,23 @@
 Simulated rocket flight through the AURORA Kalman filter.
 
 Replicates the 2-state (altitude, velocity) constant-acceleration Kalman
-filter from aurora/lib/apogee/kalman.c (a_vert=0 here -> constant-velocity).
-The simulation generates a realistic pressure signal from the ISA barometric
-formula, adds sensor noise in the pressure domain, then converts back to
-altitude via the hypsometric formula before feeding the Kalman filter, matching
-the real sensor pipeline.
+filter from aurora/lib/filter/kalman.c together with the body-frame gravity
+tracker from aurora/lib/sensor/attitude.c.  The simulation generates a
+realistic pressure signal from the ISA barometric formula, synthesizes a
+body-frame IMU (accel + gyro) with a slow pitch-over after apogee, and feeds
+both streams through the Python mirrors of the flight pipeline.  Plots cover
+pressure, altitude, vertical velocity, body-frame gravity direction, the
+gravity-removed world-vertical acceleration, and the three-way apogee vote.
+
+When invoked with ``--flight DIR``, the script instead loads real telemetry
+from ``DIR/flights.influx`` and state transitions from ``DIR/state_audit``,
+segments the log into individual flights using ARMED→BOOST transitions, and
+produces one plot per flight with state transitions drawn as vertical lines.
 """
 
 import argparse
+import os
+import re
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -76,6 +85,9 @@ class KalmanFilter:
         self.consecutive_apogee = 0
         self.apogee_latched = False
 
+        # Last vote values computed in detect_apogee() for plotting
+        self.last_votes = (False, False, False)
+
         # Apogee detection parameters
         self.apogee_delta_h = apogee_delta_h
         self.apogee_debounce = apogee_debounce
@@ -128,12 +140,13 @@ class KalmanFilter:
         if altitude > self.peak_altitude:
             self.peak_altitude = altitude
 
-        if self.apogee_latched:
-            return False
-
         velocity_ok = velocity <= 0.0
         descent_ok = altitude <= self.peak_altitude - self.apogee_delta_h
         accel_ok = self.last_accel_vert < self.apogee_accel_max
+        self.last_votes = (velocity_ok, descent_ok, accel_ok)
+
+        if self.apogee_latched:
+            return False
 
         if velocity_ok and descent_ok and accel_ok:
             self.consecutive_apogee += 1
@@ -147,19 +160,73 @@ class KalmanFilter:
 
 
 # ---------------------------------------------------------------------------
+# Attitude tracker - mirrors lib/sensor/attitude.c (default +Z up mounting)
+# ---------------------------------------------------------------------------
+
+class Attitude:
+    """Gyro-integrated body-frame gravity tracker.  Defaults mirror the
+    CONFIG_IMU_UP_AXIS_POS_Z Kconfig choice: g_b seeded to [0, 0, -1]."""
+
+    def __init__(self):
+        self.g_b = np.array([0.0, 0.0, -1.0])
+        self.g_mag = 9.80665
+        self.accel_bias = np.zeros(3)
+        self.gyro_bias = np.zeros(3)
+        self.cal_samples = 0
+        self.cal_accel_sum = np.zeros(3)
+        self.cal_gyro_sum = np.zeros(3)
+        self.calibrated = False
+
+    def calibrate_sample(self, accel, gyro):
+        self.cal_accel_sum += accel
+        self.cal_gyro_sum += gyro
+        self.cal_samples += 1
+
+    def calibrate_finish(self):
+        n = float(self.cal_samples)
+        accel_mean = self.cal_accel_sum / n
+        self.gyro_bias = self.cal_gyro_sum / n
+        g_mag = float(np.linalg.norm(accel_mean))
+        if g_mag < 1e-6:
+            g_mag = 9.80665
+        self.g_mag = g_mag
+        self.g_b = np.array([0.0, 0.0, -1.0])
+        self.accel_bias = accel_mean + g_mag * self.g_b
+        self.calibrated = True
+
+    def update(self, accel, gyro, dt_s):
+        """Returns gravity-removed world-vertical accel (positive = up)."""
+        a = accel - self.accel_bias
+        w = (gyro - self.gyro_bias) * dt_s
+        g = self.g_b
+        cross = np.array([w[1] * g[2] - w[2] * g[1],
+                          w[2] * g[0] - w[0] * g[2],
+                          w[0] * g[1] - w[1] * g[0]])
+        new_g = g - cross
+        self.g_b = new_g / np.linalg.norm(new_g)
+        f_vert = -float(np.dot(a, self.g_b))
+        return f_vert - self.g_mag
+
+
+# ---------------------------------------------------------------------------
 # Flight simulation
 # ---------------------------------------------------------------------------
 
-def simulate_flight(apogee_m=500.0, dt=0.02, seed=42):
+def simulate_flight(apogee_m=500.0, dt=0.02, seed=42, pre_launch_s=1.0):
     """
-    Generate a realistic rocket altitude profile and barometric pressure.
+    Generate a realistic rocket altitude profile and barometric pressure,
+    along with a synthetic body-frame IMU stream.
 
     Phases:
-      1. Boost   - constant thrust acceleration for ~3 s
-      2. Coast   - ballistic arc (gravity only) up to apogee
-      3. Descent - drogue then main chute
+      1. Pre-launch - stationary (used by the attitude tracker to calibrate)
+      2. Boost      - constant thrust acceleration for ~3 s
+      3. Coast      - ballistic arc (gravity only) up to apogee
+      4. Descent    - drogue then main chute, with a slow pitch-over tumble
 
-    Returns (time, true_altitude, true_pressure, noisy_pressure) arrays.
+    Returns (time, true_altitude, true_pressure, noisy_pressure, accel_body,
+             gyro_body, apogee_time) arrays.  The IMU streams are expressed
+             in body frame with +Z aligned with the airframe (matches the
+             CONFIG_IMU_UP_AXIS_POS_Z default).
     """
     rng = np.random.default_rng(seed)
 
@@ -176,36 +243,68 @@ def simulate_flight(apogee_m=500.0, dt=0.02, seed=42):
 
     # --- Coast phase (gravity only until v=0) ---
     coast_time = v_burnout / g
-    actual_apogee = h_burnout + v_burnout * coast_time - 0.5 * g * coast_time**2
+    computed_apogee = h_burnout + v_burnout * coast_time - 0.5 * g * coast_time**2
 
     # --- Descent phase ---
     drogue_v = 30.0   # m/s under drogue
     main_deploy_h = 150.0
     main_v = 6.0      # m/s under main
 
-    descent_time_drogue = (actual_apogee - main_deploy_h) / drogue_v
+    descent_time_drogue = (computed_apogee - main_deploy_h) / drogue_v
     descent_time_main = main_deploy_h / main_v
-    total_time = burn_time + coast_time + descent_time_drogue + descent_time_main + 2.0
+    flight_time = burn_time + coast_time + descent_time_drogue + descent_time_main + 2.0
+    total_time = pre_launch_s + flight_time
 
     t = np.arange(0, total_time, dt)
     altitude = np.zeros_like(t)
+    accel_vert_world = np.zeros_like(t)  # world-frame +up, gravity-removed
 
     for i, ti in enumerate(t):
-        if ti <= burn_time:
-            altitude[i] = 0.5 * a_thrust * ti**2
-        elif ti <= burn_time + coast_time:
-            tc = ti - burn_time
+        tf = ti - pre_launch_s  # flight-relative time
+        if tf <= 0.0:
+            altitude[i] = 0.0
+            accel_vert_world[i] = 0.0
+        elif tf <= burn_time:
+            altitude[i] = 0.5 * a_thrust * tf**2
+            accel_vert_world[i] = a_thrust - g
+        elif tf <= burn_time + coast_time:
+            tc = tf - burn_time
             altitude[i] = h_burnout + v_burnout * tc - 0.5 * g * tc**2
-        elif ti <= burn_time + coast_time + descent_time_drogue:
-            td = ti - burn_time - coast_time
-            altitude[i] = actual_apogee - drogue_v * td
-        elif ti <= burn_time + coast_time + descent_time_drogue + descent_time_main:
-            tm = ti - burn_time - coast_time - descent_time_drogue
+            accel_vert_world[i] = -g
+        elif tf <= burn_time + coast_time + descent_time_drogue:
+            td = tf - burn_time - coast_time
+            altitude[i] = computed_apogee - drogue_v * td
+            accel_vert_world[i] = 0.0  # terminal velocity under drogue
+        elif tf <= burn_time + coast_time + descent_time_drogue + descent_time_main:
+            tm = tf - burn_time - coast_time - descent_time_drogue
             altitude[i] = main_deploy_h - main_v * tm
+            accel_vert_world[i] = 0.0  # terminal velocity under main
         else:
             altitude[i] = 0.0
+            accel_vert_world[i] = 0.0
 
     altitude = np.maximum(altitude, 0.0)
+
+    # --- Body attitude: nominally vertical, slow pitch-over after apogee ---
+    apogee_time = pre_launch_s + burn_time + coast_time
+    pitch_rate = 0.35  # rad/s tumble around body-y after apogee
+    pitch = np.where(t > apogee_time, pitch_rate * (t - apogee_time), 0.0)
+
+    # Specific force in world frame: a_world - gravity_world = [0, 0, a_vert + g]
+    specific_force_z_world = accel_vert_world + g
+
+    # Rotate world [0,0,f] into body via rotation of angle `pitch` around body-y.
+    # body_x = sin(pitch) * f, body_y = 0, body_z = cos(pitch) * f
+    accel_body = np.zeros((len(t), 3))
+    accel_body[:, 0] = np.sin(pitch) * specific_force_z_world
+    accel_body[:, 2] = np.cos(pitch) * specific_force_z_world
+
+    gyro_body = np.zeros((len(t), 3))
+    gyro_body[t > apogee_time, 1] = pitch_rate
+
+    # IMU noise (body frame)
+    accel_body += rng.normal(0.0, 0.4, size=accel_body.shape)
+    gyro_body += rng.normal(0.0, 0.01, size=gyro_body.shape)
 
     # --- Pressure domain ---
     true_pressure = altitude_to_pressure(altitude)
@@ -214,7 +313,226 @@ def simulate_flight(apogee_m=500.0, dt=0.02, seed=42):
     pressure_noise = rng.normal(0.0, 50.0, size=len(t))
     noisy_pressure = true_pressure + pressure_noise
 
-    return t, altitude, true_pressure, noisy_pressure
+    return (t, altitude, true_pressure, noisy_pressure,
+            accel_body, gyro_body, apogee_time)
+
+
+# ---------------------------------------------------------------------------
+# Real flight log parsing (InfluxDB line protocol + state_audit)
+# ---------------------------------------------------------------------------
+
+def parse_influx(path):
+    """Parse AURORA telemetry in InfluxDB line protocol.
+
+    Returns dict with keys ``accel``, ``gyro``, ``baro`` mapping to
+    ``(t_ms, values)`` tuples where ``t_ms`` is a 1-D int array and
+    ``values`` is an (N, K) float array (K=3 for accel/gyro, 2 for baro
+    as ``[pres_kPa, temp_C]``).
+    """
+    rows = {"accel": ([], []), "gyro": ([], []), "baro": ([], [])}
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            # "telemetry,type=T field=v,field=v <timestamp>"
+            try:
+                measurement_and_fields, ts = line.rsplit(" ", 1)
+                meas_tags, fields = measurement_and_fields.split(" ", 1)
+                t_ms = int(ts)
+            except ValueError:
+                continue
+            tags = dict(kv.split("=", 1) for kv in meas_tags.split(",")[1:])
+            ttype = tags.get("type")
+            if ttype not in rows:
+                continue
+            fd = dict(kv.split("=", 1) for kv in fields.split(","))
+            try:
+                if ttype in ("accel", "gyro"):
+                    vals = [float(fd["x"]), float(fd["y"]), float(fd["z"])]
+                else:  # baro
+                    vals = [float(fd["pres"]), float(fd["temp"])]
+            except (KeyError, ValueError):
+                continue
+            rows[ttype][0].append(t_ms)
+            rows[ttype][1].append(vals)
+
+    out = {}
+    for k, (ts, vs) in rows.items():
+        out[k] = (np.array(ts, dtype=np.int64), np.array(vs, dtype=float))
+    return out
+
+
+def parse_state_audit(path):
+    """Parse the state_audit file into a list of events.
+
+    Each entry: ``(t_ms, kind, from_state, to_or_event)`` where ``kind`` is
+    ``"transition"`` or ``"event"``. Tolerates the dash-prefixed first line.
+    """
+    rx = re.compile(r"^-*(\d+)\s+(\S+)\s+(\S+)\s+(.+)$")
+    events = []
+    with open(path) as f:
+        for line in f:
+            m = rx.match(line.strip())
+            if not m:
+                continue
+            events.append((int(m.group(1)), m.group(2), m.group(3),
+                           m.group(4).strip()))
+    return events
+
+
+def segment_flights(events):
+    """Find all ARMED→BOOST transitions and the subsequent *→IDLE close-out.
+
+    Returns list of ``(boost_ms, end_ms)`` tuples. ``end_ms`` may be ``None``
+    if the flight is still running at end-of-log.
+    """
+    flights = []
+    boosts = [i for i, e in enumerate(events)
+              if e[1] == "transition" and e[2] == "ARMED" and e[3] == "BOOST"]
+    for bi in boosts:
+        boost_ms = events[bi][0]
+        end_ms = None
+        for ej in events[bi + 1:]:
+            if ej[1] == "transition" and ej[3] == "IDLE":
+                end_ms = ej[0]
+                break
+        flights.append((boost_ms, end_ms))
+    return flights
+
+
+def process_real_flight(streams, events, boost_ms, end_ms,
+                        dt_s=0.02, pre_boost_s=10.0, cal_s=3.0,
+                        post_end_s=2.0, post_main_s=5.0,
+                        default_duration_s=120.0,
+                        q_alt=0.1, q_vel=0.5, r_meas=4.0,
+                        apogee_delta_h=1.5, apogee_debounce=3,
+                        apogee_accel_max=2.0):
+    """Run the real flight window through Attitude + KalmanFilter.
+
+    Aligns t=0 to ``boost_ms - pre_boost_s*1000`` so that the first
+    ``cal_s`` seconds are stationary and usable for calibration, and the
+    BOOST transition lands at ``t = pre_boost_s``.
+
+    If a ``*→MAIN`` transition is present within ``[boost_ms, end_ms]``,
+    the analysis window is truncated to ``MAIN + post_main_s`` seconds to
+    discard the long post-parachute tail (where the state machine often
+    idles out instead of progressing to REDUNDANT).
+
+    Returns a dict with keys: t, pressure_pa, baro_alt, filtered_alt,
+    filtered_vel, g_b_hist, accel_vert_hist, vote_hist, apogee_idx,
+    computed_apogee_idx, state_transitions, g_mag, p_ref.
+    """
+    if cal_s > pre_boost_s:
+        print(f"  warning: cal_s={cal_s:.1f}s > pre_boost_s={pre_boost_s:.1f}s, "
+              f"clamping cal_s to {pre_boost_s:.1f}s")
+        cal_s = pre_boost_s
+
+    window_start_ms = boost_ms - int(pre_boost_s * 1000)
+    raw_end_ms = (end_ms if end_ms is not None
+                  else boost_ms + int(default_duration_s * 1000))
+
+    main_ms = None
+    for ev in events:
+        if ev[0] < boost_ms or ev[0] > raw_end_ms:
+            continue
+        if ev[1] == "transition" and ev[3] == "MAIN":
+            main_ms = ev[0]
+            break
+
+    if main_ms is not None:
+        tail_ms = main_ms + int(post_main_s * 1000)
+    else:
+        tail_ms = raw_end_ms
+    window_end_ms = tail_ms + int(post_end_s * 1000)
+
+    duration_s = (window_end_ms - window_start_ms) / 1000.0
+    t = np.arange(0.0, duration_s, dt_s)
+
+    def resample(t_ms_raw, vals_raw):
+        mask = (t_ms_raw >= window_start_ms) & (t_ms_raw <= window_end_ms)
+        ts = (t_ms_raw[mask] - window_start_ms) / 1000.0
+        vs = vals_raw[mask]
+        out = np.zeros((len(t), vs.shape[1]))
+        for k in range(vs.shape[1]):
+            out[:, k] = np.interp(t, ts, vs[:, k])
+        return out
+
+    accel = resample(*streams["accel"])
+    gyro = resample(*streams["gyro"])
+    baro = resample(*streams["baro"])  # [pres_kPa, temp_C]
+
+    pressure_pa = baro[:, 0] * 1000.0  # kPa → Pa
+
+    # Ground reference: mean pressure over the calibration window.
+    cal_samples = int(cal_s / dt_s)
+    p_ref = float(np.mean(pressure_pa[:cal_samples]))
+    baro_alt = pressure_to_altitude(pressure_pa, p_ref)
+
+    kf = KalmanFilter(q_alt=q_alt, q_vel=q_vel, r_meas=r_meas,
+                      apogee_delta_h=apogee_delta_h,
+                      apogee_debounce=apogee_debounce,
+                      apogee_accel_max=apogee_accel_max)
+    att = Attitude()
+
+    for i in range(cal_samples):
+        att.calibrate_sample(accel[i], gyro[i])
+    att.calibrate_finish()
+
+    filtered_alt = np.zeros_like(t)
+    filtered_vel = np.zeros_like(t)
+    accel_vert_hist = np.zeros_like(t)
+    g_b_hist = np.tile(att.g_b, (len(t), 1))
+    vote_hist = np.zeros((len(t), 3), dtype=bool)
+    apogee_idx = None
+
+    # Skip apogee detection until the KF settles past calibration.
+    settle_idx = cal_samples + int(1.0 / dt_s)
+
+    for i in range(len(t)):
+        if i < cal_samples:
+            a_vert = 0.0
+        else:
+            a_vert = att.update(accel[i], gyro[i], dt_s)
+        accel_vert_hist[i] = a_vert
+        g_b_hist[i] = att.g_b
+
+        kf.predict(dt_s, a_vert)
+        kf.update(baro_alt[i])
+        filtered_alt[i] = kf.state[0]
+        filtered_vel[i] = kf.state[1]
+
+        detected = kf.detect_apogee()
+        vote_hist[i] = kf.last_votes
+        if apogee_idx is None and i > settle_idx and detected:
+            apogee_idx = i
+
+    state_transitions = []
+    for ev in events:
+        if ev[1] != "transition":
+            continue
+        if window_start_ms <= ev[0] <= window_end_ms:
+            ts = (ev[0] - window_start_ms) / 1000.0
+            state_transitions.append((ts, ev[2], ev[3]))
+
+    computed_apogee_idx = (int(np.argmax(filtered_alt))
+                         if len(filtered_alt) > 0 else None)
+
+    return {
+        "t": t,
+        "pressure_pa": pressure_pa,
+        "baro_alt": baro_alt,
+        "filtered_alt": filtered_alt,
+        "filtered_vel": filtered_vel,
+        "g_b_hist": g_b_hist,
+        "accel_vert_hist": accel_vert_hist,
+        "vote_hist": vote_hist,
+        "apogee_idx": apogee_idx,
+        "computed_apogee_idx": computed_apogee_idx,
+        "state_transitions": state_transitions,
+        "g_mag": att.g_mag,
+        "p_ref": p_ref,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -232,8 +550,16 @@ THEMES = {
         "true_alt":     "#1a5fb4",
         "filtered":     "#e5a50a",
         "velocity":     "#26a269",
+        "velocity_ref": "#8fd19e",
         "apogee":       "#c01c28",
         "zero_line":    "#333333",
+        "g_x":          "#c01c28",
+        "g_y":          "#26a269",
+        "g_z":          "#1a5fb4",
+        "accel_vert":   "#813d9c",
+        "vote_vel":     "#26a269",
+        "vote_desc":    "#1a5fb4",
+        "vote_acc":     "#e5a50a",
         "legend_bg":    "#f8f9fa",
         "legend_edge":  "#dce0e5",
     },
@@ -247,8 +573,16 @@ THEMES = {
         "true_alt":     "#6ea8fe",
         "filtered":     "#ffd43b",
         "velocity":     "#51cf66",
+        "velocity_ref": "#2f7a3d",
         "apogee":       "#ff6b6b",
         "zero_line":    "#8890a0",
+        "g_x":          "#ff6b6b",
+        "g_y":          "#51cf66",
+        "g_z":          "#6ea8fe",
+        "accel_vert":   "#c77dff",
+        "vote_vel":     "#51cf66",
+        "vote_desc":    "#6ea8fe",
+        "vote_acc":     "#ffd43b",
         "legend_bg":    "#252830",
         "legend_edge":  "#3a3d46",
     },
@@ -279,59 +613,176 @@ def apply_theme(name: str) -> dict:
 # Plotting
 # ---------------------------------------------------------------------------
 
-def plot_flight(t, true_alt, true_press, noisy_press, baro_alt,
-                filtered_alt, filtered_vel, apogee_idx, theme_name, out_path):
-    """Generate the 3-panel flight plot using the given theme."""
+def plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
+                g_b_hist, accel_vert_hist, vote_hist, apogee_idx,
+                theme_name, out_path, true_alt=None, true_press=None,
+                true_vel=None, state_transitions=None, title=None,
+                computed_apogee_idx=None):
+    """Generate the 6-panel flight plot using the given theme.
+
+    Optional overlays:
+      * ``true_alt`` / ``true_press`` / ``true_vel`` — ground-truth reference
+        curves (only available for the simulation path).
+      * ``state_transitions`` — list of ``(t_s, from_state, to_state)`` tuples
+        drawn as labelled vertical lines on every panel.
+      * ``computed_apogee_idx`` — index of the filtered-altitude peak, drawn
+        as a thin light reference line for comparison with ``apogee_idx``.
+    """
     c = apply_theme(theme_name)
 
-    fig, (ax_press, ax_alt, ax_vel) = plt.subplots(
-        3, 1, figsize=(12, 10), sharex=True,
-        gridspec_kw={"height_ratios": [2, 3, 1]},
+    fig, axes = plt.subplots(
+        6, 1, figsize=(12, 16), sharex=True,
+        gridspec_kw={"height_ratios": [1.5, 2.5, 1.5, 1.5, 1.5, 1.2]},
     )
+    ax_press, ax_alt, ax_vel, ax_att, ax_acc, ax_vote = axes
 
-    # Top: raw pressure
+    state_palette = {
+        "IDLE":      "#9a9996",
+        "ARMED":     "#e5a50a",
+        "BOOST":     "#c01c28",
+        "BURNOUT":   "#ed333b",
+        "APOGEE":    "#9141ac",
+        "MAIN":      "#1a5fb4",
+        "REDUNDANT": "#26a269",
+        "LANDED":    "#613583",
+        "ERROR":     "#a51d2d",
+    }
+
+    def mark_apogee(ax, label=None):
+        if apogee_idx is None:
+            return
+        ax.axvline(t[apogee_idx], color=c["apogee"],
+                   linestyle="--", linewidth=1.5, label=label)
+
+    def mark_computed_apogee(ax, label=None):
+        if computed_apogee_idx is None:
+            return
+        ax.axvline(t[computed_apogee_idx], color=c["apogee"],
+                   linestyle="-", linewidth=0.8, alpha=0.35, label=label)
+
+    def mark_states(ax, with_labels=False, with_dt_apogee=False):
+        if not state_transitions:
+            return None
+        ymin, ymax = ax.get_ylim()
+        for ts, frm, to in state_transitions:
+            col = state_palette.get(to, c["zero_line"])
+            if with_dt_apogee and to == "APOGEE":
+                dt_apogee = ts - t[computed_apogee_idx]
+                label = (f"Apogee detected (flight) (t={ts:.2f} s, "
+                         f"Δ={dt_apogee:+.2f} s)")
+                print(label)
+                ax.axvline(ts, color=col, linestyle="-", linewidth=1.0, alpha=0.7, label=label)
+            else:
+                ax.axvline(ts, color=col, linestyle="-", linewidth=1.0, alpha=0.7)
+            if with_labels:
+                ax.text(ts, ymax, f" {to}", color=col, fontsize=8,
+                        va="top", ha="left", rotation=90,
+                        bbox=dict(boxstyle="round,pad=0.15",
+                                facecolor=c["legend_bg"],
+                                edgecolor=col, linewidth=0.5, alpha=0.85))
+
+    # 1) Pressure
     ax_press.plot(t, noisy_press / 100, color=c["noisy"], linewidth=0.5,
-                  label="Noisy baro reading")
-    ax_press.plot(t, true_press / 100, color=c["pressure"], linewidth=1.5,
-                  label="True pressure")
-    if apogee_idx is not None:
-        ax_press.axvline(t[apogee_idx], color=c["apogee"],
-                         linestyle="--", linewidth=1.5)
+                  label="Baro pressure")
+    if true_press is not None:
+        ax_press.plot(t, true_press / 100, color=c["pressure"], linewidth=1.5,
+                      label="True pressure")
+    mark_computed_apogee(ax_press)
+    mark_apogee(ax_press)
     ax_press.set_ylabel("Pressure (hPa)")
-    ax_press.set_title("AURORA Kalman Filter - Simulated 500 m Rocket Flight",
-                       color=c["brand"], fontweight="bold")
+    if title is not None:
+        ax_press.set_title(title, color=c["brand"], fontweight="bold")
     ax_press.legend(loc="upper right")
     ax_press.grid(True, color=c["grid"], alpha=0.5)
     ax_press.invert_yaxis()
+    mark_states(ax_press, with_labels=True)
 
-    # Middle: altitude
+    # 2) Altitude
     ax_alt.plot(t, baro_alt, color=c["noisy"], linewidth=0.5,
                 label="Baro altitude (hypsometric)")
-    ax_alt.plot(t, true_alt, color=c["true_alt"], linewidth=2,
-                label="True altitude")
+    if true_alt is not None:
+        ax_alt.plot(t, true_alt, color=c["true_alt"], linewidth=2,
+                    label="True altitude")
     ax_alt.plot(t, filtered_alt, color=c["filtered"], linewidth=2,
                 label="Kalman filter output")
+    if computed_apogee_idx is not None:
+        mark_computed_apogee(ax_alt,
+                           f"Computed apogee (t={t[computed_apogee_idx]:.2f} s)")
     if apogee_idx is not None:
-        ax_alt.axvline(t[apogee_idx], color=c["apogee"], linestyle="--",
-                       linewidth=1.5,
-                       label=f"Apogee detected (t={t[apogee_idx]:.2f} s)")
+        if computed_apogee_idx is not None:
+            dt_apogee = t[apogee_idx] - t[computed_apogee_idx]
+            apogee_label = (f"Apogee detected (simulator) (t={t[apogee_idx]:.2f} s, "
+                            f"Δ={dt_apogee:+.2f} s)")
+        else:
+            apogee_label = f"Apogee detected (simulator) (t={t[apogee_idx]:.2f} s)"
+        mark_apogee(ax_alt, apogee_label)
         ax_alt.plot(t[apogee_idx], filtered_alt[apogee_idx], "o",
                     color=c["apogee"], markersize=8)
     ax_alt.set_ylabel("Altitude (m)")
-    ax_alt.legend(loc="upper right")
     ax_alt.grid(True, color=c["grid"], alpha=0.5)
+    mark_states(ax_alt, with_dt_apogee=True)
+    ax_alt.legend(loc="upper right")
 
-    # Bottom: velocity
+    # 3) Vertical velocity (filtered + optional truth reference)
+    if true_vel is not None:
+        ax_vel.plot(t, true_vel, color=c["velocity_ref"], linewidth=1.0,
+                    linestyle=":", label="True velocity (d/dt)")
     ax_vel.plot(t, filtered_vel, color=c["velocity"], linewidth=1.5,
-                label="Estimated velocity")
+                label="Filtered velocity")
     ax_vel.axhline(0, color=c["zero_line"], linewidth=0.5)
-    if apogee_idx is not None:
-        ax_vel.axvline(t[apogee_idx], color=c["apogee"],
-                       linestyle="--", linewidth=1.5)
-    ax_vel.set_xlabel("Time (s)")
+    mark_computed_apogee(ax_vel)
+    mark_apogee(ax_vel)
     ax_vel.set_ylabel("Velocity (m/s)")
     ax_vel.legend(loc="upper right")
     ax_vel.grid(True, color=c["grid"], alpha=0.5)
+    mark_states(ax_vel)
+
+    # 4) Attitude: body-frame gravity direction g_b
+    ax_att.plot(t, g_b_hist[:, 0], color=c["g_x"], linewidth=1.5,
+                label="g_b[x]")
+    ax_att.plot(t, g_b_hist[:, 1], color=c["g_y"], linewidth=1.5,
+                label="g_b[y]")
+    ax_att.plot(t, g_b_hist[:, 2], color=c["g_z"], linewidth=1.5,
+                label="g_b[z]")
+    ax_att.axhline(0, color=c["zero_line"], linewidth=0.5)
+    mark_computed_apogee(ax_att)
+    mark_apogee(ax_att)
+    ax_att.set_ylabel("Gravity dir (body)")
+    ax_att.set_ylim(-1.15, 1.15)
+    ax_att.legend(loc="upper right", ncol=3)
+    ax_att.grid(True, color=c["grid"], alpha=0.5)
+    mark_states(ax_att)
+
+    # 5) Gravity-removed world-vertical accel (attitude.update output)
+    ax_acc.plot(t, accel_vert_hist, color=c["accel_vert"], linewidth=1.2,
+                label="a_vert (world, g-removed)")
+    ax_acc.axhline(0, color=c["zero_line"], linewidth=0.5)
+    mark_computed_apogee(ax_acc)
+    mark_apogee(ax_acc)
+    ax_acc.set_ylabel("a_vert (m/s²)")
+    ax_acc.legend(loc="upper right")
+    ax_acc.grid(True, color=c["grid"], alpha=0.5)
+    mark_states(ax_acc)
+
+    # 6) Apogee votes - step plots at stacked y-levels
+    vote_labels = ["velocity <= 0", "altitude <= peak - Δh",
+                   "a_vert < accel_max"]
+    vote_colors = [c["vote_vel"], c["vote_desc"], c["vote_acc"]]
+    for row, (label, color) in enumerate(zip(vote_labels, vote_colors)):
+        base = 2 - row
+        ax_vote.fill_between(t, base, base + vote_hist[:, row].astype(float) * 0.8,
+                             step="pre", color=color, alpha=0.55, linewidth=0,
+                             label=label)
+    mark_computed_apogee(ax_vote)
+    mark_apogee(ax_vote)
+    ax_vote.set_xlabel("Time (s)")
+    ax_vote.set_ylabel("Apogee votes")
+    ax_vote.set_yticks([0.4, 1.4, 2.4])
+    ax_vote.set_yticklabels(list(reversed(vote_labels)))
+    ax_vote.set_ylim(-0.1, 3.0)
+    ax_vote.legend(loc="upper right", ncol=3, fontsize=8)
+    ax_vote.grid(True, color=c["grid"], alpha=0.5, axis="x")
+    mark_states(ax_vote)
 
     plt.tight_layout()
     plt.savefig(out_path, dpi=150)
@@ -343,54 +794,199 @@ def plot_flight(t, true_alt, true_press, noisy_press, baro_alt,
 # Main
 # ---------------------------------------------------------------------------
 
+def run_simulation(args):
+    dt = 0.02  # 50 Hz sample rate
+    pre_launch_s = 1.0
+    (t, true_alt, true_press, noisy_press,
+     accel_body, gyro_body, apogee_time) = simulate_flight(
+        apogee_m=500.0, dt=dt, pre_launch_s=pre_launch_s)
+
+    p_ref = noisy_press[0]
+    baro_alt = pressure_to_altitude(noisy_press, p_ref)
+
+    kf = KalmanFilter(q_alt=0.1, q_vel=0.5, r_meas=25.0)
+    att = Attitude()
+
+    filtered_alt = np.zeros_like(t)
+    filtered_vel = np.zeros_like(t)
+    accel_vert_hist = np.zeros_like(t)
+    g_b_hist = np.tile(att.g_b, (len(t), 1))
+    vote_hist = np.zeros((len(t), 3), dtype=bool)
+    apogee_idx = None
+
+    cal_samples = int(pre_launch_s / dt)
+    for i in range(cal_samples):
+        att.calibrate_sample(accel_body[i], gyro_body[i])
+    att.calibrate_finish()
+
+    settle_idx = cal_samples + int(1.0 / dt)
+
+    for i in range(len(t)):
+        if i < cal_samples:
+            a_vert = 0.0
+        else:
+            a_vert = att.update(accel_body[i], gyro_body[i], dt)
+        accel_vert_hist[i] = a_vert
+        g_b_hist[i] = att.g_b
+
+        kf.predict(dt, a_vert)
+        kf.update(baro_alt[i])
+        filtered_alt[i] = kf.state[0]
+        filtered_vel[i] = kf.state[1]
+
+        detected = kf.detect_apogee()
+        vote_hist[i] = kf.last_votes
+        if apogee_idx is None and i > settle_idx and detected:
+            apogee_idx = i
+
+    true_vel = np.gradient(true_alt, t)
+    computed_apogee_idx = int(np.argmax(filtered_alt))
+
+    print(f"Ground ref pressure: {p_ref:.0f} Pa ({p_ref/100:.1f} hPa)")
+    print(f"True apogee:         {true_alt.max():.1f} m "
+          f"(t = {apogee_time:.2f} s)")
+    if apogee_idx is not None:
+        print(f"Filter apogee:       {filtered_alt[apogee_idx]:.1f} m "
+              f"(t = {t[apogee_idx]:.2f} s)")
+    else:
+        print("Filter apogee:       not detected")
+    print(f"Attitude g_mag:      {att.g_mag:.3f} m/s²")
+
+    themes = ["light", "dark"] if args.theme == "both" else [args.theme]
+    for theme in themes:
+        suffix = f"_{theme}" if args.theme == "both" else ""
+        out_path = f"flight_simulation{suffix}.png"
+        plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
+                    g_b_hist, accel_vert_hist, vote_hist, apogee_idx,
+                    theme, out_path,
+                    true_alt=true_alt, true_press=true_press, true_vel=true_vel,
+                    computed_apogee_idx=computed_apogee_idx,
+                    title="AURORA Kalman Filter - Simulated 500 m Rocket Flight")
+
+
+def run_real_flight(args):
+    flight_dir = args.flight
+    influx_path = os.path.join(flight_dir, "flights.influx")
+    audit_path = os.path.join(flight_dir, "state_audit")
+
+    for p in (influx_path, audit_path):
+        if not os.path.isfile(p):
+            raise SystemExit(f"error: missing {p}")
+
+    print(f"Loading telemetry from {influx_path} ...")
+    streams = parse_influx(influx_path)
+    print(f"  accel: {len(streams['accel'][0])} samples")
+    print(f"  gyro:  {len(streams['gyro'][0])} samples")
+    print(f"  baro:  {len(streams['baro'][0])} samples")
+
+    events = parse_state_audit(audit_path)
+    flights = segment_flights(events)
+    if not flights:
+        raise SystemExit("error: no ARMED->BOOST transitions found")
+    print(f"Detected {len(flights)} flight(s):")
+    for n, (b, e) in enumerate(flights, start=1):
+        end_str = f"{e} ms" if e is not None else "end-of-log"
+        print(f"  flight {n}: BOOST @ {b} ms → close @ {end_str}")
+
+    themes = ["light", "dark"] if args.theme == "both" else [args.theme]
+
+    for n, (boost_ms, end_ms) in enumerate(flights, start=1):
+        print(f"\n--- Processing flight {n} ---")
+        result = process_real_flight(streams, events, boost_ms, end_ms,
+                                     dt_s=args.dt, pre_boost_s=args.pre_boost,
+                                     cal_s=args.cal,
+                                     post_main_s=args.post_main,
+                                     q_alt=args.q_alt, q_vel=args.q_vel,
+                                     r_meas=args.r_meas,
+                                     apogee_delta_h=args.delta_h,
+                                     apogee_debounce=args.debounce,
+                                     apogee_accel_max=args.accel_max)
+
+        apogee_idx = result["apogee_idx"]
+        computed_idx = result["computed_apogee_idx"]
+        print(f"  p_ref:         {result['p_ref']:.0f} Pa "
+              f"({result['p_ref']/100:.1f} hPa)")
+        print(f"  g_mag:         {result['g_mag']:.3f} m/s²")
+        print(f"  peak baro alt: {result['baro_alt'].max():.1f} m")
+        if computed_idx is not None:
+            print(f"  computed apogee: {result['filtered_alt'][computed_idx]:.1f} m "
+                  f"(t = {result['t'][computed_idx]:.2f} s)")
+        if apogee_idx is not None:
+            delta = (result['t'][apogee_idx] - result['t'][computed_idx]
+                     if computed_idx is not None else None)
+            delta_str = f", Δ={delta:+.2f} s" if delta is not None else ""
+            print(f"  filter apogee: {result['filtered_alt'][apogee_idx]:.1f} m "
+                  f"(t = {result['t'][apogee_idx]:.2f} s{delta_str})")
+        else:
+            print("  filter apogee: not detected")
+        print(f"  transitions:   {len(result['state_transitions'])}")
+
+        title = f"AURORA Flight {n} - {os.path.basename(flight_dir.rstrip('/'))}"
+        for theme in themes:
+            suffix = f"_{theme}" if args.theme == "both" else ""
+            out_path = f"flight{n}{suffix}.png"
+            plot_flight(result["t"], result["pressure_pa"],
+                        result["baro_alt"], result["filtered_alt"],
+                        result["filtered_vel"], result["g_b_hist"],
+                        result["accel_vert_hist"], result["vote_hist"],
+                        apogee_idx, theme, out_path,
+                        state_transitions=result["state_transitions"],
+                        computed_apogee_idx=result["computed_apogee_idx"],
+                        title=title)
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Simulated rocket flight through the AURORA Kalman filter.")
+        description="Simulated or recorded rocket flight through the "
+                    "AURORA Kalman filter.")
     parser.add_argument(
         "--theme", choices=["light", "dark", "both"], default="both",
         help="Colour theme matching the Furo Sphinx docs (default: both)")
     parser.add_argument(
         "--show", action="store_true",
         help="Open an interactive matplotlib window")
+    parser.add_argument(
+        "--flight", metavar="DIR",
+        help="Load real flight data from DIR (expects flights.influx + "
+             "state_audit). Produces one plot per flight segmented on "
+             "ARMED→BOOST transitions.")
+    parser.add_argument(
+        "--dt", type=float, default=0.02,
+        help="Resampling period in seconds for real flight data (default 0.02)")
+    parser.add_argument(
+        "--pre-boost", type=float, default=10.0, dest="pre_boost",
+        help="Seconds of pre-boost data to include per flight (default 10)")
+    parser.add_argument(
+        "--cal", type=float, default=3.0,
+        help="Seconds of calibration window before BOOST (default 3)")
+    parser.add_argument(
+        "--post-main", type=float, default=5.0, dest="post_main",
+        help="Seconds of data to keep after the MAIN transition "
+             "(default 5) — trims the long post-parachute tail")
+    parser.add_argument("--q-alt", type=float, default=0.1, dest="q_alt",
+                        help="KF process noise on altitude (default 0.1)")
+    parser.add_argument("--q-vel", type=float, default=0.5, dest="q_vel",
+                        help="KF process noise on velocity (default 0.5, "
+                             "matches Kconfig)")
+    parser.add_argument("--r-meas", type=float, default=4.0, dest="r_meas",
+                        help="KF measurement noise variance "
+                             "(default 4.0, matches Kconfig)")
+    parser.add_argument("--delta-h", type=float, default=1.5, dest="delta_h",
+                        help="Apogee descent confirmation in m "
+                             "(default 1.5, matches Kconfig)")
+    parser.add_argument("--debounce", type=int, default=3,
+                        help="Apogee debounce ticks (default 3, "
+                             "matches Kconfig)")
+    parser.add_argument("--accel-max", type=float, default=2.0,
+                        dest="accel_max",
+                        help="Apogee max a_vert in m/s² "
+                             "(default 2.0, matches Kconfig)")
     args = parser.parse_args()
 
-    dt = 0.02  # 50 Hz sample rate
-    t, true_alt, true_press, noisy_press = simulate_flight(apogee_m=500.0, dt=dt)
-
-    # Ground-level reference pressure (first sample, before launch)
-    p_ref = noisy_press[0]
-
-    # Convert noisy pressure -> altitude via hypsometric formula
-    baro_alt = pressure_to_altitude(noisy_press, p_ref)
-
-    kf = KalmanFilter(q_alt=0.1, q_vel=0.5, r_meas=25.0)
-
-    filtered_alt = np.zeros_like(t)
-    filtered_vel = np.zeros_like(t)
-    apogee_idx = None
-
-    # Skip apogee detection for the first second to let the filter settle
-    settle_samples = int(1.0 / dt)
-
-    for i in range(len(t)):
-        kf.predict(dt)
-        kf.update(baro_alt[i])
-        filtered_alt[i] = kf.state[0]
-        filtered_vel[i] = kf.state[1]
-        if apogee_idx is None and i > settle_samples and kf.detect_apogee():
-            apogee_idx = i
-
-    print(f"Ground ref pressure: {p_ref:.0f} Pa ({p_ref/100:.1f} hPa)")
-    print(f"True apogee:         {true_alt.max():.1f} m")
-    print(f"Filter apogee:       {filtered_alt[apogee_idx]:.1f} m"
-          f" (t = {t[apogee_idx]:.2f} s)")
-
-    themes = ["light", "dark"] if args.theme == "both" else [args.theme]
-    for theme in themes:
-        suffix = f"_{theme}" if args.theme == "both" else ""
-        out_path = f"flight_simulation{suffix}.png"
-        plot_flight(t, true_alt, true_press, noisy_press, baro_alt,
-                    filtered_alt, filtered_vel, apogee_idx, theme, out_path)
+    if args.flight:
+        run_real_flight(args)
+    else:
+        run_simulation(args)
 
     if args.show:
         plt.show()
