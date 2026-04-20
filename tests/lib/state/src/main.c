@@ -23,7 +23,7 @@ static const struct sm_thresholds simple_state_cfg = {
 
 	/* Timers */
 	.DT_AB = 100,	// 100 ms
-	.DT_L = 50,		// 50 ms
+	.DT_L = 150,	// 150 ms
 
 	/* Timeouts */
 	.TO_A = 200,	// 200 ms
@@ -114,6 +114,16 @@ static inline void put_state_main(struct sm_inputs *in)
 	in->altitude = simple_state_cfg.T_M - 1.0;
 	sm_update(in);
 	zassert_equal(sm_get_state(), SM_MAIN, "State should be MAIN");
+}
+
+/** @brief Helper to transition from MAIN to REDUNDANT. */
+static inline void put_state_redundant(struct sm_inputs *in)
+{
+	put_state_main(in);
+
+	k_sleep(K_MSEC(simple_state_cfg.TO_M));
+	sm_update(in);
+	zassert_equal(sm_get_state(), SM_REDUNDANT, "State should be REDUNDANT");
 }
 
 ZTEST_SUITE(simple_state_tests, NULL, NULL, simple_state_machine_mock_before, simple_state_machine_mock_after, NULL);
@@ -375,19 +385,47 @@ ZTEST(simple_state_tests, test_state_apogee_timeout)
 }
 
 /**
+ * @brief Test MAIN -> REDUNDANT transition
+ *
+ * Verifies that MAIN transitions to REDUNDANT when TO_M timer expires.
+ *
+ */
+ZTEST(simple_state_tests, test_state_main_redundant)
+{
+	struct sm_error_handling_args err_args = {
+		.cb = &mock_error_handler,
+		.args = NULL,
+	};
+
+	error_handler_call_count = 0;
+	sm_deinit();
+	sm_init(&simple_state_cfg, &err_args);
+
+	struct sm_inputs inputs = {
+		.armed = 1,
+		.orientation = simple_state_cfg.T_OA,
+		.acceleration = 0.0,
+		.velocity = 0.0,
+		.altitude = 0.0,
+	};
+
+	/* Reach MAIN through normal flight path */
+	put_state_main(&inputs);
+
+	/* wait for TO_M timeout to expire */
+	sm_update(&inputs);  // unchanged inputs
+	k_sleep(K_MSEC(simple_state_cfg.TO_M));
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_REDUNDANT, "State should be REDUNDANT");
+	zassert_true(error_handler_call_count == 0, "Error handler should not have been called");
+}
+
+/**
  * @brief Test REDUNDANT -> LANDED transition
  *
  * Verifies that REDUNDANT transitions to LANDED when velocity stays
  * at or below T_L for DT_L duration. Verifies timer reset when velocity
  * rises above T_L.
- *
- * Note: MAIN -> REDUNDANT requires the TO_M timer to be running.
- * In the normal APOGEE -> MAIN path the TO_M timer is not started,
- * so this test reaches MAIN and waits for TO_M (which was started by
- * entering APOGEE and then timing out through the error path is not
- * suitable). Instead, this test uses the APOGEE timeout path which
- * starts TO_M, then verifies REDUNDANT behavior after the error handler
- * transitions through.
  */
 ZTEST(simple_state_tests, test_state_redundand_landed)
 {
@@ -408,29 +446,16 @@ ZTEST(simple_state_tests, test_state_redundand_landed)
 		.altitude = 0.0,
 	};
 
-	/* Reach APOGEE through normal flight path */
-	put_state_apogee(&inputs);
+	/* Reach REDUNDANT through normal flight path */
+	put_state_redundant(&inputs);
 
-	/* Let APOGEE timeout to ERROR (this starts TO_M timer) */
-	inputs.altitude = simple_state_cfg.T_M + 100.0;
-	k_sleep(K_MSEC(simple_state_cfg.TO_A));
+	/* wait for TO_M timeout to expire */
+	inputs.velocity = simple_state_cfg.T_L;
 	sm_update(&inputs);
-	zassert_equal(sm_get_state(), SM_ERROR, "State should be ERROR");
-	zassert_true(error_handler_call_count > 0, "Error handler should have been called");
-
-	/*
-	 * Force re-init to MAIN with TO_M already running.
-	 * We reinit and use the apogee timeout path which starts TO_M.
-	 */
-	error_handler_call_count = 0;
-	sm_deinit();
-	sm_init(&simple_state_cfg, &err_args);
-	put_state_apogee(&inputs);
-
-	/* Transition to MAIN normally */
-	inputs.altitude = simple_state_cfg.T_M - 1.0;
+	k_sleep(K_MSEC(simple_state_cfg.DT_L));
 	sm_update(&inputs);
-	zassert_equal(sm_get_state(), SM_MAIN, "State should be MAIN");
+	zassert_equal(sm_get_state(), SM_LANDED, "State should be LANDED");
+	zassert_true(error_handler_call_count == 0, "Error handler should not have been called");
 }
 
 /**
@@ -458,14 +483,15 @@ ZTEST(simple_state_tests, test_state_redundand_timeout)
 		.altitude = 0.0,
 	};
 
-	/* Reach APOGEE through normal flight path */
-	put_state_apogee(&inputs);
+	/* Reach REDUNDANT through normal flight path */
+	put_state_redundant(&inputs);
 
-	/* Let APOGEE timeout to ERROR (this starts TO_M) */
-	inputs.altitude = simple_state_cfg.T_M + 100.0;
-	k_sleep(K_MSEC(simple_state_cfg.TO_A));
+	/* Let REDUNDANT timeout to ERROR (this starts TO_R) */
+	inputs.velocity = simple_state_cfg.T_L + 1.0;
+	k_sleep(K_MSEC(simple_state_cfg.TO_R));
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_ERROR, "State should be ERROR");
+	zassert_true(error_handler_call_count > 0, "Error handler should have been called");
 }
 
 /**

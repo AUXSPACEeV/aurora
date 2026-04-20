@@ -333,12 +333,12 @@ static inline void _sm_update(const struct sm_inputs *in,
 	case SM_APOGEE:
 		if (in->altitude < th.T_M) {
 			k_timer_stop(&to_a);
+			k_timer_start(&to_m, K_MSEC(th.TO_M), K_NO_WAIT);
 			SM_TRANSITION(SM_MAIN);
 			LOG_INF("-> MAIN");
 		} else if (TIMER_EXPIRED(&to_a)) {
 			/* Timeout expired, abort to ERROR */
 			k_timer_stop(&to_a);
-			k_timer_start(&to_m, K_MSEC(th.TO_M), K_NO_WAIT);
 			SM_EVENT("apogee timeout expired");
 			LOG_INF("-[TIMEOUT]-> ERROR");
 			sm_do_error_handling();
