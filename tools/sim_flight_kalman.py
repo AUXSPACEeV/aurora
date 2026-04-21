@@ -446,7 +446,7 @@ def segment_flights(events):
         boost_ns = events[bi][0]
         end_ns = None
         for ej in events[bi + 1:]:
-            if ej[1] == "transition" and ej[3] == "IDLE":
+            if ej[1] == "transition" and (ej[3] == "IDLE" or ej[3] == "LANDED"):
                 end_ns = ej[0]
                 break
         flights.append((boost_ns, end_ns))
@@ -484,15 +484,18 @@ def process_real_flight(streams, events, boost_ns, end_ns,
                   else boost_ns + int(default_duration_s * 1000000000))
 
     main_ns = None
+    landed_ns = None
     for ev in events:
         if ev[0] < boost_ns or ev[0] > raw_end_ns:
             continue
-        if ev[1] == "transition" and ev[3] == "MAIN":
+        if main_ns is None and ev[1] == "transition" and ev[3] == "MAIN":
             main_ns = ev[0]
-            break
+            continue
+        if landed_ns is None and ev[1] == "transition" and ev[3] == "LANDED":
+            landed_ns = ev[0]
 
     if main_ns is not None:
-        tail_ns = main_ns + int(post_main_s * 1000000000)
+        tail_ns = main_ns + int(post_main_s * 1000000000) if landed_ns is None else landed_ns
     else:
         tail_ns = raw_end_ns
     window_end_ns = tail_ns + int(post_end_s * 1000000000)
