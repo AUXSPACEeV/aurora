@@ -270,7 +270,6 @@ void state_machine_task(void *, void *, void *)
 #if defined(CONFIG_PYRO)
 	const struct device *pyro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_pyro));
 	enum sm_state pyro_state = SM_IDLE;
-	int ret;
 #endif /* CONFIG_PYRO */
 
 	struct sm_inputs inputs = (struct sm_inputs){
@@ -460,24 +459,54 @@ void state_machine_task(void *, void *, void *)
 		if (state != pyro_state) {
 			switch (state) {
 			case SM_IDLE:
-				ret = pyro_disarm(pyro0, 0);
-				if (ret)
-					LOG_ERR("Failed to disarm pyro module.");
+				if (pyro_disarm(pyro0, 0))
+					LOG_ERR("Failed to disarm pyro0 channel 0.");
+				else
+					LOG_ERR("Disarmed pyro0 channel 0.");
+
+				if (pyro_disarm(pyro0, 1))
+					LOG_ERR("Failed to disarm pyro0 channel 1.");
+				else
+					LOG_ERR("Disarmed pyro0 channel 1.");
 				break;
 			case SM_ARMED:
-				ret = pyro_arm(pyro0, 0);
-				if (ret)
-					LOG_ERR("Failed to arm pyro module.");
+				if (pyro_arm(pyro0, 0))
+					LOG_ERR("Failed to arm pyro0 channel 0.");
+				else
+					LOG_ERR("Armed pyro0.");
+
+				if (pyro_arm(pyro0, 1))
+					LOG_ERR("Failed to arm pyro0 channel 1.");
+				else
+					LOG_ERR("Armed pyro0.");
+				break;
+			case SM_APOGEE:
+				if (pyro_trigger_channel(pyro0, 0))
+					LOG_ERR("Failed to trigger pyro0 channel 0.");
+				else
+					LOG_ERR("Triggered pyro0 channel 0.");
+
+				// Capacitors are empty after trigger. Recharge!
+				if (pyro_charge_channel(pyro0, 1))
+					LOG_ERR("Failed to charge pyro0 channel 1.");
+				else
+					LOG_ERR("Charging pyro0 channel 1.");
 				break;
 			case SM_MAIN:
-				ret = pyro_trigger_channel(pyro0, 0);
-				if (ret)
-					LOG_ERR("Failed to trigger pyro channel 0.");
+				if (pyro_trigger_channel(pyro0, 1))
+					LOG_ERR("Failed to trigger pyro0 channel 1.");
+				else
+					LOG_ERR("Triggered pyro0 channel 1.");
+
+				// Capacitors are empty after trigger. Recharge!
+				if (pyro_charge_channel(pyro0, 1))
+					LOG_ERR("Failed to recharge pyro0 channel 1.");
+				else
+					LOG_ERR("Recharging pyro0 channel 1.");
 				break;
 			case SM_REDUNDANT:
-				ret = pyro_trigger_channel(pyro0, 1);
-				if (ret)
-					LOG_ERR("Failed to trigger pyro channel 1.");
+				if (pyro_trigger_channel(pyro0, 1))
+					LOG_ERR("Failed to trigger pyro0 channel 1.");
 				break;
 			default:
 				break;
