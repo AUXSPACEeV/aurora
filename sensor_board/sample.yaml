@@ -16,6 +16,11 @@ tests:
     integration_platforms:
       - sensor_board_v2/rp2040
       - sensor_board_v2/rp2350a/hazard3
+  app.native_sim:
+    platform_allow:
+      - native_sim
+    integration_platforms:
+      - native_sim
   app.default.sysbuild:
     sysbuild: true
     platform_allow:

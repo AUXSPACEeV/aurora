@@ -109,14 +109,14 @@ static void powerfail_deassert()
 }
 #endif /* CONFIG_AURORA_POWERFAIL */
 
-static bool baro_active = false; /**< True once the barometer thread has initialized. */
-static bool imu_active = false;  /**< True once the IMU thread has initialized. */
+bool baro_active = false; /**< True once the barometer thread has initialized. */
+bool imu_active = false;  /**< True once the IMU thread has initialized. */
 static bool sm_active = false;   /**< True once the state machine thread has initialized. */
 
 /* ============================================================
  *                     IMU TASK
  * ============================================================ */
-#if defined(CONFIG_IMU)
+#if defined(CONFIG_IMU) && !defined(CONFIG_AURORA_FAKE_SENSORS)
 /**
  * @brief IMU polling thread.
  *
@@ -151,12 +151,12 @@ void imu_task(void *, void *, void *)
 /* Create the IMU task (inactive unless CONFIG_IMU=y) */
 K_THREAD_DEFINE(imu_polling, 2048, imu_task, NULL, NULL, NULL,
 				5, 0, 0);
-#endif /* CONFIG_IMU */
+#endif /* CONFIG_IMU && !CONFIG_AURORA_FAKE_SENSORS */
 
 /* ============================================================
  *                     BARO TASK
  * ============================================================ */
-#if defined(CONFIG_BARO)
+#if defined(CONFIG_BARO) && !defined(CONFIG_AURORA_FAKE_SENSORS)
 /**
  * @brief Barometer polling thread.
  *
@@ -189,7 +189,7 @@ void baro_task(void *, void *, void *)
 /* Create the BARO task */
 K_THREAD_DEFINE(baro_polling, 2048, baro_task, NULL, NULL, NULL,
 				5, 0, 0);
-#endif /* CONFIG_BARO */
+#endif /* CONFIG_BARO && !CONFIG_AURORA_FAKE_SENSORS */
 
 /* ============================================================
  *                     State machine TASK

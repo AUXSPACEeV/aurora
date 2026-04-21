@@ -29,3 +29,7 @@ endif()
 target_sources(app PRIVATE
 	src/main.c
 	)
+
+target_sources_ifdef(CONFIG_AURORA_FAKE_SENSORS app PRIVATE
+	src/fake_sensors.c
+	)
