@@ -156,7 +156,7 @@ static void stop_timers(void)
 
 static int fallback_sm_error_handler(void *args)
 {
-	LOG_ERR("State Machine encountered an unrecoverable error.\n");
+	LOG_ERR("State Machine encountered an unrecoverable error.");
 
 	return -EIO;
 }
@@ -170,9 +170,9 @@ static void sm_do_error_handling(void)
 	if (err_hdl.cb != NULL) {
 		ret = err_hdl.cb(err_hdl.args);
 		if (ret != 0)
-			LOG_ERR("State Machine error handler failed with code %d\n", ret);
+			LOG_ERR("State Machine error handler failed with code %d", ret);
 	} else {
-		LOG_ERR("No fallback handler defined for state machine errors!\n");
+		LOG_ERR("No fallback handler defined for state machine errors!");
 	}
 
 	k_spin_unlock(&err_lock, key);
@@ -189,7 +189,7 @@ void sm_init(const struct sm_thresholds *cfg,
 #if defined(CONFIG_FILTER)
 	int ret = filter_init(&filter);
 	if (ret) {
-		LOG_ERR("Could not initialize filter (%d).\n", ret);
+		LOG_ERR("Could not initialize filter (%d).", ret);
 		return;
 	}
 #endif /* CONFIG_FILTER */
