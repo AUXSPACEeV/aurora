@@ -318,7 +318,7 @@ ZTEST(data_logger_core, test_log_delegates_datapoint)
 	data_logger_start(&logger);
 
 	struct datapoint dp = {
-		.timestamp_ms  = 12345LL,
+		.timestamp_ns  = 12345ULL,
 		.type          = AURORA_DATA_IMU_ACCEL,
 		.channel_count = 3,
 		.channels = {
@@ -330,7 +330,7 @@ ZTEST(data_logger_core, test_log_delegates_datapoint)
 
 	zassert_ok(data_logger_write(&logger, &dp), NULL);
 	zassert_equal(mock_state.write_datapoint_calls, 1, NULL);
-	zassert_equal(mock_state.last_dp.timestamp_ms, 12345LL,
+	zassert_equal(mock_state.last_dp.timestamp_ns, 12345ULL,
 		      "timestamp must be forwarded unchanged");
 	zassert_equal(mock_state.last_dp.type, AURORA_DATA_IMU_ACCEL, NULL);
 	zassert_equal(mock_state.last_dp.channel_count, 3, NULL);
@@ -605,7 +605,7 @@ ZTEST(data_logger_core, test_full_lifecycle)
 
 	for (int i = 0; i < (int)ARRAY_SIZE(cases); i++) {
 		struct datapoint dp = {
-			.timestamp_ms  = (int64_t)(i + 1) * 10,
+			.timestamp_ns  = (uint64_t)(i + 1) * 10,
 			.type          = cases[i].type,
 			.channel_count = cases[i].channel_count,
 		};
@@ -648,7 +648,7 @@ ZTEST_SUITE(data_logger_csv, NULL, NULL, csv_before, NULL, NULL);
 /**
  * @brief CSV header row is written on init.
  *
- * The first line of the file must contain "timestamp_ms" and "type".
+ * The first line of the file must contain "timestamp_ns" and "type".
  */
 ZTEST(data_logger_csv, test_csv_header_present)
 {
@@ -660,8 +660,8 @@ ZTEST(data_logger_csv, test_csv_header_present)
 	int n = read_file(CSV_FILE_PATH, buf, sizeof(buf));
 
 	zassert_true(n > 0, "File should not be empty after init+close");
-	zassert_not_null(strstr(buf, "timestamp_ms"),
-			 "Header must contain \"timestamp_ms\"");
+	zassert_not_null(strstr(buf, "timestamp_ns"),
+			 "Header must contain \"timestamp_ns\"");
 	zassert_not_null(strstr(buf, "type"),
 			 "Header must contain \"type\"");
 }
@@ -674,7 +674,7 @@ ZTEST(data_logger_csv, test_csv_baro_datapoint)
 	char buf[CSV_BUF_SIZE];
 
 	struct datapoint dp = {
-		.timestamp_ms  = 1000LL,
+		.timestamp_ns  = 1000ULL,
 		.type          = AURORA_DATA_BARO,
 		.channel_count = 2,
 		.channels = {
@@ -709,7 +709,7 @@ ZTEST(data_logger_csv, test_csv_accel_datapoint)
 	char buf[CSV_BUF_SIZE];
 
 	struct datapoint dp = {
-		.timestamp_ms  = 2000LL,
+		.timestamp_ns  = 2000ULL,
 		.type          = AURORA_DATA_IMU_ACCEL,
 		.channel_count = 3,
 		.channels = {
@@ -741,7 +741,7 @@ ZTEST(data_logger_csv, test_csv_negative_value)
 	char buf[CSV_BUF_SIZE];
 
 	struct datapoint dp = {
-		.timestamp_ms  = 500LL,
+		.timestamp_ns  = 500ULL,
 		.type          = AURORA_DATA_IMU_GYRO,
 		.channel_count = 1,
 		.channels = {
@@ -773,7 +773,7 @@ ZTEST(data_logger_csv, test_csv_multiple_rows)
 
 	for (int i = 0; i < 3; i++) {
 		struct datapoint dp = {
-			.timestamp_ms  = (int64_t)(i + 1) * 100,
+			.timestamp_ns  = (uint64_t)(i + 1) * 100,
 			.type          = AURORA_DATA_BARO,
 			.channel_count = 2,
 			.channels = {
@@ -851,7 +851,7 @@ ZTEST(data_logger_influx, test_influx_baro_line)
 	char buf[INFLUX_BUF_SIZE];
 
 	struct datapoint dp = {
-		.timestamp_ms  = 1000LL,
+		.timestamp_ns  = 1000ULL,
 		.type          = AURORA_DATA_BARO,
 		.channel_count = 2,
 		.channels = {
@@ -896,7 +896,7 @@ ZTEST(data_logger_influx, test_influx_imu_gyro_fields)
 	char buf[INFLUX_BUF_SIZE];
 
 	struct datapoint dp = {
-		.timestamp_ms  = 2500LL,
+		.timestamp_ns  = 2500ULL,
 		.type          = AURORA_DATA_IMU_GYRO,
 		.channel_count = 3,
 		.channels = {
@@ -930,7 +930,7 @@ ZTEST(data_logger_influx, test_influx_negative_value)
 	char buf[INFLUX_BUF_SIZE];
 
 	struct datapoint dp = {
-		.timestamp_ms  = 300LL,
+		.timestamp_ns  = 300ULL,
 		.type          = AURORA_DATA_IMU_ACCEL,
 		.channel_count = 1,
 		.channels = {
@@ -969,7 +969,7 @@ ZTEST(data_logger_influx, test_influx_multiple_lines)
 	for (int i = 0; i < (int)ARRAY_SIZE(types); i++) {
 		uint8_t ch = (types[i] == AURORA_DATA_BARO) ? 2 : 3;
 		struct datapoint dp = {
-			.timestamp_ms  = (int64_t)(i + 1) * 10,
+			.timestamp_ns  = (uint64_t)(i + 1) * 10,
 			.type          = types[i],
 			.channel_count = ch,
 		};

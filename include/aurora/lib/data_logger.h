@@ -54,7 +54,7 @@ enum aurora_data {
  * up to @ref DP_MAX_CHANNELS raw Zephyr @c sensor_value readings.
  */
 struct datapoint {
-	int64_t timestamp_ms;                          /**< ms since launch           */
+	uint64_t timestamp_ns;                         /**< ns since launch           */
 	enum aurora_data type;                         /**< Sensor group              */
 	uint8_t channel_count;                         /**< Valid entries in channels */
 	struct sensor_value channels[DP_MAX_CHANNELS]; /**< Channel readings          */

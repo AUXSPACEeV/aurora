@@ -7,7 +7,7 @@
  * the format @c val1.val2 (Zephyr sensor_value convention).
  *
  * Column layout:
- *   timestamp_ms, type,
+ *   timestamp_ns, type,
  *   ch0_val1, ch0_val2, ch1_val1, ch1_val2, ch2_val1, ch2_val2
  *
  * Copyright (c) 2026 Auxspace e.V.
@@ -96,7 +96,7 @@ static int csv_write_header(struct data_logger *logger)
 {
 	struct csv_ctx *ctx = logger->ctx;
 	const char *hdr =
-		"timestamp_ms,type,"
+		"timestamp_ns,type,"
 		"ch0_val1,ch0_val2,"
 		"ch1_val1,ch1_val2,"
 		"ch2_val1,ch2_val2\n";
@@ -115,8 +115,8 @@ static int csv_write_datapoint(struct data_logger *logger,
 	ssize_t wr;
 	int rc;
 
-	/* timestamp_ms */
-	len = snprintf(buf, sizeof(buf), "%" PRId64 ",", dp->timestamp_ms);
+	/* timestamp_ns */
+	len = snprintf(buf, sizeof(buf), "%" PRIu64 ",", dp->timestamp_ns);
 	if (len < 0 || len >= (int)sizeof(buf))
 		return -ENOMEM;
 

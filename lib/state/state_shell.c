@@ -152,14 +152,14 @@ static int cmd_audit(const struct shell *sh, size_t argc, char **argv)
 		}
 
 		if (e.type == SM_AUDIT_TRANSITION) {
-			shell_print(sh, "%-12lld %-12s %-12s %s",
-				    (long long)e.timestamp_ms,
+			shell_print(sh, "%-12llu %-12s %-12s %s",
+				    (unsigned long long)e.timestamp_ns,
 				    "transition",
 				    sm_state_str(e.from),
 				    sm_state_str(e.to));
 		} else {
-			shell_print(sh, "%-12lld %-12s %-12s %s",
-				    (long long)e.timestamp_ms,
+			shell_print(sh, "%-12llu %-12s %-12s %s",
+				    (unsigned long long)e.timestamp_ns,
 				    "event",
 				    sm_state_str(e.from),
 				    e.event ? e.event : "");

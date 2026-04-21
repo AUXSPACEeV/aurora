@@ -317,9 +317,9 @@ void state_machine_task(void *, void *, void *)
 				}
 #endif /* CONFIG_IMU */
 #if defined(CONFIG_DATA_LOGGER)
-				int64_t ts = k_uptime_get();
+				uint64_t ts = k_ticks_to_ns_floor64(k_uptime_ticks());
 				struct datapoint dp = {
-					.timestamp_ms = ts,
+					.timestamp_ns = ts,
 					.type = AURORA_DATA_IMU_ACCEL,
 					.channel_count = 3,
 					.channels = {
@@ -338,9 +338,9 @@ void state_machine_task(void *, void *, void *)
 #endif /* CONFIG_DATA_LOGGER */
 			} else if (data_chan == &baro_data_chan) {
 #if defined(CONFIG_DATA_LOGGER)
-				int64_t ts = k_uptime_get();
+				uint64_t ts = k_ticks_to_ns_floor64(k_uptime_ticks());
 				struct datapoint dp = {
-					.timestamp_ms = ts,
+					.timestamp_ns = ts,
 					.type = AURORA_DATA_BARO,
 					.channel_count = 2,
 					.channels = {msg_buf.baro.temperature, msg_buf.baro.pressure},

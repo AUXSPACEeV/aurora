@@ -26,7 +26,7 @@ Example Usage
    data_logger_start(&logger);
 
    struct datapoint dp = {
-       .timestamp_ms = k_uptime_get(),
+       .timestamp_ns = k_ticks_to_ns_floor64(k_uptime_ticks()),
        .type         = AURORA_DATA_BARO,
        .channel_count = 2,
        .channels = {

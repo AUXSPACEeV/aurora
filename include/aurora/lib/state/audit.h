@@ -29,7 +29,7 @@ enum sm_audit_type {
 
 /** @brief Single audit log entry. */
 struct sm_audit_entry {
-	int64_t timestamp_ms;		/**< Uptime in milliseconds when recorded. */
+	uint64_t timestamp_ns;		/**< Uptime in nanoseconds when recorded. */
 	enum sm_audit_type type;	/**< Entry type. */
 	enum sm_state from;		/**< Previous state (transitions only). */
 	enum sm_state to;		/**< New state (transitions only). */

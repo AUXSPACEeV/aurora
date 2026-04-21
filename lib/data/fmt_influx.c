@@ -4,7 +4,7 @@
  *
  * Each datapoint is written as one InfluxDB line:
  *
- *   [measurement,type=name field=<val[,field=val...] timestamp_ms
+ *   [measurement,type=name field=<val[,field=val...] timestamp_ns
  *
  * Example:
  *   telemetry,type=baro temp=23.500000,pres=101325.000000 1700000000000
@@ -147,9 +147,9 @@ static int influx_format_line(char *dst, size_t dst_size,
 		offset += n;
 	}
 
-	/* timestamp in milliseconds */
+	/* timestamp in nanoseconds */
 	n = snprintf(dst + offset, dst_size - offset,
-		     " %" PRId64 "\n", dp->timestamp_ms);
+		     " %" PRIu64 "\n", dp->timestamp_ns);
 	if (n < 0 || n >= (int)(dst_size - offset)) {
 		return -ENOMEM;
 	}

@@ -428,11 +428,10 @@ void sm_update(const struct sm_inputs *inputs)
 	static double previous_altitude = 0.0;
 
 #if defined(CONFIG_FILTER)
-	static int64_t last_time_ns = 0;
+	static uint64_t last_time_ns = 0;
 	struct sm_inputs filtered_inputs;
 
-	int64_t current_time_ns = (k_uptime_ticks() * NSEC_PER_SEC)
-				  / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
+	uint64_t current_time_ns = k_ticks_to_ns_floor64(k_uptime_ticks());
 
 	if (last_time_ns != 0) {
 		filter_predict(&filter, current_time_ns - last_time_ns,
