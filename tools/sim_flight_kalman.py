@@ -60,11 +60,21 @@ def pressure_to_altitude(p, p_ref=P0):
 # Kalman filter - mirrors kalman.c exactly
 # ---------------------------------------------------------------------------
 
+# Mahalanobis (normalized innovation squared) gate: ~5-sigma.
+FILTER_NIS_GATE = 25.0
+
+# Updates to ignore before the NIS gate arms.
+FILTER_NIS_WARMUP = 30
+
+# Sanity band on world-frame vertical accel at the apogee decision point.
+FILTER_APOGEE_ACCEL_BAND = 20.0
+
+
 class KalmanFilter:
     """2-state Kalman filter identical to struct filter / kalman.c."""
 
     def __init__(self, q_alt=0.1, q_vel=0.5, r_meas=4.0,
-                 apogee_k_sigma=4.0, apogee_debounce=3):
+                 apogee_debounce=3):
         # State vector [altitude, velocity]
         self.state = np.array([0.0, 0.0])
 
@@ -85,11 +95,15 @@ class KalmanFilter:
         self.consecutive_apogee = 0
         self.apogee_latched = False
 
+        # Innovation-gate warm-up and bookkeeping for plots.
+        self.updates_since_init = 0
+        self.last_update_gated = False
+        self.gated_updates = 0
+
         # Last vote values computed in detect_apogee() for plotting
-        self.last_votes = (False, False)
+        self.last_votes = (False, False, False)
 
         # Apogee detection parameters
-        self.apogee_k_sigma = apogee_k_sigma
         self.apogee_debounce = apogee_debounce
 
     def predict(self, dt_s: float, a_vert: float = 0.0):
@@ -111,10 +125,25 @@ class KalmanFilter:
         new_P[1, 1] = P[1, 1] + Q11
         self.P = new_P
 
-    def update(self, z: float):
-        """filter_update - measurement correction."""
+    def update(self, z: float) -> bool:
+        """filter_update - measurement correction with innovation gate.
+
+        Returns True if the measurement was applied, False if it was
+        rejected by the NIS gate (glitch suppression).
+        """
         y = z - self.state[0]
         S = self.P[0, 0] + self.R
+
+        self.updates_since_init += 1
+
+        if (self.updates_since_init > FILTER_NIS_WARMUP
+                and self.P[0, 0] <= self.R
+                and y * y > FILTER_NIS_GATE * S):
+            self.last_update_gated = True
+            self.gated_updates += 1
+            return False
+
+        self.last_update_gated = False
 
         K0 = self.P[0, 0] / S
         K1 = self.P[1, 0] / S
@@ -127,13 +156,15 @@ class KalmanFilter:
         self.P[0, 1] = P[0, 1] - K0 * P[0, 1]
         self.P[1, 0] = P[1, 0] - K1 * P[0, 0]
         self.P[1, 1] = P[1, 1] - K1 * P[0, 1]
+        return True
 
     def detect_apogee(self) -> bool:
-        """filter_detect_apogee - two-vote detector:
-           (velocity <= 0) AND (altitude <= peak - k*sigma_alt),
+        """filter_detect_apogee - three-vote detector:
+           (velocity <= 0) AND (altitude < peak) AND
+           (|last_accel_vert| < FILTER_APOGEE_ACCEL_BAND),
            sustained for `apogee_debounce` consecutive calls.
-           sigma_alt = sqrt(P[0,0]) is the KF's own altitude stddev,
-           so the descent threshold scales with measurement noise.
+           Velocity leads altitude at apogee so no hysteresis is used;
+           debounce + the inertial sanity band reject noise.
            Latched once fired."""
         altitude = self.state[0]
         velocity = self.state[1]
@@ -141,15 +172,15 @@ class KalmanFilter:
         if altitude > self.peak_altitude:
             self.peak_altitude = altitude
 
-        sigma_alt = float(np.sqrt(max(self.P[0, 0], 0.0)))
         velocity_ok = velocity <= 0.0
-        descent_ok = altitude <= self.peak_altitude - self.apogee_k_sigma * sigma_alt
-        self.last_votes = (velocity_ok, descent_ok)
+        descent_ok = altitude < self.peak_altitude
+        inertial_ok = abs(self.last_accel_vert) < FILTER_APOGEE_ACCEL_BAND
+        self.last_votes = (velocity_ok, descent_ok, inertial_ok)
 
         if self.apogee_latched:
             return False
 
-        if velocity_ok and descent_ok:
+        if velocity_ok and descent_ok and inertial_ok:
             self.consecutive_apogee += 1
         else:
             self.consecutive_apogee = 0
@@ -427,7 +458,7 @@ def process_real_flight(streams, events, boost_ms, end_ms,
                         post_end_s=2.0, post_main_s=5.0,
                         default_duration_s=120.0,
                         q_alt=0.1, q_vel=0.5, r_meas=4.0,
-                        apogee_k_sigma=4.0, apogee_debounce=3):
+                        apogee_debounce=3):
     """Run the real flight window through Attitude + KalmanFilter.
 
     Aligns t=0 to ``boost_ms - pre_boost_s*1000`` so that the first
@@ -490,7 +521,6 @@ def process_real_flight(streams, events, boost_ms, end_ms,
     baro_alt = pressure_to_altitude(pressure_pa, p_ref)
 
     kf = KalmanFilter(q_alt=q_alt, q_vel=q_vel, r_meas=r_meas,
-                      apogee_k_sigma=apogee_k_sigma,
                       apogee_debounce=apogee_debounce)
     att = Attitude()
 
@@ -502,7 +532,8 @@ def process_real_flight(streams, events, boost_ms, end_ms,
     filtered_vel = np.zeros_like(t)
     accel_vert_hist = np.zeros_like(t)
     g_b_hist = np.tile(att.g_b, (len(t), 1))
-    vote_hist = np.zeros((len(t), 2), dtype=bool)
+    vote_hist = np.zeros((len(t), 3), dtype=bool)
+    gated_hist = np.zeros(len(t), dtype=bool)
     apogee_idx = None
 
     # Skip apogee detection until the KF settles past calibration.
@@ -518,13 +549,18 @@ def process_real_flight(streams, events, boost_ms, end_ms,
 
         kf.predict(dt_s, a_vert)
         kf.update(baro_alt[i])
+        gated_hist[i] = kf.last_update_gated
         filtered_alt[i] = kf.state[0]
         filtered_vel[i] = kf.state[1]
 
-        detected = kf.detect_apogee()
-        vote_hist[i] = kf.last_votes
-        if apogee_idx is None and i > settle_idx and detected:
-            apogee_idx = i
+        # Match the state machine: only run apogee detection once past
+        # the settle window.  In production this gating is the BOOST /
+        # BURNOUT state entry; here we approximate with a fixed delay.
+        if i > settle_idx:
+            detected = kf.detect_apogee()
+            vote_hist[i] = kf.last_votes
+            if apogee_idx is None and detected:
+                apogee_idx = i
 
     state_transitions = []
     for ev in events:
@@ -548,6 +584,8 @@ def process_real_flight(streams, events, boost_ms, end_ms,
         "accel_body": accel,
         "gyro_body": gyro,
         "vote_hist": vote_hist,
+        "gated_hist": gated_hist,
+        "gated_updates": kf.gated_updates,
         "apogee_idx": apogee_idx,
         "computed_apogee_idx": computed_apogee_idx,
         "state_transitions": state_transitions,
@@ -639,7 +677,7 @@ def plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
                 theme_name, out_path, true_alt=None, true_press=None,
                 true_vel=None, state_transitions=None, title=None,
                 computed_apogee_idx=None, accel_body=None,
-                gyro_body=None):
+                gyro_body=None, gated_hist=None):
     """Generate the 6-panel flight plot using the given theme.
 
     Optional overlays:
@@ -649,6 +687,9 @@ def plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
         drawn as labelled vertical lines on every panel.
       * ``computed_apogee_idx`` — index of the filtered-altitude peak, drawn
         as a thin light reference line for comparison with ``apogee_idx``.
+      * ``gated_hist`` — boolean array marking baro samples that were
+        rejected by the innovation gate; drawn as scatter on the pressure
+        panel.
     """
     c = apply_theme(theme_name)
 
@@ -709,6 +750,11 @@ def plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
     if true_press is not None:
         ax_press.plot(t, true_press / 100, color=c["pressure"], linewidth=1.5,
                       label="True pressure")
+    if gated_hist is not None and np.any(gated_hist):
+        idx = np.flatnonzero(gated_hist)
+        ax_press.scatter(t[idx], noisy_press[idx] / 100,
+                         color=c["apogee"], marker="x", s=28, linewidths=1.2,
+                         label=f"NIS-gated ({len(idx)})", zorder=5)
     mark_computed_apogee(ax_press)
     mark_apogee(ax_press)
     ax_press.set_ylabel("Pressure (hPa)")
@@ -810,8 +856,12 @@ def plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
     mark_states(ax_acc)
 
     # 7) Apogee votes - step plots at stacked y-levels
-    vote_labels = ["velocity <= 0", "altitude <= peak - k·σ_alt"]
-    vote_colors = [c["vote_vel"], c["vote_desc"]]
+    vote_labels = [
+        "velocity <= -k·σ_vel",
+        "altitude < peak",
+        "|a_vert| < 20 m/s²",
+    ]
+    vote_colors = [c["vote_vel"], c["vote_desc"], c["vote_acc"]]
     n_votes = len(vote_labels)
     for row, (label, color) in enumerate(zip(vote_labels, vote_colors)):
         base = (n_votes - 1) - row
@@ -856,7 +906,8 @@ def run_simulation(args):
     filtered_vel = np.zeros_like(t)
     accel_vert_hist = np.zeros_like(t)
     g_b_hist = np.tile(att.g_b, (len(t), 1))
-    vote_hist = np.zeros((len(t), 2), dtype=bool)
+    vote_hist = np.zeros((len(t), 3), dtype=bool)
+    gated_hist = np.zeros(len(t), dtype=bool)
     apogee_idx = None
 
     cal_samples = int(pre_launch_s / dt)
@@ -876,13 +927,18 @@ def run_simulation(args):
 
         kf.predict(dt, a_vert)
         kf.update(baro_alt[i])
+        gated_hist[i] = kf.last_update_gated
         filtered_alt[i] = kf.state[0]
         filtered_vel[i] = kf.state[1]
 
-        detected = kf.detect_apogee()
-        vote_hist[i] = kf.last_votes
-        if apogee_idx is None and i > settle_idx and detected:
-            apogee_idx = i
+        # Match the state machine: only run apogee detection once past
+        # the settle window.  In production this gating is the BOOST /
+        # BURNOUT state entry; here we approximate with a fixed delay.
+        if i > settle_idx:
+            detected = kf.detect_apogee()
+            vote_hist[i] = kf.last_votes
+            if apogee_idx is None and detected:
+                apogee_idx = i
 
     true_vel = np.gradient(true_alt, t)
     computed_apogee_idx = int(np.argmax(filtered_alt))
@@ -896,6 +952,7 @@ def run_simulation(args):
     else:
         print("Filter apogee:       not detected")
     print(f"Attitude g_mag:      {att.g_mag:.3f} m/s²")
+    print(f"Gated baro updates:  {kf.gated_updates}")
 
     themes = ["light", "dark"] if args.theme == "both" else [args.theme]
     for theme in themes:
@@ -907,6 +964,7 @@ def run_simulation(args):
                     true_alt=true_alt, true_press=true_press, true_vel=true_vel,
                     computed_apogee_idx=computed_apogee_idx,
                     accel_body=accel_body, gyro_body=gyro_body,
+                    gated_hist=gated_hist,
                     title="AURORA Kalman Filter - Simulated 500 m Rocket Flight")
 
 
@@ -944,7 +1002,6 @@ def run_real_flight(args):
                                      post_main_s=args.post_main,
                                      q_alt=args.q_alt, q_vel=args.q_vel,
                                      r_meas=args.r_meas,
-                                     apogee_k_sigma=args.k_sigma,
                                      apogee_debounce=args.debounce)
 
         apogee_idx = result["apogee_idx"]
@@ -965,6 +1022,7 @@ def run_real_flight(args):
         else:
             print("  filter apogee: not detected")
         print(f"  transitions:   {len(result['state_transitions'])}")
+        print(f"  gated baro:    {result['gated_updates']}")
 
         title = f"AURORA Flight {n} - {os.path.basename(flight_dir.rstrip('/'))}"
         for theme in themes:
@@ -979,6 +1037,7 @@ def run_real_flight(args):
                         computed_apogee_idx=result["computed_apogee_idx"],
                         accel_body=result["accel_body"],
                         gyro_body=result["gyro_body"],
+                        gated_hist=result["gated_hist"],
                         title=title)
 
 
@@ -1018,10 +1077,6 @@ def main():
     parser.add_argument("--r-meas", type=float, default=4.0, dest="r_meas",
                         help="KF measurement noise variance "
                              "(default 4.0, matches Kconfig)")
-    parser.add_argument("--k-sigma", type=float, default=4.0, dest="k_sigma",
-                        help="Apogee descent confirmation in multiples of "
-                             "sqrt(P[0,0]) — the KF's altitude stddev "
-                             "(default 4.0)")
     parser.add_argument("--debounce", type=int, default=3,
                         help="Apogee debounce ticks (default 3, "
                              "matches Kconfig)")

@@ -42,6 +42,9 @@ struct filter {
     double last_accel_vert;  /**< Most recent world-vertical accel (m/s^2). */
     int consecutive_apogee;  /**< Count of consecutive samples meeting criteria. */
     int apogee_latched;      /**< Non-zero once apogee has been reported. */
+
+    /* Innovation-gate warm-up. */
+    int updates_since_init;  /**< Count of filter_update() calls since init. */
 };
 
 /**
@@ -80,25 +83,39 @@ int filter_predict(struct filter *filter, int64_t dt, double a_vert);
  * Computes Kalman gain and corrects the state estimate using a
  * barometric altitude measurement.
  *
+ * A normalized-innovation-squared (NIS) gate rejects measurements
+ * that are statistically inconsistent with the current estimate
+ * (y*y/S above ~5-sigma), guarding against sensor glitches such as
+ * ejection pressure spikes.  The gate only activates once the
+ * filter's altitude variance has dropped to or below the measurement
+ * noise, so cold-start and wide-prior conditions still accept the
+ * first reads.
+ *
  * @param filter Pointer to filter structure.
  * @param z      Measured altitude in meters.
  *
- * @retval 0 on success.
+ * @retval 0 if the measurement was applied.
+ * @retval 1 if the measurement was rejected by the innovation gate.
  * @retval -EINVAL if @p filter is NULL.
+ * @retval -EDOM   if the innovation covariance is singular.
  */
 int filter_update(struct filter *filter, double z);
 
 /**
- * @brief Detect apogee using a two-criterion vote.
+ * @brief Detect apogee using a three-criterion vote.
  *
- * Combines two signals to reject noise-driven false positives:
- *   1. Filtered vertical velocity is non-positive.
- *   2. Filtered altitude has descended at least
- *      @c CONFIG_FILTER_APOGEE_K_SIGMA_MILLI * sqrt(P[0][0]) below
- *      the tracked peak, i.e. the threshold scales with the KF's own
- *      altitude uncertainty and self-tunes to measurement noise.
+ * Combines three signals to reject noise-driven false positives:
+ *   1. Filtered vertical velocity is non-positive.  Velocity is the
+ *      leading indicator at apogee, so no hysteresis band is applied
+ *      beyond the debounce below — it would only delay detection.
+ *   2. Filtered altitude is below the tracked peak, guarding against
+ *      pad-side triggers where velocity jitter could briefly go
+ *      negative before launch.
+ *   3. The most recent world-frame vertical acceleration is within a
+ *      hard-coded sanity band (|a_vert| < ~20 m/s^2), ruling out
+ *      boost and anomalous accel transients at the decision point.
  *
- * Both conditions must hold for
+ * All conditions must hold for
  * @c CONFIG_FILTER_APOGEE_DEBOUNCE_SAMPLES consecutive calls before
  * apogee is reported.  Apogee is latched – once reported, subsequent
  * calls return 0 until @ref filter_init is called again.

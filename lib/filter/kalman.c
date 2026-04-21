@@ -20,6 +20,24 @@
 
 LOG_MODULE_REGISTER(kalman, CONFIG_AURORA_FILTER_LOG_LEVEL);
 
+/* Normalized-innovation-squared (Mahalanobis) gate for baro updates.
+ * y*y/S above this is treated as a sensor glitch and the update is
+ * skipped.  25 ~= 5-sigma; self-scaling via S, so no Kconfig knob.
+ */
+#define FILTER_NIS_GATE 25.0
+
+/* Updates to ignore before the NIS gate arms.  Protects the initial
+ * transient where the prior may be grossly wrong but P shrinks below
+ * R quickly.  At 10 Hz this is ~3 s of pad time.
+ */
+#define FILTER_NIS_WARMUP 30
+
+/* Inertial sanity band on world-frame vertical accel at the apogee
+ * decision point.  Coast/drag is small; boost is tens of g.  Rejects
+ * obviously non-apogee kinematics without a tuning parameter.
+ */
+#define FILTER_APOGEE_ACCEL_BAND 20.0
+
 /* filter_init – see filter.h */
 int filter_init(struct filter *filter)
 {
@@ -54,6 +72,7 @@ int filter_init(struct filter *filter)
 	filter->last_accel_vert = 0.0;
 	filter->consecutive_apogee = 0;
 	filter->apogee_latched = 0;
+	filter->updates_since_init = 0;
 
 	return 0;
 }
@@ -112,6 +131,20 @@ int filter_update(struct filter *filter, double z)
 	if (fabs(S) < 1e-12)
 	return -EDOM;
 
+	filter->updates_since_init++;
+
+	/* Innovation gate: reject measurements that are statistically
+	 * inconsistent with the current estimate.  The gate only arms
+	 * after a short warm-up and once the filter is more certain
+	 * than the sensor (P[0][0] <= R), so the initial convergence
+	 * transient still accepts large but legitimate innovations.
+	 */
+	if (filter->updates_since_init > FILTER_NIS_WARMUP &&
+	    filter->covariance[0][0] <= filter->noise_m &&
+	    (y * y) > FILTER_NIS_GATE * S) {
+		return 1;
+	}
+
 	/* Kalman gain */
 	const double K0 = filter->covariance[0][0] / S;
 	const double K1 = filter->covariance[1][0] / S;
@@ -150,20 +183,18 @@ int filter_detect_apogee(struct filter *filter)
 	if (filter->apogee_latched)
 	return 0;
 
-	/* Self-tuning descent threshold: scale by the KF's own altitude
-	 * standard deviation so the gate adapts to measurement noise.
-	 * sigma_alt^2 = P[0][0]; clamped to 0 for numerical safety.
+	/* Velocity is the leading indicator at apogee, so fire as soon as
+	 * the filter's velocity estimate goes non-positive and altitude
+	 * has dropped below the tracked peak.  Debounce + the inertial
+	 * sanity band handle noise rejection without adding a hysteresis
+	 * band that would delay detection during coast.
 	 */
-	const double p00 = filter->covariance[0][0];
-	const double sigma_alt = (p00 > 0.0) ? sqrt(p00) : 0.0;
-	const double k_sigma =
-	((double)CONFIG_FILTER_APOGEE_K_SIGMA_MILLI) / FILTER_SCALE_DIVISOR;
-
 	const int velocity_ok = velocity <= 0.0;
-	const int descent_ok =
-	altitude <= filter->peak_altitude - k_sigma * sigma_alt;
+	const int descent_ok = altitude < filter->peak_altitude;
+	const int inertial_ok =
+	fabs(filter->last_accel_vert) < FILTER_APOGEE_ACCEL_BAND;
 
-	if (velocity_ok && descent_ok) {
+	if (velocity_ok && descent_ok && inertial_ok) {
 	filter->consecutive_apogee++;
 	} else {
 	filter->consecutive_apogee = 0;
