@@ -377,7 +377,7 @@ def parse_influx(path):
     """Parse AURORA telemetry in InfluxDB line protocol.
 
     Returns dict with keys ``accel``, ``gyro``, ``baro`` mapping to
-    ``(t_ms, values)`` tuples where ``t_ms`` is a 1-D int array and
+    ``(t_ns, values)`` tuples where ``t_ns`` is a 1-D int array and
     ``values`` is an (N, K) float array (K=3 for accel/gyro, 2 for baro
     as ``[pres_kPa, temp_C]``).
     """
@@ -391,7 +391,7 @@ def parse_influx(path):
             try:
                 measurement_and_fields, ts = line.rsplit(" ", 1)
                 meas_tags, fields = measurement_and_fields.split(" ", 1)
-                t_ms = int(ts)
+                t_ns = int(ts)
             except ValueError:
                 continue
             tags = dict(kv.split("=", 1) for kv in meas_tags.split(",")[1:])
@@ -406,7 +406,7 @@ def parse_influx(path):
                     vals = [float(fd["pres"]), float(fd["temp"])]
             except (KeyError, ValueError):
                 continue
-            rows[ttype][0].append(t_ms)
+            rows[ttype][0].append(t_ns)
             rows[ttype][1].append(vals)
 
     out = {}
@@ -418,7 +418,7 @@ def parse_influx(path):
 def parse_state_audit(path):
     """Parse the state_audit file into a list of events.
 
-    Each entry: ``(t_ms, kind, from_state, to_or_event)`` where ``kind`` is
+    Each entry: ``(t_ns, kind, from_state, to_or_event)`` where ``kind`` is
     ``"transition"`` or ``"event"``. Tolerates the dash-prefixed first line.
     """
     rx = re.compile(r"^-*(\d+)\s+(\S+)\s+(\S+)\s+(.+)$")
@@ -436,24 +436,24 @@ def parse_state_audit(path):
 def segment_flights(events):
     """Find all ARMED→BOOST transitions and the subsequent *→IDLE close-out.
 
-    Returns list of ``(boost_ms, end_ms)`` tuples. ``end_ms`` may be ``None``
+    Returns list of ``(boost_ns, end_ns)`` tuples. ``end_ns`` may be ``None``
     if the flight is still running at end-of-log.
     """
     flights = []
     boosts = [i for i, e in enumerate(events)
               if e[1] == "transition" and e[2] == "ARMED" and e[3] == "BOOST"]
     for bi in boosts:
-        boost_ms = events[bi][0]
-        end_ms = None
+        boost_ns = events[bi][0]
+        end_ns = None
         for ej in events[bi + 1:]:
             if ej[1] == "transition" and ej[3] == "IDLE":
-                end_ms = ej[0]
+                end_ns = ej[0]
                 break
-        flights.append((boost_ms, end_ms))
+        flights.append((boost_ns, end_ns))
     return flights
 
 
-def process_real_flight(streams, events, boost_ms, end_ms,
+def process_real_flight(streams, events, boost_ns, end_ns,
                         dt_s=0.02, pre_boost_s=10.0, cal_s=3.0,
                         post_end_s=2.0, post_main_s=5.0,
                         default_duration_s=120.0,
@@ -461,11 +461,11 @@ def process_real_flight(streams, events, boost_ms, end_ms,
                         apogee_debounce=3):
     """Run the real flight window through Attitude + KalmanFilter.
 
-    Aligns t=0 to ``boost_ms - pre_boost_s*1000`` so that the first
+    Aligns t=0 to ``boost_ns - pre_boost_s*1000000000`` so that the first
     ``cal_s`` seconds are stationary and usable for calibration, and the
     BOOST transition lands at ``t = pre_boost_s``.
 
-    If a ``*→MAIN`` transition is present within ``[boost_ms, end_ms]``,
+    If a ``*→MAIN`` transition is present within ``[boost_ns, end_ns]``,
     the analysis window is truncated to ``MAIN + post_main_s`` seconds to
     discard the long post-parachute tail (where the state machine often
     idles out instead of progressing to REDUNDANT).
@@ -479,30 +479,30 @@ def process_real_flight(streams, events, boost_ms, end_ms,
               f"clamping cal_s to {pre_boost_s:.1f}s")
         cal_s = pre_boost_s
 
-    window_start_ms = boost_ms - int(pre_boost_s * 1000)
-    raw_end_ms = (end_ms if end_ms is not None
-                  else boost_ms + int(default_duration_s * 1000))
+    window_start_ns = boost_ns - int(pre_boost_s * 1000000000)
+    raw_end_ns = (end_ns if end_ns is not None
+                  else boost_ns + int(default_duration_s * 1000000000))
 
-    main_ms = None
+    main_ns = None
     for ev in events:
-        if ev[0] < boost_ms or ev[0] > raw_end_ms:
+        if ev[0] < boost_ns or ev[0] > raw_end_ns:
             continue
         if ev[1] == "transition" and ev[3] == "MAIN":
-            main_ms = ev[0]
+            main_ns = ev[0]
             break
 
-    if main_ms is not None:
-        tail_ms = main_ms + int(post_main_s * 1000)
+    if main_ns is not None:
+        tail_ns = main_ns + int(post_main_s * 1000000000)
     else:
-        tail_ms = raw_end_ms
-    window_end_ms = tail_ms + int(post_end_s * 1000)
+        tail_ns = raw_end_ns
+    window_end_ns = tail_ns + int(post_end_s * 1000000000)
 
-    duration_s = (window_end_ms - window_start_ms) / 1000.0
+    duration_s = (window_end_ns - window_start_ns) / 1000000000.0
     t = np.arange(0.0, duration_s, dt_s)
 
-    def resample(t_ms_raw, vals_raw):
-        mask = (t_ms_raw >= window_start_ms) & (t_ms_raw <= window_end_ms)
-        ts = (t_ms_raw[mask] - window_start_ms) / 1000.0
+    def resample(t_ns_raw, vals_raw):
+        mask = (t_ns_raw >= window_start_ns) & (t_ns_raw <= window_end_ns)
+        ts = (t_ns_raw[mask] - window_start_ns) / 1000000000.0
         vs = vals_raw[mask]
         out = np.zeros((len(t), vs.shape[1]))
         for k in range(vs.shape[1]):
@@ -566,8 +566,8 @@ def process_real_flight(streams, events, boost_ms, end_ms,
     for ev in events:
         if ev[1] != "transition":
             continue
-        if window_start_ms <= ev[0] <= window_end_ms:
-            ts = (ev[0] - window_start_ms) / 1000.0
+        if window_start_ns <= ev[0] <= window_end_ns:
+            ts = (ev[0] - window_start_ns) / 1000000000.0
             state_transitions.append((ts, ev[2], ev[3]))
 
     computed_apogee_idx = (int(np.argmax(filtered_alt))
@@ -994,9 +994,9 @@ def run_real_flight(args):
 
     themes = ["light", "dark"] if args.theme == "both" else [args.theme]
 
-    for n, (boost_ms, end_ms) in enumerate(flights, start=1):
+    for n, (boost_ns, end_ns) in enumerate(flights, start=1):
         print(f"\n--- Processing flight {n} ---")
-        result = process_real_flight(streams, events, boost_ms, end_ms,
+        result = process_real_flight(streams, events, boost_ns, end_ns,
                                      dt_s=args.dt, pre_boost_s=args.pre_boost,
                                      cal_s=args.cal,
                                      post_main_s=args.post_main,

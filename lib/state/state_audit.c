@@ -123,14 +123,14 @@ static int write_entry(const struct sm_audit_entry *e)
 		return -ENOENT;
 
 	if (e->type == SM_AUDIT_TRANSITION) {
-		snprintf(buf, sizeof(buf), "%-12lld %-12s %-12s %s\n",
-			(long long)e->timestamp_ms,
+		snprintf(buf, sizeof(buf), "%-12llu %-12s %-12s %s\n",
+			(unsigned long long)e->timestamp_ns,
 			"transition",
 			sm_state_str(e->from),
 			sm_state_str(e->to));
 	} else {
-		snprintf(buf, sizeof(buf), "%-12lld %-12s %-12s %s\n",
-			(long long)e->timestamp_ms,
+		snprintf(buf, sizeof(buf), "%-12llu %-12s %-12s %s\n",
+			(unsigned long long)e->timestamp_ns,
 			"event",
 			sm_state_str(e->from),
 			e->event ? e->event : "");
@@ -185,7 +185,7 @@ static void append(const struct sm_audit_entry *e)
 void sm_audit_transition(enum sm_state from, enum sm_state to)
 {
 	struct sm_audit_entry e = {
-		.timestamp_ms = k_uptime_get(),
+		.timestamp_ns = k_ticks_to_ns_floor64(k_uptime_ticks()),
 		.type = SM_AUDIT_TRANSITION,
 		.from = from,
 		.to = to,
@@ -198,7 +198,7 @@ void sm_audit_transition(enum sm_state from, enum sm_state to)
 void sm_audit_event(enum sm_state state, const char *event)
 {
 	struct sm_audit_entry e = {
-		.timestamp_ms = k_uptime_get(),
+		.timestamp_ns = k_ticks_to_ns_floor64(k_uptime_ticks()),
 		.type = SM_AUDIT_EVENT,
 		.from = state,
 		.to = state,

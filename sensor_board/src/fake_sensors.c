@@ -54,20 +54,20 @@ extern bool imu_active;
 
 static struct k_spinlock profile_lock;
 /** Uptime (ms) at which `sim launch` fired. 0 means not yet launched. */
-static int64_t launch_uptime_ms;
+static uint64_t launch_uptime_ns;
 
-static int64_t profile_launch_get(void)
+static uint64_t profile_launch_get(void)
 {
 	k_spinlock_key_t key = k_spin_lock(&profile_lock);
-	int64_t v = launch_uptime_ms;
+	uint64_t v = launch_uptime_ns;
 	k_spin_unlock(&profile_lock, key);
 	return v;
 }
 
-static void profile_launch_set(int64_t v)
+static void profile_launch_set(uint64_t v)
 {
 	k_spinlock_key_t key = k_spin_lock(&profile_lock);
-	launch_uptime_ms = v;
+	launch_uptime_ns = v;
 	k_spin_unlock(&profile_lock, key);
 }
 
@@ -78,17 +78,17 @@ static void profile_launch_set(int64_t v)
  *
  * @param t_s Seconds since launch; negative means stationary on the pad.
  */
-static void profile_sample(double t_s, double *altitude_m, double *accel_z_ms2)
+static void profile_sample(double t_s, double *altitude_m, double *accel_vert_ms2)
 {
 	if (t_s < 0.0) {
 		*altitude_m = 0.0;
-		*accel_z_ms2 = GRAVITY_MS2;
+		*accel_vert_ms2 = GRAVITY_MS2;
 		return;
 	}
 
 	if (t_s < BOOST_DURATION_S) {
 		*altitude_m = 0.5 * BOOST_COORD_ACCEL_MS2 * t_s * t_s;
-		*accel_z_ms2 = BOOST_COORD_ACCEL_MS2 + GRAVITY_MS2;
+		*accel_vert_ms2 = BOOST_COORD_ACCEL_MS2 + GRAVITY_MS2;
 		return;
 	}
 
@@ -101,7 +101,7 @@ static void profile_sample(double t_s, double *altitude_m, double *accel_z_ms2)
 	if (v > 0.0) {
 		*altitude_m = h_burnout + v_burnout * t_coast -
 			      0.5 * GRAVITY_MS2 * t_coast * t_coast;
-		*accel_z_ms2 = 0.0; /* ballistic coast: accelerometer reads 0 */
+		*accel_vert_ms2 = 0.0; /* ballistic coast: accelerometer reads 0 */
 		return;
 	}
 
@@ -116,7 +116,7 @@ static void profile_sample(double t_s, double *altitude_m, double *accel_z_ms2)
 		h = 0.0;
 	}
 	*altitude_m = h;
-	*accel_z_ms2 = GRAVITY_MS2; /* terminal descent or landed */
+	*accel_vert_ms2 = GRAVITY_MS2; /* terminal descent or landed */
 }
 
 static double altitude_to_pressure_kpa(double h_m)
@@ -136,11 +136,11 @@ static void set_sensor_value_double(struct sensor_value *sv, double v)
 
 static double flight_time_seconds(void)
 {
-	int64_t launch = profile_launch_get();
+	uint64_t launch = profile_launch_get();
 	if (launch == 0) {
 		return -1.0;
 	}
-	return (double)(k_uptime_get() - launch) / 1000.0;
+	return (double)(k_ticks_to_ns_floor64(k_uptime_ticks()) - launch) / 1000000000.0;
 }
 
 /* -------- Synthetic IMU thread -------- */
@@ -154,12 +154,12 @@ static void fake_imu_task(void *, void *, void *)
 	imu_active = true;
 
 	while (1) {
-		double altitude, accel_z;
-		profile_sample(flight_time_seconds(), &altitude, &accel_z);
+		double altitude, accel_vert;
+		profile_sample(flight_time_seconds(), &altitude, &accel_vert);
 
 		struct imu_data msg = {0};
 		set_sensor_value_double(&msg.accel[0], 0.0);
-		set_sensor_value_double(&msg.accel[1], accel_z);
+		set_sensor_value_double(&msg.accel[1], accel_vert);
 		set_sensor_value_double(&msg.accel[2], 0.0);
 		set_sensor_value_double(&msg.gyro[0], 0.0);
 		set_sensor_value_double(&msg.gyro[1], 0.0);
@@ -185,8 +185,8 @@ static void fake_baro_task(void *, void *, void *)
 	baro_active = true;
 
 	while (1) {
-		double altitude, accel_z;
-		profile_sample(flight_time_seconds(), &altitude, &accel_z);
+		double altitude, accel_vert;
+		profile_sample(flight_time_seconds(), &altitude, &accel_vert);
 
 		struct baro_data msg = {0};
 		set_sensor_value_double(&msg.temperature, 20.0);
@@ -209,7 +209,7 @@ static int cmd_sim_launch(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-	profile_launch_set(k_uptime_get());
+	profile_launch_set(k_ticks_to_ns_floor64(k_uptime_ticks()));
 	shell_print(sh, "sim: flight profile launched");
 	return 0;
 }
@@ -230,14 +230,14 @@ static int cmd_sim_status(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argv);
 
 	double t = flight_time_seconds();
-	double altitude, accel_z;
-	profile_sample(t, &altitude, &accel_z);
+	double altitude, accel_vert;
+	profile_sample(t, &altitude, &accel_vert);
 
 	if (t < 0.0) {
 		shell_print(sh, "sim: pad-stationary");
 	} else {
 		shell_print(sh, "sim: t=%.2fs  h=%.2fm  a_z=%.2fm/s^2",
-			    t, altitude, accel_z);
+			    t, altitude, accel_vert);
 	}
 	return 0;
 }
