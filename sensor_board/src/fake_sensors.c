@@ -159,8 +159,8 @@ static void fake_imu_task(void *, void *, void *)
 
 		struct imu_data msg = {0};
 		set_sensor_value_double(&msg.accel[0], 0.0);
-		set_sensor_value_double(&msg.accel[1], 0.0);
-		set_sensor_value_double(&msg.accel[2], accel_z);
+		set_sensor_value_double(&msg.accel[1], accel_z);
+		set_sensor_value_double(&msg.accel[2], 0.0);
 		set_sensor_value_double(&msg.gyro[0], 0.0);
 		set_sensor_value_double(&msg.gyro[1], 0.0);
 		set_sensor_value_double(&msg.gyro[2], 0.0);

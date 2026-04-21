@@ -29,7 +29,7 @@ endchoice
 
 config AURORA_STATE_MACHINE_AUDIT
 	bool "State machine audit log"
-	default y
+	default y if AURORA_STATE_MACHINE && CONFIG_FILE_SYSTEM
 	help
 	  Enable a ring-buffer audit log that records timestamped state
 	  transitions and notable events.  Useful for post-flight analysis
