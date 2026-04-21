@@ -123,13 +123,13 @@ static int write_entry(const struct sm_audit_entry *e)
 		return -ENOENT;
 
 	if (e->type == SM_AUDIT_TRANSITION) {
-		snprintf(buf, sizeof(buf), "%-12llu %-12s %-12s %s\n",
+		snprintf(buf, sizeof(buf), "%-12llu %-12s %-12s %s",
 			(unsigned long long)e->timestamp_ns,
 			"transition",
 			sm_state_str(e->from),
 			sm_state_str(e->to));
 	} else {
-		snprintf(buf, sizeof(buf), "%-12llu %-12s %-12s %s\n",
+		snprintf(buf, sizeof(buf), "%-12llu %-12s %-12s %s",
 			(unsigned long long)e->timestamp_ns,
 			"event",
 			sm_state_str(e->from),
@@ -139,12 +139,14 @@ static int write_entry(const struct sm_audit_entry *e)
 	k_spinlock_key_t key = k_spin_lock(&lock);
 
 	ssize_t wr = fs_write(&audit_file, buf, strlen(buf));
+	wr += fs_write(&audit_file, "\n", 1);
 
 	if (wr < 0) {
 		return (int)wr;
 	}
 
 	k_spin_unlock(&lock, key);
+	LOG_INF("%s", buf);
 
 	return fs_sync(&audit_file);
 }

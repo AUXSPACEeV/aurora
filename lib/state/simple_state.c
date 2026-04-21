@@ -203,8 +203,6 @@ void sm_init(const struct sm_thresholds *cfg,
 		err_hdl.cb = sm_err_hdl->cb;
 		err_hdl.args = sm_err_hdl->args;
 	}
-
-	LOG_INF("State machine initialized (DISARMED, IDLE)");
 }
 
 /* sm_deinit – see state.h */
@@ -214,8 +212,6 @@ void sm_deinit(void)
 	stop_timers();
 	SM_EVENT("state machine reset");
 	current_state = SM_IDLE;
-
-	LOG_INF("State machine reset (DISARMED, IDLE)");
 }
 
 /*-----------------------------------------------------------
@@ -237,7 +233,6 @@ static inline void _sm_update(const struct sm_inputs *in,
 	if (!in->armed && current_state != SM_IDLE) {
 		stop_timers();
 		SM_TRANSITION(SM_IDLE);
-		LOG_INF("-[DISARM]-> IDLE");
 	}
 
 	switch (current_state)
@@ -249,7 +244,6 @@ static inline void _sm_update(const struct sm_inputs *in,
 	case SM_IDLE:
 		if (in->armed && in->orientation >= th.T_OA) {
 			SM_TRANSITION(SM_ARMED);
-			LOG_INF("-[ARM]-> ARMED");
 		}
 		break;
 
@@ -263,7 +257,6 @@ static inline void _sm_update(const struct sm_inputs *in,
 			k_timer_stop(&dt_ab);
 			SM_EVENT("orientation below threshold");
 			SM_TRANSITION(SM_IDLE);
-			LOG_INF("-[ORIENTATION]-> IDLE");
 			break;
 		}
 
@@ -284,7 +277,6 @@ static inline void _sm_update(const struct sm_inputs *in,
 				SM_TRANSITION(SM_BOOST);
 				k_timer_stop(&dt_ab);
 				running_timers[TIMER_DT_AB] = 0;
-				LOG_INF("-> BOOST");
 			}
 
 			break;
@@ -306,7 +298,6 @@ static inline void _sm_update(const struct sm_inputs *in,
 	case SM_BOOST:
 		if (in->acceleration < th.T_BB) {
 			SM_TRANSITION(SM_BURNOUT);
-			LOG_INF("-> BURNOUT");
 		}
 		break;
 
@@ -318,13 +309,11 @@ static inline void _sm_update(const struct sm_inputs *in,
 		if (filter_detect_apogee(&filter) == 1) {
 			k_timer_start(&to_a, K_MSEC(th.TO_A), K_NO_WAIT);
 			SM_TRANSITION(SM_APOGEE);
-			LOG_INF("-> APOGEE (filter)");
 		}
 #else
 		if (in->velocity <= 0.0 && in->altitude < previous_altitude) {
 			k_timer_start(&to_a, K_MSEC(th.TO_A), K_NO_WAIT);
 			SM_TRANSITION(SM_APOGEE);
-			LOG_INF("-> APOGEE");
 		}
 #endif /* CONFIG_FILTER */
 		break;
@@ -337,12 +326,10 @@ static inline void _sm_update(const struct sm_inputs *in,
 			k_timer_stop(&to_a);
 			k_timer_start(&to_m, K_MSEC(th.TO_M), K_NO_WAIT);
 			SM_TRANSITION(SM_MAIN);
-			LOG_INF("-> MAIN");
 		} else if (TIMER_EXPIRED(&to_a)) {
 			/* Timeout expired, abort to ERROR */
 			k_timer_stop(&to_a);
 			SM_EVENT("apogee timeout expired");
-			LOG_INF("-[TIMEOUT]-> ERROR");
 			sm_do_error_handling();
 		}
 		break;
@@ -355,7 +342,6 @@ static inline void _sm_update(const struct sm_inputs *in,
 			k_timer_stop(&to_m);
 			k_timer_start(&to_r, K_MSEC(th.TO_R), K_NO_WAIT);
 			SM_TRANSITION(SM_REDUNDANT);
-			LOG_INF("-> REDUNDANT");
 		}
 		break;
 
@@ -378,7 +364,6 @@ static inline void _sm_update(const struct sm_inputs *in,
 				SM_TRANSITION(SM_LANDED);
 				k_timer_stop(&dt_l);
 				running_timers[TIMER_DT_L] = 0;
-				LOG_INF("-> LANDED");
 				break;
 			}
 
@@ -401,7 +386,6 @@ _check_timeout:
 			running_timers[TIMER_DT_L] = 0;
 			k_timer_stop(&to_r);
 			SM_EVENT("redundant timeout expired");
-			LOG_INF("-[TIMEOUT]-> ERROR");
 			sm_do_error_handling();
 		}
 		break;
