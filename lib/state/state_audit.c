@@ -74,7 +74,7 @@ static int sm_audit_file_create()
 
 		/* All files already exist */
 		if (i == CONFIG_AURORA_STATE_MACHINE_AUDIT_MAX_FILES) {
-			rc = snprintf(full_path, sizeof(full_path), "%s/audit_0",
+			rc = snprintf(full_path, sizeof(full_path), "%s/audit.0",
 					CONFIG_AURORA_STATE_MACHINE_AUDIT_BASE_PATH);
 
 			if (rc < 0 || rc >= (int)sizeof(full_path))

@@ -13,8 +13,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <stdlib.h>
-#include <errno.h>
+#include <math.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/spinlock.h>
@@ -362,7 +361,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 		/* Timer is running. Check conditions */
 		if (running_timers[TIMER_DT_L] == 1) {
 			/* conditions aren't met. Reset the timer */
-			if (in->velocity > th.T_L) {
+			if (fabs(in->velocity) > (double)th.T_L) {
 				running_timers[TIMER_DT_L] = 0;
 				k_timer_stop(&dt_l);
 				goto _check_timeout;
@@ -381,7 +380,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 		}
 
 		/* Timer hasn't started yet. Are conditions met? */
-		if (in->velocity > th.T_L)
+		if (fabs(in->velocity) > (double)th.T_L)
 			goto _check_timeout;
 
 		/* Conditions are met, so start the timer. */
