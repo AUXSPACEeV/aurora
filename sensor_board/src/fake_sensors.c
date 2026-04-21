@@ -17,6 +17,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "aurora/lib/state/state.h"
 #include <math.h>
 #include <stdint.h>
 #include <zephyr/kernel.h>
@@ -98,7 +99,12 @@ static void profile_sample(double t_s, double *altitude_m, double *accel_vert_ms
 	const double t_coast = t_s - BOOST_DURATION_S;
 
 	const double v = v_burnout - GRAVITY_MS2 * t_coast;
-	if (v > 0.0) {
+	const enum sm_state state = sm_get_state();
+
+	if (state < SM_APOGEE) {
+		if (v < 0.0) {
+			LOG_WRN_ONCE("Simulator APOGEE; State machine %s", sm_state_str(state));
+		}
 		*altitude_m = h_burnout + v_burnout * t_coast -
 			      0.5 * GRAVITY_MS2 * t_coast * t_coast;
 		*accel_vert_ms2 = 0.0; /* ballistic coast: accelerometer reads 0 */

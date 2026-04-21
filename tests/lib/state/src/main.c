@@ -45,10 +45,11 @@ static void simple_state_machine_mock_after(void *fixture)
 
 /** @brief Track error handler invocations for testing. */
 static int error_handler_call_count;
+static int mock_error_handler_rc;
 static int mock_error_handler(void *args)
 {
 	error_handler_call_count++;
-	return 0;
+	return mock_error_handler_rc;
 }
 
 /** @brief Helper to transition the state machine from IDLE to ARMED. */
@@ -472,6 +473,7 @@ ZTEST(simple_state_tests, test_state_redundand_timeout)
 	};
 
 	error_handler_call_count = 0;
+	mock_error_handler_rc = -EIO;
 	sm_deinit();
 	sm_init(&simple_state_cfg, &err_args);
 
@@ -573,6 +575,7 @@ ZTEST(simple_state_tests, test_state_error)
 	};
 
 	error_handler_call_count = 0;
+	mock_error_handler_rc = -EIO;
 	sm_deinit();
 	sm_init(&simple_state_cfg, &err_args);
 
@@ -598,6 +601,45 @@ ZTEST(simple_state_tests, test_state_error)
 	zassert_equal(sm_get_state(), SM_ERROR, "State should still be ERROR");
 	zassert_true(error_handler_call_count > count_after_error,
 		     "Error handler should be called again");
+}
+
+/**
+ * @brief Test ERROR -> IDLE recovery
+ *
+ * Verifies that when the error handler returns 0 (mitigated), the state
+ * machine transitions back to IDLE.
+ */
+ZTEST(simple_state_tests, test_state_error_recovery)
+{
+	struct sm_error_handling_args err_args = {
+		.cb = &mock_error_handler,
+		.args = NULL,
+	};
+
+	error_handler_call_count = 0;
+	mock_error_handler_rc = -5;
+	sm_deinit();
+	sm_init(&simple_state_cfg, &err_args);
+
+	struct sm_inputs inputs = {
+		.armed = 1,
+		.orientation = simple_state_cfg.T_OA,
+		.acceleration = 0.0,
+		.velocity = 0.0,
+		.altitude = 0.0,
+	};
+
+	/* Reach ERROR via APOGEE timeout, handler still failing */
+	put_state_apogee(&inputs);
+	inputs.altitude = simple_state_cfg.T_M + 100.0;
+	k_sleep(K_MSEC(simple_state_cfg.TO_A));
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_ERROR, "State should be ERROR");
+
+	/* Handler now reports recovery; SM must return to IDLE */
+	mock_error_handler_rc = 0;
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_IDLE, "State should recover to IDLE");
 }
 
 /**

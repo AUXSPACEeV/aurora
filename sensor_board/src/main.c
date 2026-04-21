@@ -224,6 +224,13 @@ K_THREAD_DEFINE(baro_polling, 2048, baro_task, NULL, NULL, NULL,
  *                     State machine TASK
  * ============================================================ */
 #if defined(CONFIG_AURORA_STATE_MACHINE)
+
+int state_machine_error_handler(void *args)
+{
+	LOG_WRN("WTF is error handling? Just go back to IDLE.");
+	return 0;
+}
+
 /**
  * @brief State machine thread.
  *
@@ -246,6 +253,11 @@ void state_machine_task(void *, void *, void *)
 	double pitch = 0.0;
 	bool baro_ready = false;
 	bool imu_ready = false;
+
+	struct sm_error_handling_args sm_error_handler = {
+		.cb = &state_machine_error_handler,
+		.args = NULL,
+	};
 
 #if defined(CONFIG_IMU)
 	static struct attitude attitude_state;
@@ -276,7 +288,7 @@ void state_machine_task(void *, void *, void *)
 	}
 #endif /*.CONFIG_PYRO */
 
-	sm_init(&state_cfg, NULL);
+	sm_init(&state_cfg, &sm_error_handler);
 	sm_active = true;
 
 	// TODO: Add idling
