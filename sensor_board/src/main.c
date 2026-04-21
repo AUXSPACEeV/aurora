@@ -76,21 +76,48 @@ ZBUS_CHAN_ADD_OBS(baro_data_chan, sm_sub, 1);
 
 #if defined(CONFIG_DATA_LOGGER)
 static struct data_logger sm_logger;
-static struct k_work flush_work;
 
-static void flush_work_handler(struct k_work *work)
+/* Decouple logging from the SM hot path: SM pushes datapoints into this
+ * queue with K_NO_WAIT; a dedicated logger thread drains it and owns all
+ * FS-touching operations (write + periodic flush). Sized to absorb the
+ * worst-case flush stall at full IMU+baro rate.
+ */
+#define LOG_MSGQ_DEPTH     256
+#define LOG_FLUSH_PERIOD_MS 1000
+
+K_MSGQ_DEFINE(log_msgq, sizeof(struct datapoint), LOG_MSGQ_DEPTH, 4);
+
+static inline void log_enqueue(const struct datapoint *dp)
 {
-	ARG_UNUSED(work);
-	data_logger_flush(&sm_logger);
+	/* Drop on overflow rather than stall the SM thread. */
+	(void)k_msgq_put(&log_msgq, dp, K_NO_WAIT);
 }
 
-static void flush_timer_handler(struct k_timer *timer)
+static void logger_task(void *, void *, void *)
 {
-	ARG_UNUSED(timer);
-	k_work_submit(&flush_work);
+	struct datapoint dp;
+	int64_t last_flush = k_uptime_get();
+
+	while (1) {
+		int64_t now = k_uptime_get();
+		int64_t wait_ms = LOG_FLUSH_PERIOD_MS - (now - last_flush);
+		if (wait_ms < 0) {
+			wait_ms = 0;
+		}
+
+		if (k_msgq_get(&log_msgq, &dp, K_MSEC(wait_ms)) == 0) {
+			data_logger_log(&dp);
+		}
+
+		if (k_uptime_get() - last_flush >= LOG_FLUSH_PERIOD_MS) {
+			data_logger_flush(&sm_logger);
+			last_flush = k_uptime_get();
+		}
+	}
 }
 
-K_TIMER_DEFINE(data_logger_flush_timer, flush_timer_handler, NULL);
+K_THREAD_DEFINE(logger_thread, 2048, logger_task, NULL, NULL, NULL,
+		8, 0, 0);
 #endif /* CONFIG_DATA_LOGGER */
 
 #if defined(CONFIG_AURORA_POWERFAIL)
@@ -145,12 +172,12 @@ void imu_task(void *, void *, void *)
 	}
 #endif /* !CONFIG_IMU_TRIGGER */
 
-	LOG_INF("IMU task ended.");
+	LOG_INF("IMU ready.");
 }
 
 /* Create the IMU task (inactive unless CONFIG_IMU=y) */
 K_THREAD_DEFINE(imu_polling, 2048, imu_task, NULL, NULL, NULL,
-				5, 0, 0);
+				7, 0, 0);
 #endif /* CONFIG_IMU && !CONFIG_AURORA_FAKE_SENSORS */
 
 /* ============================================================
@@ -183,12 +210,14 @@ void baro_task(void *, void *, void *)
 
 		k_sleep(K_MSEC(1000 / baro_hz));
 	}
-#endif
+#endif /* !CONFIG_BARO_TRIGGER */
+
+	LOG_INF("Baro ready.");
 }
 
 /* Create the BARO task */
 K_THREAD_DEFINE(baro_polling, 2048, baro_task, NULL, NULL, NULL,
-				5, 0, 0);
+				7, 0, 0);
 #endif /* CONFIG_BARO && !CONFIG_AURORA_FAKE_SENSORS */
 
 /* ============================================================
@@ -328,13 +357,13 @@ void state_machine_task(void *, void *, void *)
 						msg_buf.imu.accel[2]
 					},
 				};
-				data_logger_log(&dp);
+				log_enqueue(&dp);
 
 				dp.type = AURORA_DATA_IMU_GYRO;
 				dp.channels[0] = msg_buf.imu.gyro[0];
 				dp.channels[1] = msg_buf.imu.gyro[1];
 				dp.channels[2] = msg_buf.imu.gyro[2];
-				data_logger_log(&dp);
+				log_enqueue(&dp);
 #endif /* CONFIG_DATA_LOGGER */
 			} else if (data_chan == &baro_data_chan) {
 #if defined(CONFIG_DATA_LOGGER)
@@ -345,7 +374,7 @@ void state_machine_task(void *, void *, void *)
 					.channel_count = 2,
 					.channels = {msg_buf.baro.temperature, msg_buf.baro.pressure},
 				};
-				data_logger_log(&dp);
+				log_enqueue(&dp);
 #endif /* CONFIG_DATA_LOGGER */
 				if (baro_sensor_value_to_altitude(&msg_buf.baro.pressure, &altitude) == 0) {
 					baro_ready = true;
@@ -426,7 +455,7 @@ void state_machine_task(void *, void *, void *)
 
 /* Create the State machine task */
 K_THREAD_DEFINE(state_machine, 4096, state_machine_task, NULL, NULL,
-				NULL, 5, 0, 0);
+				NULL, 6, 0, 0);
 #endif /* CONFIG_AURORA_STATE_MACHINE */
 
 
@@ -444,15 +473,10 @@ int main(void)
 	LOG_INF("Auxspace AURORA %s", APP_VERSION_STRING);
 
 #if defined(CONFIG_DATA_LOGGER)
-	k_work_init(&flush_work, flush_work_handler);
-
 	if (data_logger_init(&sm_logger, "flight") != 0) {
-	LOG_ERR("data_logger_init failed");
+		LOG_ERR("data_logger_init failed");
 	} else {
-	data_logger_set_default(&sm_logger);
-	k_timer_start(&data_logger_flush_timer,
-			K_SECONDS(1),
-			K_SECONDS(1));
+		data_logger_set_default(&sm_logger);
 	}
 #endif /* CONFIG_DATA_LOGGER */
 
