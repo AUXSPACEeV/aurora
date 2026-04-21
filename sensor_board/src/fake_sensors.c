@@ -43,7 +43,7 @@ extern bool imu_active;
 #define BOOST_COORD_ACCEL_MS2    30.0
 #define BOOST_DURATION_S         1.5
 /* Parachute descent rate applied after apogee. */
-#define PARACHUTE_RATE_MS         3.0
+#define PARACHUTE_RATE_MS         7.0
 
 /* ISA troposphere, matching the constants in lib/sensor/baro.c */
 #define SEA_LEVEL_PRESSURE_KPA   101.325

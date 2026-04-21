@@ -1,0 +1,15 @@
+*** Booting AURORA 3638fc57328a ***
+[00:00:00.000,000] <inf> [  0 main] main: Auxspace AURORA 0.2.1
+[00:00:00.000,000] <err> [  0 main] fs: directory open error (-2)
+[00:00:00.000,000] <inf> [  5 baro_polling] fake_sensors: Fake baro running at 50 Hz
+[00:00:00.000,000] <inf> [  5 imu_polling] fake_sensors: Fake IMU running at 100 Hz
+[00:00:00.000,000] <err> [  6 state_machine] fs: directory open error (-2)
+[00:00:00.000,000] <inf> [  6 state_machine] state_audit: State machine audit file created: /RAM:/state/audit.0.
+[00:00:00.000,000] <inf> [  6 state_machine] state_audit: 0            event        IDLE         state machine initialized
+[00:00:00.000,000] <inf> [  6 state_machine] state_audit: 0            transition   IDLE         ARMED
+[00:00:00.000,000] <err> [ 14 logging] fs: directory open error (-2)
+[00:00:04.000,000] <inf> [  6 state_machine] attitude: Attitude calibrated: n=200 g_mag=9.810 g_b=[0.00 0.00 -1.00]
+[00:00:05.910,000] <inf> [  6 state_machine] state_audit: 5910000000   event        ARMED        orientation and altitude threshold reached
+[00:00:06.120,000] <inf> [  6 state_machine] state_audit: 6120000000   event        ARMED        orientation, altitude and timing threshold reached
+[00:00:06.120,000] <inf> [  6 state_machine] state_audit: 6120000000   transition   ARMED        BOOST
+[00:00:06.630,000] <inf> [  6 state_machine] state_audit: 6630000000   transition   BOOST        BURNOUT
