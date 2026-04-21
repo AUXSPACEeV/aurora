@@ -445,16 +445,28 @@ int main(void)
 
 #if defined(CONFIG_DATA_LOGGER)
 	k_work_init(&flush_work, flush_work_handler);
+
 	if (data_logger_init(&sm_logger, "flight") != 0) {
-		LOG_ERR("data_logger_init failed");
+	LOG_ERR("data_logger_init failed");
 	} else {
-		data_logger_set_default(&sm_logger);
-		k_timer_start(&data_logger_flush_timer, K_SECONDS(1), K_SECONDS(1));
+	data_logger_set_default(&sm_logger);
+	k_timer_start(&data_logger_flush_timer,
+			K_SECONDS(1),
+			K_SECONDS(1));
 	}
 #endif /* CONFIG_DATA_LOGGER */
 
 #if defined(CONFIG_AURORA_POWERFAIL)
 	powerfail_setup(&powerfail_assert, &powerfail_deassert);
+
+#else
+	/* No powerfail module → assume always armed */
+	armed = 1;
+
+#if defined(CONFIG_DATA_LOGGER)
+	data_logger_start(&sm_logger);
+#endif /* CONFIG_DATA_LOGGER */
+
 #endif /* CONFIG_AURORA_POWERFAIL */
 
 #if defined(CONFIG_AURORA_NOTIFY)
