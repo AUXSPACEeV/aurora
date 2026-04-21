@@ -399,6 +399,30 @@ void state_machine_task(void *, void *, void *)
 		state = sm_get_state();
 		LOG_DBG("STATE = %d", state);
 
+#if defined(CONFIG_DATA_LOGGER)
+		{
+			uint64_t ts = k_ticks_to_ns_floor64(k_uptime_ticks());
+			struct datapoint kin_dp = {
+				.timestamp_ns = ts,
+				.type = AURORA_DATA_SM_KINEMATICS,
+				.channel_count = 3,
+			};
+			sensor_value_from_double(&kin_dp.channels[0], inputs.acceleration);
+			sensor_value_from_double(&kin_dp.channels[1], inputs.accel_vert);
+			sensor_value_from_double(&kin_dp.channels[2], inputs.velocity);
+			log_enqueue(&kin_dp);
+
+			struct datapoint pose_dp = {
+				.timestamp_ns = ts,
+				.type = AURORA_DATA_SM_POSE,
+				.channel_count = 2,
+			};
+			sensor_value_from_double(&pose_dp.channels[0], inputs.orientation);
+			sensor_value_from_double(&pose_dp.channels[1], inputs.altitude);
+			log_enqueue(&pose_dp);
+		}
+#endif /* CONFIG_DATA_LOGGER */
+
 		if (state != prev_state) {
 #if defined(CONFIG_AURORA_NOTIFY)
 			notify_state_change(prev_state, state);
