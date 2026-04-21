@@ -16,6 +16,18 @@ module = SENSOR_BOARD
 module-str = SENSOR_BOARD
 source "subsys/logging/Kconfig.template.log_config"
 
+config AURORA_FAKE_SENSORS
+	bool "Synthetic IMU/baro data source (no hardware)"
+	depends on IMU && BARO
+	help
+	  Replaces the hardware IMU and barometer polling threads with a
+	  synthetic flight-profile generator. The generator publishes
+	  imu_data/baro_data messages on the same zbus channels, at the
+	  same cadence and thread priorities, so the downstream data path,
+	  Kalman filter and state machine can be exercised without real
+	  sensors. Intended for native_sim. A shell command "sim launch"
+	  kicks off the canned ascent/descent profile.
+
 menu "State Machine Configuration"
 
 config BOOST_ACCELERATION

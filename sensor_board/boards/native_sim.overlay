@@ -1,0 +1,28 @@
+/*
+ * Copyright (c) 2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * RAM disk (64 KiB) with an auto-mounted FatFS volume for the data
+ * logger formatter tests.  Zephyr's fstab init hook mounts the volume
+ * before any test suite runs, so no explicit fs_mount() is needed.
+ */
+
+/ {
+	ramdisk0 {
+		compatible = "zephyr,ram-disk";
+		disk-name = "RAM";
+		sector-size = <512>;
+		sector-count = <200000>;
+	};
+
+	fstab {
+		compatible = "zephyr,fstab";
+
+		ram_fatfs: ram_fatfs {
+			compatible = "zephyr,fstab,fatfs";
+			mount-point = "/RAM:";
+			automount;
+			disk-access;
+		};
+	};
+};

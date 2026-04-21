@@ -8,6 +8,7 @@
  */
 
 #include <errno.h>
+#include <stdio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/spinlock.h>
 #include <zephyr/logging/log.h>
