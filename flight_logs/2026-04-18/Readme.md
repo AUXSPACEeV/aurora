@@ -2,7 +2,8 @@
 
 ## Info
 
-AURORA Version `0.2.1`
+- AURORA Version: `0.2.1`
+- Board: `esp32s3-micrometer/esp32s3/procpu`
 
 ## Compile command
 

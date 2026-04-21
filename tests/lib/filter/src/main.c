@@ -149,6 +149,8 @@ ZTEST(kalman_filter_tests, test_init_values)
 		      "consecutive_apogee should be initialized to 0");
 	zassert_equal(f.apogee_latched, 0,
 		      "apogee_latched should be initialized to 0");
+	zassert_equal(f.updates_since_init, 0,
+		      "updates_since_init should be initialized to 0");
 }
 
 /* ----------------------------------------------------------------
@@ -336,6 +338,49 @@ ZTEST(kalman_filter_tests, test_update_reduces_covariance)
 		     "P[0][0] should decrease after measurement update");
 }
 
+/**
+ * @brief Innovation gate accepts the cold-start measurement.
+ *
+ * With P[0][0] = 10 > R = 4 the gate is bypassed, so even a large
+ * innovation must still be applied.  This protects first-read and
+ * wide-prior cases from being locked out.
+ */
+ZTEST(kalman_filter_tests, test_update_gate_bypassed_when_wide)
+{
+	double alt_before = filt.state[0];
+
+	int ret = filter_update(&filt, 500.0);
+	zassert_equal(ret, 0, "Wide-prior update should be applied");
+	zassert_true(filt.state[0] > alt_before,
+		     "Wide-prior update must move state toward measurement");
+}
+
+/**
+ * @brief Innovation gate rejects glitch measurements once converged.
+ *
+ * Tighten P[0][0] below R to simulate a converged filter, then feed
+ * a measurement far outside the 5-sigma envelope.  The gate must
+ * reject it and leave the state untouched.
+ */
+ZTEST(kalman_filter_tests, test_update_gate_rejects_glitch)
+{
+	filt.state[0] = 100.0;
+	filt.state[1] = 0.0;
+	filt.covariance[0][0] = 0.5;  /* << noise_m = 4 */
+	filt.updates_since_init = 1000;  /* past warm-up */
+
+	double alt_before = filt.state[0];
+	double P00_before = filt.covariance[0][0];
+
+	/* 500 m jump from a 100 m estimate with sigma ~= 2.1 m: ~190 sigma. */
+	int ret = filter_update(&filt, 500.0);
+	zassert_equal(ret, 1, "Glitch measurement should be rejected");
+	zassert_near(filt.state[0], alt_before, FLOAT_TOL,
+		     "Rejected update must not move state");
+	zassert_near(filt.covariance[0][0], P00_before, FLOAT_TOL,
+		     "Rejected update must not shrink covariance");
+}
+
 /* ----------------------------------------------------------------
  * filter_detect_apogee tests
  * ---------------------------------------------------------------- */
@@ -350,23 +395,12 @@ ZTEST(kalman_filter_tests, test_detect_apogee_null)
 		      "filter_detect_apogee(NULL) should return -EINVAL");
 }
 
-/** @brief k_sigma from Kconfig (dimensionless multiplier on sqrt(P[0][0])). */
-#define APOGEE_K_SIGMA \
-	((double)CONFIG_FILTER_APOGEE_K_SIGMA_MILLI / 1000.0)
-
 /** @brief Debounce count from Kconfig. */
 #define APOGEE_DEBOUNCE CONFIG_FILTER_APOGEE_DEBOUNCE_SAMPLES
 
-/** @brief Altitude stddev used by the helpers. Tests pin P[0][0] = 1. */
-#define APOGEE_SIGMA_ALT 1.0
-
-/** @brief Equivalent descent in meters for the tests' fixed sigma. */
-#define APOGEE_DESCENT_THRESH (APOGEE_K_SIGMA * APOGEE_SIGMA_ALT)
-
 /**
  * @brief Drive the filter toward a post-apogee state and count calls
- *        until apogee is latched.  Pins P[0][0] so the sigma-scaled
- *        descent threshold is deterministic.
+ *        until apogee is latched.
  */
 static int drive_apogee_descent(struct filter *f,
 				double peak, double descent)
@@ -374,7 +408,6 @@ static int drive_apogee_descent(struct filter *f,
 	f->peak_altitude = peak;
 	f->state[0] = peak - descent;
 	f->state[1] = -1.0;
-	f->covariance[0][0] = APOGEE_SIGMA_ALT * APOGEE_SIGMA_ALT;
 
 	for (int i = 0; i < APOGEE_DEBOUNCE * 2; i++) {
 		if (filter_detect_apogee(f) == 1) {
@@ -407,12 +440,11 @@ ZTEST(kalman_filter_tests, test_detect_apogee_positive_velocity)
 }
 
 /**
- * @brief Velocity zero-crossing alone must not fire without descent.
+ * @brief Velocity alone must not fire without descent below peak.
  */
 ZTEST(kalman_filter_tests, test_detect_apogee_requires_descent)
 {
 	/* Ascend to a peak. */
-	filt.covariance[0][0] = APOGEE_SIGMA_ALT * APOGEE_SIGMA_ALT;
 	for (int i = 0; i < 10; i++) {
 		filt.state[0] = (double)i;
 		filt.state[1] = 10.0;
@@ -420,8 +452,8 @@ ZTEST(kalman_filter_tests, test_detect_apogee_requires_descent)
 			      "No apogee during ascent");
 	}
 
-	/* Velocity crosses zero but altitude stays at the peak. */
-	filt.state[1] = -0.5;
+	/* Velocity goes negative but altitude stays at the peak. */
+	filt.state[1] = -1.0;
 	for (int i = 0; i < APOGEE_DEBOUNCE + 2; i++) {
 		zassert_equal(filter_detect_apogee(&filt), 0,
 			      "No apogee without descent below peak");
@@ -429,12 +461,11 @@ ZTEST(kalman_filter_tests, test_detect_apogee_requires_descent)
 }
 
 /**
- * @brief Sufficient descent + velocity fires after debounce.
+ * @brief Any descent + significantly-negative velocity fires after debounce.
  */
 ZTEST(kalman_filter_tests, test_detect_apogee_debounced)
 {
-	int n = drive_apogee_descent(&filt, 100.0,
-				     APOGEE_DESCENT_THRESH + 0.5);
+	int n = drive_apogee_descent(&filt, 100.0, 0.5);
 
 	zassert_equal(n, APOGEE_DEBOUNCE,
 		      "Apogee should fire exactly after the debounce count");
@@ -446,9 +477,8 @@ ZTEST(kalman_filter_tests, test_detect_apogee_debounced)
 ZTEST(kalman_filter_tests, test_detect_apogee_debounce_reset)
 {
 	filt.peak_altitude = 100.0;
-	filt.state[0] = 100.0 - (APOGEE_DESCENT_THRESH + 0.5);
+	filt.state[0] = 100.0 - 0.5;
 	filt.state[1] = -1.0;
-	filt.covariance[0][0] = APOGEE_SIGMA_ALT * APOGEE_SIGMA_ALT;
 
 	/* Partial progress, but not yet latched. */
 	for (int i = 0; i < APOGEE_DEBOUNCE - 1; i++) {
@@ -472,24 +502,32 @@ ZTEST(kalman_filter_tests, test_detect_apogee_debounce_reset)
 }
 
 /**
- * @brief High altitude uncertainty widens the gate and blocks detection.
+ * @brief Inertial sanity band blocks apogee under unrealistic accel.
  *
- * With P[0][0] inflated so that k_sigma * sqrt(P[0][0]) exceeds the
- * actual descent, the descent vote must stay low.
+ * Even with velocity and descent criteria satisfied, an implausibly
+ * large |a_vert| must veto the apogee vote so accel glitches or a
+ * still-thrusting motor can't trigger ejection.
  */
-ZTEST(kalman_filter_tests, test_detect_apogee_sigma_gate)
+ZTEST(kalman_filter_tests, test_detect_apogee_inertial_band)
 {
 	filt.peak_altitude = 100.0;
-	filt.state[0] = 100.0 - (APOGEE_DESCENT_THRESH + 0.5);
+	filt.state[0] = 100.0 - 0.5;
 	filt.state[1] = -1.0;
-	/* Blow up sigma so threshold >> descent. */
-	const double big_sigma = APOGEE_SIGMA_ALT * 100.0;
-	filt.covariance[0][0] = big_sigma * big_sigma;
+	filt.last_accel_vert = 50.0;  /* outside the 20 m/s^2 band */
 
 	for (int i = 0; i < APOGEE_DEBOUNCE * 2; i++) {
 		zassert_equal(filter_detect_apogee(&filt), 0,
-			      "Apogee must not fire while sigma gate is wider than descent");
+			      "Apogee must not fire while accel is out of band");
 	}
+
+	/* Bring accel back into the band; apogee should now latch. */
+	filt.last_accel_vert = 0.0;
+	for (int i = 0; i < APOGEE_DEBOUNCE - 1; i++) {
+		zassert_equal(filter_detect_apogee(&filt), 0,
+			      "Counter restarts after veto clears");
+	}
+	zassert_equal(filter_detect_apogee(&filt), 1,
+		      "Apogee fires once all three criteria hold");
 }
 
 /**
@@ -497,8 +535,7 @@ ZTEST(kalman_filter_tests, test_detect_apogee_sigma_gate)
  */
 ZTEST(kalman_filter_tests, test_detect_apogee_latched)
 {
-	int n = drive_apogee_descent(&filt, 100.0,
-				     APOGEE_DESCENT_THRESH + 0.5);
+	int n = drive_apogee_descent(&filt, 100.0, 0.5);
 	zassert_equal(n, APOGEE_DEBOUNCE,
 		      "Setup: apogee must fire after debounce");
 

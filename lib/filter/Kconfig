@@ -49,19 +49,6 @@ config FILTER_R_MILLISCALE
       Measurement noise variance scaled by 1000.
       Real value = FILTER_R_MILLISCALE / 1000.0
 
-config FILTER_APOGEE_K_SIGMA_MILLI
-    int "Apogee descent confirmation (x1000, sigma multiples)"
-    default 4000
-    range 0 100000
-    help
-      Filtered altitude must have descended at least
-      k_sigma * sqrt(P[0][0]) below the tracked peak before apogee
-      is reported, where P[0][0] is the KF's current altitude
-      variance.  The threshold therefore scales with measurement
-      noise and self-tunes: a noisy baro gets a wider gate, a clean
-      one gets a tight gate, without a fixed meter tolerance.
-      Real value = FILTER_APOGEE_K_SIGMA_MILLI / 1000.0.
-
 config FILTER_APOGEE_DEBOUNCE_SAMPLES
     int "Apogee debounce samples"
     default 3
