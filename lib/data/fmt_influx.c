@@ -45,6 +45,10 @@ static const char *field_names_for(enum aurora_data type, int channel)
 	static const char *const baro_fields[]  = {"temp",
 						   "pres", NULL};
 	static const char *const xyz_fields[]   = {"x", "y", "z"};
+	static const char *const kin_fields[]   = {"accel", "accel_vert",
+						   "velocity"};
+	static const char *const pose_fields[]  = {"orientation", "altitude",
+						   NULL};
 
 	switch (type) {
 	case AURORA_DATA_BARO:
@@ -53,6 +57,10 @@ static const char *field_names_for(enum aurora_data type, int channel)
 	case AURORA_DATA_IMU_GYRO:
 	case AURORA_DATA_IMU_MAG:
 		return (channel < 3) ? xyz_fields[channel] : "unknown";
+	case AURORA_DATA_SM_KINEMATICS:
+		return (channel < 3) ? kin_fields[channel] : "unknown";
+	case AURORA_DATA_SM_POSE:
+		return (channel < 2) ? pose_fields[channel] : "unknown";
 	default:
 		return "unknown";
 	}
