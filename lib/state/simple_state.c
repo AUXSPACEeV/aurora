@@ -166,15 +166,25 @@ static void sm_do_error_handling(void)
 	int ret;
 	k_spinlock_key_t key = k_spin_lock(&err_lock);
 
-	SM_TRANSITION(SM_ERROR);
-	if (err_hdl.cb != NULL) {
-		ret = err_hdl.cb(err_hdl.args);
-		if (ret != 0)
-			LOG_ERR("State Machine error handler failed with code %d", ret);
-	} else {
-		LOG_ERR("No fallback handler defined for state machine errors!");
+	if (current_state != SM_ERROR) {
+		SM_TRANSITION(SM_ERROR);
 	}
 
+	if (err_hdl.cb == NULL) {
+		LOG_ERR("No fallback handler defined for state machine errors!");
+		goto out;
+	}
+
+	ret = err_hdl.cb(err_hdl.args);
+	if (ret == 0) {
+		SM_EVENT("error mitigated, returning to IDLE");
+		stop_timers();
+		SM_TRANSITION(SM_IDLE);
+	} else {
+		LOG_ERR("State Machine error handler failed with code %d", ret);
+	}
+
+out:
 	k_spin_unlock(&err_lock, key);
 }
 
