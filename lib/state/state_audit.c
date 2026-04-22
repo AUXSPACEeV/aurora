@@ -107,7 +107,7 @@ static int sm_audit_file_create()
 	}
 
 	audit_file_exists = 1;
-	LOG_INF("State machine audit file created: %s.", full_path);
+	LOG_INF("State machine audit file created: %s", full_path);
 
 	return 0;
 }
@@ -161,11 +161,11 @@ static void append(const struct sm_audit_entry *e)
 	if (!audit_file_exists && audit_file_retry_cnt++ < MAX_F_RETRIES) {
 		rc = sm_audit_file_create();
 		if (rc) {
-			LOG_ERR("Could not create audit file (%d).", rc);
+			LOG_ERR("Could not create audit file (%d)", rc);
 		} else {
 			rc = sm_audit_file_write_header();
 			if (rc) {
-				LOG_ERR("Could not create header (%d).", rc);
+				LOG_ERR("Could not create header (%d)", rc);
 			}
 		}
 	}
@@ -180,7 +180,7 @@ static void append(const struct sm_audit_entry *e)
 
 	rc = write_entry(e);
 	if (rc && rc != -ENOENT) {
-		LOG_ERR("Failed to write to audit file (%d).", rc);
+		LOG_ERR("Failed to write to audit file (%d)", rc);
 	}
 }
 

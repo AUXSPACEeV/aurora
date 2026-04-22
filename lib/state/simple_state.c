@@ -155,7 +155,7 @@ static void stop_timers(void)
 
 static int fallback_sm_error_handler(void *args)
 {
-	LOG_ERR("State Machine encountered an unrecoverable error.");
+	LOG_ERR("State Machine encountered an unrecoverable error");
 
 	return -EIO;
 }
