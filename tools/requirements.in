@@ -1,0 +1,4 @@
+matplotlib>=3.10.8
+numpy>=2.4.3
+pexpect>=4.9.0
+pip-tools>=7.5.3

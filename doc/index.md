@@ -78,6 +78,7 @@ zephyr
 
 drivers/index
 lib/index
+tools/index
 ```
 
 ```{toctree}

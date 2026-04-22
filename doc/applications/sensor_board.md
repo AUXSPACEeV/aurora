@@ -69,8 +69,6 @@ These options are defined in `sensor_board/Kconfig` under the
 | `CONFIG_MAIN_TIMEOUT_MS` | ms | 2000 | Delay between MAIN and REDUNDANT pyro events. |
 | `CONFIG_REDUNDANT_TIMEOUT_MS` | ms | 900000 | Max time in REDUNDANT state before aborting. |
 
-
-
 ## Supported Boards and Shields
 
 Since `sensor_board` is an auxspace internal project, only auxspace hardware
