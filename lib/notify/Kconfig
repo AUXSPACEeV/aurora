@@ -23,6 +23,37 @@ config AURORA_NOTIFY_BUZZER
 	  Drive a passive buzzer via PWM to signal boot, state changes,
 	  and errors. Plays a melody when landed.
 
+if AURORA_NOTIFY_BUZZER
+
+config AURORA_NOTIFY_BUZZER_QUEUE_SIZE
+	int "Buzzer event queue depth"
+	default 16
+	range 1 128
+	help
+	  Maximum number of buzzer notification events that may be
+	  queued before new events are dropped with a warning. Events
+	  are played in FIFO order by a dedicated worker thread, so
+	  ordering of sequences such as stop-melody-then-play-tone is
+	  preserved.
+
+config AURORA_NOTIFY_BUZZER_STACK_SIZE
+	int "Buzzer worker thread stack size"
+	default 1024
+	help
+	  Stack size (bytes) of the dedicated thread that plays queued
+	  buzzer events.
+
+config AURORA_NOTIFY_BUZZER_THREAD_PRIORITY
+	int "Buzzer worker thread priority"
+	default 10
+	help
+	  Zephyr priority of the buzzer worker thread. Lower numerical
+	  values are higher priority; keep this numerically above
+	  flight-critical threads (sensors, state machine — priority 5)
+	  so notifications never preempt them.
+
+endif # AURORA_NOTIFY_BUZZER
+
 config AURORA_NOTIFY_LED
 	bool "PWM LED notifications"
 	depends on PWM
