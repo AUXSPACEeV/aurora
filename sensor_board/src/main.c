@@ -172,7 +172,7 @@ void imu_task(void *, void *, void *)
 	}
 #endif /* !CONFIG_IMU_TRIGGER */
 
-	LOG_INF("IMU ready.");
+	LOG_INF("IMU ready");
 }
 
 /* Create the IMU task (inactive unless CONFIG_IMU=y) */
@@ -212,7 +212,7 @@ void baro_task(void *, void *, void *)
 	}
 #endif /* !CONFIG_BARO_TRIGGER */
 
-	LOG_INF("Baro ready.");
+	LOG_INF("Baro ready");
 }
 
 /* Create the BARO task */
@@ -227,7 +227,7 @@ K_THREAD_DEFINE(baro_polling, 2048, baro_task, NULL, NULL, NULL,
 
 int state_machine_error_handler(void *args)
 {
-	LOG_WRN("WTF is error handling? Just go back to IDLE.");
+	LOG_WRN("WTF is error handling? Just go back to IDLE");
 	return 0;
 }
 
