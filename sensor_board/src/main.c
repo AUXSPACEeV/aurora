@@ -456,63 +456,45 @@ void state_machine_task(void *, void *, void *)
 		imu_ready = false;
 
 #if defined(CONFIG_PYRO)
-		if (state != pyro_state) {
-			switch (state) {
-			case SM_IDLE:
-				if (pyro_disarm(pyro0, 0))
-					LOG_ERR("Failed to disarm pyro0 channel 0.");
-				else
-					LOG_ERR("Disarmed pyro0 channel 0.");
+		if (state == pyro_state)
+			continue;
 
-				if (pyro_disarm(pyro0, 1))
-					LOG_ERR("Failed to disarm pyro0 channel 1.");
-				else
-					LOG_ERR("Disarmed pyro0 channel 1.");
-				break;
-			case SM_ARMED:
-				if (pyro_arm(pyro0, 0))
-					LOG_ERR("Failed to arm pyro0 channel 0.");
-				else
-					LOG_ERR("Armed pyro0.");
+#define PYRO_ACT(fn, ch, past, action)					\
+		do {							\
+			if (fn(pyro0, ch))				\
+				LOG_ERR("Failed to " action		\
+					" pyro0 channel " #ch);	\
+			else						\
+				LOG_INF(past " pyro0 channel " #ch);\
+		} while (0)
 
-				if (pyro_arm(pyro0, 1))
-					LOG_ERR("Failed to arm pyro0 channel 1.");
-				else
-					LOG_ERR("Armed pyro0.");
-				break;
-			case SM_APOGEE:
-				if (pyro_trigger_channel(pyro0, 0))
-					LOG_ERR("Failed to trigger pyro0 channel 0.");
-				else
-					LOG_ERR("Triggered pyro0 channel 0.");
-
-				// Capacitors are empty after trigger. Recharge!
-				if (pyro_charge_channel(pyro0, 1))
-					LOG_ERR("Failed to charge pyro0 channel 1.");
-				else
-					LOG_ERR("Charging pyro0 channel 1.");
-				break;
-			case SM_MAIN:
-				if (pyro_trigger_channel(pyro0, 1))
-					LOG_ERR("Failed to trigger pyro0 channel 1.");
-				else
-					LOG_ERR("Triggered pyro0 channel 1.");
-
-				// Capacitors are empty after trigger. Recharge!
-				if (pyro_charge_channel(pyro0, 1))
-					LOG_ERR("Failed to recharge pyro0 channel 1.");
-				else
-					LOG_ERR("Recharging pyro0 channel 1.");
-				break;
-			case SM_REDUNDANT:
-				if (pyro_trigger_channel(pyro0, 1))
-					LOG_ERR("Failed to trigger pyro0 channel 1.");
-				break;
-			default:
-				break;
-			}
-			pyro_state = state;
+		switch (state) {
+		case SM_IDLE:
+			PYRO_ACT(pyro_disarm, 0, "Disarmed", "disarm");
+			PYRO_ACT(pyro_disarm, 1, "Disarmed", "disarm");
+			break;
+		case SM_ARMED:
+			PYRO_ACT(pyro_arm, 0, "Armed", "arm");
+			PYRO_ACT(pyro_arm, 1, "Armed", "arm");
+			break;
+		case SM_APOGEE:
+			PYRO_ACT(pyro_trigger_channel, 0, "Triggered", "trigger");
+			/* Capacitors are empty after trigger. Recharge! */
+			PYRO_ACT(pyro_charge_channel, 1, "Charging", "charge");
+			break;
+		case SM_MAIN:
+			PYRO_ACT(pyro_trigger_channel, 1, "Triggered", "trigger");
+			/* Capacitors are empty after trigger. Recharge! */
+			PYRO_ACT(pyro_charge_channel, 1, "Recharging", "recharge");
+			break;
+		case SM_REDUNDANT:
+			PYRO_ACT(pyro_trigger_channel, 1, "Re-triggered", "re-trigger");
+			break;
+		default:
+			break;
 		}
+#undef PYRO_ACT
+		pyro_state = state;
 #endif /* CONFIG_PYRO */
 
 	}
