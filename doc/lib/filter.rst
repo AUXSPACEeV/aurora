@@ -33,24 +33,7 @@ A Python simulation tool
 (`tools/sim_flight_kalman.py <https://github.com/AUXSPACEeV/aurora/blob/main/tools/sim_flight_kalman.py>`_)
 reproduces the same algorithm with a realistic flight profile and MS5607
 sensor-noise model, allowing the filter to be tuned and validated offline before
-flight. On run, it produces a graph and saves it to a file called
-``flight_simulation.png``. Here is an example run:
-
-.. code-block:: bash
-
-   Plot saved to flight_simulation.png
-   Ground ref pressure: 101340 Pa (1013.4 hPa)
-   True apogee:         500.0 m
-   Filter apogee:       496.4 m (t = 12.56 s)
-
-.. only:: not dark
-
-   .. image:: /img/flight_simulation.png
-
-.. only:: dark
-
-   .. image:: /img/flight_simulation_dark.png
-      :alt: flight_simulation.png
+flight. See :doc:`/tools/sim_flight_kalman` for usage and example output.
 
 The filter and its hypsometric pipeline are covered by a ztest suite under
 `aurora/tests/lib/filter/ <https://github.com/AUXSPACEeV/aurora/tree/main/tests/lib/filter>`_.

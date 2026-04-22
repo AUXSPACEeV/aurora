@@ -68,6 +68,26 @@ comparable to firmware behaviour.
 - `--show` — open the plots in an interactive matplotlib window in
   addition to writing them to disk.
 
+On run, the script produces a graph and saves it to a file called
+`flight_simulation.png`. Here is an example run:
+
+```bash
+Plot saved to flight_simulation.png
+Ground ref pressure: 101340 Pa (1013.4 hPa)
+True apogee:         500.0 m
+Filter apogee:       496.4 m (t = 12.56 s)
+```
+
+```{image} /img/flight_simulation_light.png
+:alt: flight_simulation_light.png
+:class: only-light
+```
+
+```{image} /img/flight_simulation_dark.png
+:alt: flight_simulation_dark.png
+:class: only-dark
+```
+
 ## Reuse from other scripts
 
 `sim_flight_kalman.py` also exposes the helpers used by

@@ -69,6 +69,22 @@ These options are defined in `sensor_board/Kconfig` under the
 | `CONFIG_MAIN_TIMEOUT_MS` | ms | 2000 | Delay between MAIN and REDUNDANT pyro events. |
 | `CONFIG_REDUNDANT_TIMEOUT_MS` | ms | 900000 | Max time in REDUNDANT state before aborting. |
 
+## Application Simulation
+
+Using the `native_sim` board target, and the
+[`sim_fetch.py`](/tools/sim_fetch.md) tool, it is possible to run application
+simulations and create graphs from the data_logger output:
+
+```{image} /img/native_sim_flight_light.png
+:alt: native_sim_flight_light.png
+:class: only-light
+```
+
+```{image} /img/native_sim_flight_dark.png
+:alt: native_sim_flight_dark.png
+:class: only-dark
+```
+
 ## Supported Boards and Shields
 
 Since `sensor_board` is an auxspace internal project, only auxspace hardware
