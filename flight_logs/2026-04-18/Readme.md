@@ -1,4 +1,4 @@
-# `Multimeter Test flight 2026-04-18`
+# Multimeter Test flight 2026-04-18
 
 ## Info
 

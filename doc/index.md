@@ -88,6 +88,13 @@ tools/index
 boards/index
 ```
 
+```{toctree}
+:maxdepth: 1
+:caption: Flight Logs
+
+flight_logs/index
+```
+
 ## Indices and tables
 
 - {ref}`genindex`

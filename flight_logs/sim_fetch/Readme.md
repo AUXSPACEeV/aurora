@@ -1,4 +1,4 @@
-# `Flight Simulation`
+# Flight Simulation
 
 ## Info
 
