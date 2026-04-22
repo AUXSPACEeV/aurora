@@ -43,6 +43,11 @@ don't throw heavy loads an the 3V3 pin, it may overheat the LDO.
 ```{zephyr:board-supported-runners}
 ```
 
+```{warning}
+If no µSD-Card is inserted, the board will have trouble booting, since the
+SPI-SDHC driver has no way to detect card presence without a card-detect-pin!
+```
+
 ## Building
 
 µMeter is built with `sysbuild` since it uses the MCUBoot boot loader:

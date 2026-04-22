@@ -63,3 +63,8 @@ active development.
 
 ```{zephyr:board-supported-runners}
 ```
+
+```{warning}
+If no µSD-Card is inserted, the board will have trouble booting, since the
+SPI-SDHC driver has no way to detect card presence without a card-detect-pin!
+```
