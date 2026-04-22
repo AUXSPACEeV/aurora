@@ -11,8 +11,10 @@ Backends
 --------
 
 - **PWM Buzzer** (``CONFIG_AURORA_NOTIFY_BUZZER``): drives a passive
-  buzzer via PWM to signal boot, state changes, and errors.
-  See `Buzzer Patterns`_.
+  buzzer via PWM to signal boot, state changes, and errors. Runs on
+  a dedicated worker thread so that the blocking tone sequences do
+  not stall the caller (typically the state-machine task).
+  See `Buzzer Patterns`_ and `Threading and Queueing`_.
 - **PWM LED** (``CONFIG_AURORA_NOTIFY_LED``): drives an LED via PWM
   to signal boot, state changes, and errors. LED does not blink when data logger
   is disabled. See `LED Patterns`_.
@@ -126,13 +128,21 @@ currently playing melody before issuing the new pattern.
      - Armed. **Pyros live.**
    * - State → ``APOGEE``
      - 3000 Hz tone for 300 ms (high, longer beep)
-     - Apogee detected, drogue / main event triggered.
+     - Apogee detected, drogue event triggered.
+   * - State → ``MAIN``
+     - 2500 Hz tone for 300 ms (mid-high, longer beep)
+     - Main parachute deployment event.
+   * - State → ``REDUNDANT``
+     - Two 2500 Hz beeps of 150 ms, separated by a 100 ms gap
+     - Redundant (backup) parachute deployment event. The double beep
+       distinguishes the fallback path from the nominal ``MAIN`` event.
    * - State → ``LANDED``
      - "Astronomia" (Coffin Dance) melody, plays until interrupted
      - Flight complete. Acts as an audible recovery beacon.
    * - Any other state transition
      - Silent (any ongoing melody is stopped)
-     - In-flight states other than ``APOGEE`` are silent on the buzzer.
+     - In-flight states ``BOOST`` and ``BURNOUT`` are silent on the
+       buzzer.
    * - Error
      - Three 4000 Hz beeps of 100 ms, separated by 100 ms gaps
      - Unrecoverable error. Service required.
@@ -172,16 +182,65 @@ Quick Reference
      - 3000 Hz · 300 ms
    * - ``MAIN``
      - Off
-     - Silent
+     - 2500 Hz · 300 ms
    * - ``REDUNDANT``
      - Off
-     - Silent
+     - 2 × 2500 Hz · 150 ms beeps
    * - ``LANDED``
      - Long blink (400 / 100 ms)
      - "Astronomia" melody (looping)
    * - ``ERROR``
      - Solid ON
      - 3 × 4000 Hz · 100 ms beeps
+
+Threading and Queueing
+----------------------
+
+The notification dispatcher (:c:func:`notify_state_change`,
+:c:func:`notify_error`, ...) runs synchronously in the caller's
+thread — it fans out to each backend inline. Individual backends may
+choose to offload their work to avoid blocking flight-critical
+threads.
+
+**Buzzer backend** runs on a dedicated worker thread with a bounded
+FIFO event queue:
+
+- Calls from the state-machine task return immediately (they only
+  enqueue an event), so blocking tone sequences (up to ~600 ms for
+  the error pattern) never stall the 10 Hz state machine.
+- Events are played in FIFO order. Important sequencing — notably
+  stopping the ``LANDED`` melody before a new tone — is preserved
+  because the worker thread runs ``pwm_melody_stop`` and the
+  subsequent tone in one dequeued step.
+- When the queue is full, new events are dropped with a
+  ``LOG_WRN``. This gives natural back-pressure: the worker drains
+  at the speed of its tone sequences, and bursty producers cannot
+  unboundedly queue up noise.
+
+Tunables (under ``AURORA_NOTIFY_BUZZER``):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 50 20 30
+
+   * - Kconfig
+     - Default
+     - Purpose
+   * - ``AURORA_NOTIFY_BUZZER_QUEUE_SIZE``
+     - 16
+     - Maximum queued events before overflow drops.
+   * - ``AURORA_NOTIFY_BUZZER_STACK_SIZE``
+     - 1024
+     - Worker thread stack size (bytes).
+   * - ``AURORA_NOTIFY_BUZZER_THREAD_PRIORITY``
+     - 10
+     - Worker thread priority. Keep numerically above flight
+       threads (priority 5) so notifications never preempt them.
+
+**LED backend** does not need a dedicated thread: blinking is
+delegated to Zephyr's ``pwm-leds`` driver (software timer), and the
+remaining inline sleeps are short (≤ 500 ms at boot, 50 ms on
+calibration) and occur outside the flight hot path.
 
 API Reference
 -------------
