@@ -31,6 +31,10 @@ jobs:
             artifact: esp32s3_micrometer
             toolchain: xtensa-espressif_esp32s3_zephyr-elf
             extra_args: "--sysbuild"
+          - board: native_sim
+            artifact: native_sim
+            toolchain: x86_64-zephyr-elf
+            extra_args: ""
 
     steps:
       - name: Checkout
@@ -74,7 +78,7 @@ jobs:
               [ -f "${f}" ] && cp "${f}" "dist/${{ matrix.artifact }}/${{ matrix.artifact }}.${f##*.}"
             done
           else
-            for ext in elf uf2 bin hex; do
+            for ext in elf uf2 bin hex exe; do
               src="build/zephyr/zephyr.${ext}"
               [ -f "${src}" ] && cp "${src}" "dist/${{ matrix.artifact }}/${{ matrix.artifact }}.${ext}"
             done
