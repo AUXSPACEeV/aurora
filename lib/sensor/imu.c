@@ -127,12 +127,12 @@ int imu_poll(const struct device *dev)
 int imu_init(const struct device *dev)
 {
 	if (!device_is_ready(dev)) {
-		LOG_ERR("%s: device not ready.", dev->name);
+		LOG_ERR("%s: device not ready", dev->name);
 		return -ENODEV;
 	}
 
 #if defined(CONFIG_IMU_TRIGGER)
-	LOG_DBG("Enabling IMU in trigger mode.");
+	LOG_DBG("Enabling IMU in trigger mode");
 	run_trigger_mode(dev);
 #endif
 
