@@ -75,13 +75,13 @@ Using the `native_sim` board target, and the
 [`sim_fetch.py`](/tools/sim_fetch.md) tool, it is possible to run application
 simulations and create graphs from the data_logger output:
 
-```{image} /img/native_sim_flight_light.png
-:alt: native_sim_flight_light.png
+```{image} /flight_logs/sim_fetch/plots/flight1_light.png
+:alt: flight1_light.png
 :class: only-light
 ```
 
-```{image} /img/native_sim_flight_dark.png
-:alt: native_sim_flight_dark.png
+```{image} /flight_logs/sim_fetch/plots/flight1_dark.png
+:alt: flight1_dark.png
 :class: only-dark
 ```
 

@@ -18,7 +18,7 @@ python3 tools/sim_flight_kalman.py --flight flight_logs/2026-04-18 \
 
 ## Flight Protocol
 
-Two flights are recorded in [flights.influx](./flights.influx).
+Two flights are recorded in `flights.influx`:
 
 - Flight1:
   - parachute opened too late
@@ -31,10 +31,24 @@ Two flights are recorded in [flights.influx](./flights.influx).
 
 ### Flight 1
 
-![flight1_dark](./plots/flight1_dark.png)
-![flight1_light](./plots/flight1_light.png)
+```{image} ./plots/flight1_light.png
+:alt: flight1_light.png
+:class: only-light
+```
+
+```{image} ./plots/flight1_dark.png
+:alt: flight1_dark.png
+:class: only-dark
+```
 
 ### Flight 2
 
-![flight2_dark](./plots/flight2_dark.png)
-![flight2_light](./plots/flight2_light.png)
+```{image} ./plots/flight2_light.png
+:alt: flight2_light.png
+:class: only-light
+```
+
+```{image} ./plots/flight2_dark.png
+:alt: flight2_dark.png
+:class: only-dark
+```

@@ -16,7 +16,7 @@ python3 ./tools/sim_flight_kalman.py --flight flight_logs/sim_fetch \
 
 ## Flight Protocol
 
-One flight is recorded in [flights.influx](./flights.influx).
+One flight is recorded in `flights.influx`:
 
 - parachute opened fine
 - state machine behaved as expected
@@ -25,5 +25,12 @@ One flight is recorded in [flights.influx](./flights.influx).
 
 ### Flight 1
 
-![flight1_dark](./plots/flight1_dark.png)
-![flight1_light](./plots/flight1_light.png)
+```{image} ./plots/flight1_light.png
+:alt: flight1_light.png
+:class: only-light
+```
+
+```{image} ./plots/flight1_dark.png
+:alt: flight1_dark.png
+:class: only-dark
+```
