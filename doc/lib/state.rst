@@ -70,6 +70,41 @@ implementation defines a 9-state flight sequence driven by sensor thresholds.
 State transitions are also driven by sensor thresholds configured via Kconfig
 (boost acceleration, main descent height, apogee timeout, etc.).
 
+Shell Commands
+--------------
+
+Enabling ``CONFIG_AURORA_STATE_MACHINE_SHELL`` registers the
+``state_machine`` command group. Audit-log commands are only available when
+``CONFIG_AURORA_STATE_MACHINE_AUDIT`` is also enabled.
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - Command
+     - Description
+   * - ``state_machine status``
+     - Print the active state-machine implementation and its current state.
+   * - ``state_machine transition <STATE>``
+     - Force a transition. The state name completes via tab. Because the
+       state machine exposes no arbitrary setter, this deinitializes and
+       reinitializes the machine, landing it in ``IDLE``; a warning is
+       printed when the requested target is not ``IDLE``. Ground testing
+       only.
+   * - ``state_machine audit``
+     - Dump the audit log (timestamped transitions and events).
+       Requires ``CONFIG_AURORA_STATE_MACHINE_AUDIT``.
+   * - ``state_machine audit_clear``
+     - Clear the audit log.
+       Requires ``CONFIG_AURORA_STATE_MACHINE_AUDIT``.
+
+Valid state names for ``transition`` are ``IDLE``, ``ARMED``, ``BOOST``,
+``BURNOUT``, ``APOGEE``, ``MAIN``, ``REDUNDANT``, ``LANDED`` and ``ERROR``.
+
+.. warning::
+   ``state_machine transition`` bypasses normal flight logic and resets the
+   machine. Do not use in flight.
+
 API Reference
 -------------
 

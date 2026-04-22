@@ -39,6 +39,31 @@ Example Usage
    data_logger_flush(&logger);
    data_logger_close(&logger);
 
+Shell Commands
+--------------
+
+Enabling ``CONFIG_DATA_LOGGER_SHELL`` registers the ``data_logger``
+command group. All commands operate on loggers registered through
+:c:func:`data_logger_init` logger names tab-complete.
+
+.. list-table::
+   :header-rows: 1
+   :widths: auto
+
+   * - Command
+     - Description
+   * - ``data_logger list``
+     - List every registered logger with its formatter and current state
+       (``running``, ``stopped`` or ``closed``).
+   * - ``data_logger start <name>``
+     - Start a logger. Writes the formatter header if applicable.
+   * - ``data_logger stop <name>``
+     - Stop a logger. Subsequent writes are dropped until restarted.
+   * - ``data_logger status <name>``
+     - Show the state of a single logger.
+   * - ``data_logger flush <name>``
+     - Flush buffered data to the backing storage.
+
 API Reference
 -------------
 

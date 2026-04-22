@@ -71,6 +71,24 @@ These options are defined in `sensor_board/Kconfig` under the
 
 ## Application Simulation
 
+When built with `CONFIG_AURORA_FAKE_SENSORS=y` (typically together with the
+`native_sim` board target), `sensor_board` replaces the real IMU and baro
+polling threads with a synthetic flight-profile generator. The synthetic
+threads publish on the same zbus channels (`imu_data_chan`, `baro_data_chan`)
+at the same cadence as the real drivers, so the state machine, filter, data
+logger and pyro logic run unchanged.
+
+The profile follows an ISA-troposphere altitude/pressure curve with a
+constant-thrust boost phase, a ballistic coast to apogee and a
+constant-rate parachute descent. It is controlled from the Zephyr shell via
+the `sim` command group:
+
+| Command | Description |
+|---|---|
+| `sim launch` | Start the synthetic flight profile. The uptime at which this command is issued is used as t=0. |
+| `sim reset` | Return the profile to pad-stationary (altitude 0, accel = +g on the vertical axis). |
+| `sim status` | Print the current flight time, altitude (m) and vertical proper-acceleration (m/s²), or `pad-stationary` if no launch is active. |
+
 Using the `native_sim` board target, and the
 [`sim_fetch.py`](/tools/sim_fetch.md) tool, it is possible to run application
 simulations and create graphs from the data_logger output:
