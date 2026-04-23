@@ -7,7 +7,7 @@
 #
 
 # digests to FROM debian:trixie-slim
-FROM debian@sha256:18764e98673c3baf1a6f8d960b5b5a1ec69092049522abac4e24a7726425b016
+FROM debian@sha256:cedb1ef40439206b673ee8b33a46a03a0c9fa90bf3732f54704f99cb061d2c5a
 
 # Default User 10001:10001 - replace with `id -u`:`id -g` in container build
 ARG PUID=10001
@@ -29,7 +29,7 @@ ENV LC_ALL=en_US.UTF-8
 
 # Zephyr apt requirements
 RUN apt-get install -y --no-install-recommends \
-    git cmake ninja-build gperf \
+    git git-lfs cmake ninja-build gperf \
     ccache dfu-util device-tree-compiler wget \
     python3-dev python3-pip python3-setuptools python3-tk python3-wheel python3-venv \
     xz-utils file make gcc libsdl2-dev libmagic1
