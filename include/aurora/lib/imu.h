@@ -85,16 +85,27 @@ int imu_sensor_value_to_acceleration(const struct imu_data *data,
 				     double *acc_out);
 
 /**
- * @brief calculate the orientation angle in degrees from IMU sensor values.
+ * @brief Calculate the elevation angle from horizontal using IMU sensor values.
  *
- * @param data  Pointer to the IMU sensor data
- * @param roll_out Calculated roll angle around x axis. Must be valid pointer to a double.
- * @param pitch_out Calculated pitch angle around y axis. Must be valid pointer to a double.
+ * Uses @c CONFIG_IMU_UP_AXIS_* to pick the body axis pointing toward the
+ * rocket's nose, so the result is independent of IMU mounting orientation.
+ * Convention matches the flight state machine's arming thresholds:
+ *   - 0   degrees  = long axis horizontal
+ *   - +90 degrees  = long axis pointing up (nose toward sky)
+ *   - -90 degrees  = long axis pointing down
+ *
+ * Only meaningful while gravity dominates (stationary / quasi-static);
+ * during powered flight, derive orientation from the attitude tracker.
+ *
+ * @param data      Pointer to the IMU sensor data.
+ * @param angle_out Output: elevation angle in degrees, [-90, 90]. Must be
+ *                  a valid pointer to a double.
+ *
  * @retval 0 on success.
- * @retval -EINVAL if @p data or @p roll_out or @p is pitch_out NULL
+ * @retval -EINVAL if @p data or @p angle_out is NULL.
  */
 int imu_sensor_value_to_orientation(const struct imu_data *data,
-				    double *roll_out, double *pitch_out);
+				    double *angle_out);
 
 /** @} */
 

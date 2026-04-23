@@ -249,8 +249,7 @@ void state_machine_task(void *, void *, void *)
 	double altitude = 0.0;
 	double acceleration = 0.0;
 	double accel_vert = 0.0;
-	double roll = 0.0;
-	double pitch = 0.0;
+	double tilt = 0.0;
 	bool baro_ready = false;
 	bool imu_ready = false;
 
@@ -274,7 +273,7 @@ void state_machine_task(void *, void *, void *)
 
 	struct sm_inputs inputs = (struct sm_inputs){
 		.armed = armed,
-		.orientation = roll,
+		.orientation = tilt,
 		.acceleration = acceleration,
 		.accel_vert = accel_vert,
 	};
@@ -306,7 +305,7 @@ void state_machine_task(void *, void *, void *)
 		 */
 		do {
 			if (data_chan == &imu_data_chan) {
-				if (imu_sensor_value_to_orientation(&msg_buf.imu, &roll, &pitch) == 0 &&
+				if (imu_sensor_value_to_orientation(&msg_buf.imu, &tilt) == 0 &&
 				    imu_sensor_value_to_acceleration(&msg_buf.imu, &acceleration) == 0) {
 					imu_ready = true;
 				}
@@ -400,7 +399,7 @@ void state_machine_task(void *, void *, void *)
 
 		inputs = (struct sm_inputs){
 			.armed = armed,
-			.orientation = roll,
+			.orientation = tilt,
 			.acceleration = acceleration,
 			.accel_vert = accel_vert,
 			.altitude = altitude,

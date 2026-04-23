@@ -154,17 +154,30 @@ int imu_sensor_value_to_acceleration(const struct imu_data *data, double *acc_ou
 
 /* imu_sensor_value_to_orientation – see imu.h */
 int imu_sensor_value_to_orientation(const struct imu_data *data,
-				    double *roll_out, double *pitch_out)
+				    double *angle_out)
 {
-	if (data == NULL || roll_out == NULL || pitch_out == NULL)
+	if (data == NULL || angle_out == NULL)
 		return -EINVAL;
 
-	/* TODO: set which way is up */
-	double x = out_ev(&data->accel[0]);
-	double y = out_ev(&data->accel[1]);
-	double z = out_ev(&data->accel[2]);
+	const int idx = CONFIG_IMU_UP_AXIS_INDEX;
+	const int sign = CONFIG_IMU_UP_AXIS_SIGN;
 
-	*roll_out = atan2(y, sqrt(x*x + z*z)) * (180.0 / M_PI);
-	*pitch_out = atan2(-x, sqrt(y*y + z*z)) * (180.0 / M_PI);
+	double a[3] = {
+		out_ev(&data->accel[0]),
+		out_ev(&data->accel[1]),
+		out_ev(&data->accel[2]),
+	};
+
+	/* Component of specific force along the configured up axis, and
+	 * magnitude of the components perpendicular to it.
+	 */
+	double up = (double)sign * a[idx];
+	double perp2 = 0.0;
+	for (int i = 0; i < IMU_NUM_AXES; i++) {
+		if (i != idx)
+			perp2 += a[i] * a[i];
+	}
+
+	*angle_out = atan2(up, sqrt(perp2)) * (180.0 / M_PI);
 	return 0;
 }
