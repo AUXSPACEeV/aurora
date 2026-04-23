@@ -7,8 +7,7 @@
  * the format @c val1.val2 (Zephyr sensor_value convention).
  *
  * Column layout:
- *   timestamp_ns, type,
- *   ch0_val1, ch0_val2, ch1_val1, ch1_val2, ch2_val1, ch2_val2
+ *   timestamp_ns, type, ch0, ch1, ch2
  *
  * Copyright (c) 2026 Auxspace e.V.
  *
@@ -97,10 +96,7 @@ static int csv_write_header(struct data_logger *logger)
 {
 	struct csv_ctx *ctx = logger->ctx;
 	const char *hdr =
-		"timestamp_ns,type,"
-		"ch0_val1,ch0_val2,"
-		"ch1_val1,ch1_val2,"
-		"ch2_val1,ch2_val2\n";
+		"timestamp_ns,type,ch0,ch1,ch2\n";
 
 	ssize_t wr = fs_write(&ctx->file, hdr, strlen(hdr));
 
@@ -126,9 +122,11 @@ static int csv_write_datapoint(struct data_logger *logger,
 		return (int)wr;
 
 	/* type name */
-	const char *name = data_logger_type_name(dp->type);
+	len = snprintf(buf, sizeof(buf), "%s,", data_logger_type_name(dp->type));
+	if (len < 0 || len >= (int)sizeof(buf))
+		return -ENOMEM;
 
-	wr = fs_write(&ctx->file, name, strlen(name));
+	wr = fs_write(&ctx->file, buf, len);
 	if (wr < 0)
 		return (int)wr;
 
@@ -141,19 +139,13 @@ static int csv_write_datapoint(struct data_logger *logger,
 			rc = write_sensor_value(&ctx->file, sv);
 			if (rc != 0)
 				return rc;
-		} else {
-			/* pad with zeroes for unused channels */
-			const char *zero = ",0.000000";
-
-			wr = fs_write(&ctx->file, zero, strlen(zero));
-			if (wr < 0)
-				return (int)wr;
-
-			continue;
 		}
 
+		/* skip comma separator before '\n' */
+		if (i == DP_MAX_CHANNELS - 1)
+			break;
+
 		/* comma separator after each channel */
-		/* including last "," before "\n" */
 		wr = fs_write(&ctx->file, ",", 1);
 		if (wr < 0)
 			return (int)wr;
