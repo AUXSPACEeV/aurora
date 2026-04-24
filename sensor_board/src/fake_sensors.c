@@ -180,7 +180,7 @@ static double flight_time_seconds(void)
 
 static void fake_imu_task(void *, void *, void *)
 {
-	const int hz = CONFIG_IMU_FREQUENCY_VALUE;
+	const int hz = CONFIG_IMU_FREQUENCY;
 	const int period_ms = 1000 / hz;
 
 	LOG_INF("Fake IMU running at %d Hz", hz);
@@ -224,7 +224,7 @@ K_THREAD_DEFINE(imu_polling, 2048, fake_imu_task, NULL, NULL, NULL,
 
 static void fake_baro_task(void *, void *, void *)
 {
-	const int hz = CONFIG_BARO_FREQUENCY_VALUE;
+	const int hz = CONFIG_BARO_FREQUENCY;
 	const int period_ms = 1000 / hz;
 
 	LOG_INF("Fake baro running at %d Hz", hz);
