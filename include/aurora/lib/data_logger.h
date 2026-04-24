@@ -120,6 +120,9 @@ struct data_logger_state {
 /** Maximum length of a data logger name (including NUL). */
 #define DATA_LOGGER_NAME_MAX 16
 
+/** Maximum length of a data logger path (including NUL). */
+#define DATA_LOGGER_PATH_MAX 64
+
 /**
  * @brief Logger instance (caller-allocated, typically stack or static).
  */
@@ -128,22 +131,25 @@ struct data_logger {
 	struct data_logger_state *state;         /**< Active formatter state */
 	void *ctx;                               /**< Opaque formatter context */
 	char name[DATA_LOGGER_NAME_MAX];        /**< Logger name (set by init) */
+	char path[DATA_LOGGER_PATH_MAX];        /**< Full output path (set by init) */
 };
 
 /**
  * @brief Initialise a logger.
  *
  * The output file is placed at
- * @c CONFIG_DATA_LOGGER_BASE_PATH/[ @p filename ].file_ext, where file_ext
- * comes from the active formatter.  Calls @c fmt->init then
- * @c fmt->write_header.  On any failure the logger is left in an invalid
- * state and should not be used.
+ * @c CONFIG_DATA_LOGGER_BASE_PATH/[ @p filename ]_N.file_ext, where N is
+ * a free rotation index and file_ext comes from @p fmt.  Calls
+ * @c fmt->init then @c fmt->write_header.  On any failure the logger is
+ * left in an invalid state and should not be used.
  *
  * @param logger    Caller-allocated logger instance.
  * @param filename  Base filename (without extension).
+ * @param fmt       Formatter vtable (e.g. @ref data_logger_bin_formatter).
  * @retval 0 on success, negative errno on failure.
  */
-int data_logger_init(struct data_logger *logger, const char *filename);
+int data_logger_init(struct data_logger *logger, const char *filename,
+		     const struct data_logger_formatter *fmt);
 
 /**
  * @brief Set the default logger used by @ref data_logger_log.
@@ -250,13 +256,18 @@ struct data_logger *data_logger_get(const char *name);
 /*  Built-in formatters                                                       */
 /* -------------------------------------------------------------------------- */
 
-#if defined(CONFIG_DATA_LOGGER_CSV)
-/** CSV formatter — one header row then one row per datapoint. */
+#if defined(CONFIG_DATA_LOGGER_BIN)
+/** Fixed-size binary formatter — live flight-time log (see @ref data_logger_bin). */
+extern const struct data_logger_formatter data_logger_bin_formatter;
+#endif
+
+#if defined(CONFIG_DATA_LOGGER_CONVERT_CSV)
+/** CSV formatter — conversion target. One header row, one row per datapoint. */
 extern const struct data_logger_formatter data_logger_csv_formatter;
 #endif
 
-#if defined(CONFIG_DATA_LOGGER_INFLUX)
-/** InfluxDB Line Protocol formatter — one line per datapoint, no header. */
+#if defined(CONFIG_DATA_LOGGER_CONVERT_INFLUX)
+/** InfluxDB Line Protocol formatter — conversion target. */
 extern const struct data_logger_formatter data_logger_influx_formatter;
 #endif
 
@@ -264,6 +275,65 @@ extern const struct data_logger_formatter data_logger_influx_formatter;
 /** Mock formatter — provided by the test application. */
 extern const struct data_logger_formatter data_logger_mock_formatter;
 #endif
+
+/* -------------------------------------------------------------------------- */
+/*  Binary record layout (live flight-time log)                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @defgroup lib_data_logger_bin Binary log format
+ * @ingroup lib_data_logger
+ * @{
+ *
+ * The binary file starts with an @ref aurora_bin_header followed by a
+ * dense stream of fixed-size @ref aurora_bin_record entries.  All
+ * multi-byte integers are native little-endian.
+ */
+
+/** 8-byte magic string at the start of every binary log. */
+#define AURORA_BIN_MAGIC "AURLOG\0"
+
+/** Current binary format version. */
+#define AURORA_BIN_VERSION 1U
+
+/** File header (16 bytes). */
+struct aurora_bin_header {
+	char     magic[8];     /**< @ref AURORA_BIN_MAGIC */
+	uint16_t version;      /**< @ref AURORA_BIN_VERSION */
+	uint16_t record_size;  /**< sizeof(struct aurora_bin_record) */
+	uint32_t reserved;     /**< Zero (reserved for future use). */
+} __packed;
+
+/** Per-datapoint record (40 bytes). */
+struct aurora_bin_record {
+	uint64_t timestamp_ns;  /**< ns since launch */
+	uint8_t  type;          /**< @ref aurora_data */
+	uint8_t  channel_count; /**< Valid channels in @ref channels */
+	uint8_t  _pad[6];       /**< Zero */
+	struct {
+		int32_t val1;
+		int32_t val2;
+	} channels[DP_MAX_CHANNELS];
+} __packed;
+
+/**
+ * @brief Convert a binary log file to a text formatter output.
+ *
+ * Reads @p bin_path in small chunks and re-emits every record through
+ * @p out_fmt at @p out_path.  The binary file is left intact.  The
+ * caller is responsible for not running conversion concurrently with
+ * logging to the same binary file.
+ *
+ * @param bin_path  Path to the binary log file to convert.
+ * @param out_fmt   Target formatter (e.g. @ref data_logger_csv_formatter).
+ * @param out_path  Destination path for the converted output.
+ * @retval 0 on success, negative errno on failure.
+ */
+int data_logger_convert(const char *bin_path,
+			const struct data_logger_formatter *out_fmt,
+			const char *out_path);
+
+/** @} */
 
 /** @} */
 

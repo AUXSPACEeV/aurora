@@ -77,6 +77,7 @@ ZBUS_CHAN_ADD_OBS(baro_data_chan, sm_sub, 1);
 
 #if defined(CONFIG_DATA_LOGGER)
 static struct data_logger sm_logger;
+static atomic_t sm_logger_live = ATOMIC_INIT(0);
 
 /* Decouple logging from the SM hot path: SM pushes datapoints into this
  * queue with K_NO_WAIT; a dedicated logger thread drains it and owns all
@@ -86,7 +87,28 @@ static struct data_logger sm_logger;
 #define LOG_MSGQ_DEPTH     256
 #define LOG_FLUSH_PERIOD_MS 1000
 
+/* How long SM→ARMED will wait for a pending conversion to finish. */
+#define LOG_ARM_CONVERT_TIMEOUT_MS 1500
+
 K_MSGQ_DEFINE(log_msgq, sizeof(struct datapoint), LOG_MSGQ_DEPTH, 4);
+
+/* convert_idle has one token whenever no conversion is in flight. The
+ * converter thread holds it while running; SM→ARMED tries to acquire it
+ * (with a short timeout) to verify the last flight has been fully
+ * translated before opening a new binary file.
+ */
+K_SEM_DEFINE(convert_idle, 1, 1);
+
+/* Woken by SM→(IDLE|LANDED|ERROR) to kick off conversion of the just-
+ * closed binary file.
+ */
+K_SEM_DEFINE(convert_request, 0, 1);
+
+/* Binary path captured at logger close, read by the converter thread.
+ * Single-producer (SM) / single-consumer (converter); the request sem
+ * acts as the handoff fence.
+ */
+static char convert_bin_path[DATA_LOGGER_PATH_MAX];
 
 static inline void log_enqueue(const struct datapoint *dp)
 {
@@ -107,11 +129,15 @@ static void logger_task(void *, void *, void *)
 		}
 
 		if (k_msgq_get(&log_msgq, &dp, K_MSEC(wait_ms)) == 0) {
-			data_logger_log(&dp);
+			if (atomic_get(&sm_logger_live)) {
+				data_logger_log(&dp);
+			}
 		}
 
 		if (k_uptime_get() - last_flush >= LOG_FLUSH_PERIOD_MS) {
-			data_logger_flush(&sm_logger);
+			if (atomic_get(&sm_logger_live)) {
+				data_logger_flush(&sm_logger);
+			}
 			last_flush = k_uptime_get();
 		}
 	}
@@ -119,6 +145,138 @@ static void logger_task(void *, void *, void *)
 
 K_THREAD_DEFINE(logger_thread, 2048, logger_task, NULL, NULL, NULL,
 		8, 0, 0);
+
+static void swap_extension(char *dst, size_t dst_sz, const char *src,
+			   const char *new_ext)
+{
+	strncpy(dst, src, dst_sz - 1);
+	dst[dst_sz - 1] = '\0';
+
+	char *dot = strrchr(dst, '.');
+	char *slash = strrchr(dst, '/');
+
+	if (dot != NULL && (slash == NULL || dot > slash)) {
+		*dot = '\0';
+	}
+
+	size_t len = strlen(dst);
+
+	if (len + 1 + strlen(new_ext) + 1 > dst_sz) {
+		return;
+	}
+	dst[len] = '.';
+	strcpy(dst + len + 1, new_ext);
+}
+
+static void converter_task(void *, void *, void *)
+{
+	while (1) {
+		k_sem_take(&convert_request, K_FOREVER);
+		k_sem_take(&convert_idle, K_FOREVER);
+
+		char in_path[DATA_LOGGER_PATH_MAX];
+
+		strncpy(in_path, convert_bin_path, sizeof(in_path) - 1);
+		in_path[sizeof(in_path) - 1] = '\0';
+
+#if defined(CONFIG_DATA_LOGGER_CONVERT_CSV)
+		{
+			char out_path[DATA_LOGGER_PATH_MAX];
+
+			swap_extension(out_path, sizeof(out_path), in_path,
+				       data_logger_csv_formatter.file_ext);
+			int rc = data_logger_convert(in_path,
+						     &data_logger_csv_formatter,
+						     out_path);
+
+			if (rc != 0) {
+				LOG_ERR("CSV conversion of %s failed (%d)",
+					in_path, rc);
+			} else {
+				LOG_INF("converted %s → %s", in_path, out_path);
+			}
+		}
+#endif /* CONFIG_DATA_LOGGER_CONVERT_CSV */
+
+#if defined(CONFIG_DATA_LOGGER_CONVERT_INFLUX)
+		{
+			char out_path[DATA_LOGGER_PATH_MAX];
+
+			swap_extension(out_path, sizeof(out_path), in_path,
+				       data_logger_influx_formatter.file_ext);
+			int rc = data_logger_convert(in_path,
+						     &data_logger_influx_formatter,
+						     out_path);
+
+			if (rc != 0) {
+				LOG_ERR("Influx conversion of %s failed (%d)",
+					in_path, rc);
+			} else {
+				LOG_INF("converted %s → %s", in_path, out_path);
+			}
+		}
+#endif /* CONFIG_DATA_LOGGER_CONVERT_INFLUX */
+
+		k_sem_give(&convert_idle);
+	}
+}
+
+K_THREAD_DEFINE(converter_thread, 2048, converter_task, NULL, NULL, NULL,
+		9, 0, 0);
+
+static void log_begin_flight(void)
+{
+	if (k_sem_take(&convert_idle, K_MSEC(LOG_ARM_CONVERT_TIMEOUT_MS)) != 0) {
+		LOG_ERR("ARMED: prior conversion still running after %d ms — "
+			"flight will not be logged",
+			LOG_ARM_CONVERT_TIMEOUT_MS);
+#if defined(CONFIG_AURORA_NOTIFY)
+		notify_error();
+#endif
+		return;
+	}
+	k_sem_give(&convert_idle);
+
+	memset(&sm_logger, 0, sizeof(sm_logger));
+	if (data_logger_init(&sm_logger, "flight",
+			     &data_logger_bin_formatter) != 0) {
+		LOG_ERR("data_logger_init failed");
+#if defined(CONFIG_AURORA_NOTIFY)
+		notify_error();
+#endif
+		return;
+	}
+	data_logger_set_default(&sm_logger);
+	if (data_logger_start(&sm_logger) != 0) {
+		LOG_ERR("data_logger_start failed");
+		(void)data_logger_close(&sm_logger);
+		data_logger_set_default(NULL);
+#if defined(CONFIG_AURORA_NOTIFY)
+		notify_error();
+#endif
+		return;
+	}
+
+	atomic_set(&sm_logger_live, 1);
+}
+
+static void log_end_flight(void)
+{
+	if (!atomic_get(&sm_logger_live)) {
+		return;
+	}
+	atomic_set(&sm_logger_live, 0);
+
+	(void)data_logger_stop(&sm_logger);
+
+	strncpy(convert_bin_path, sm_logger.path, sizeof(convert_bin_path) - 1);
+	convert_bin_path[sizeof(convert_bin_path) - 1] = '\0';
+
+	(void)data_logger_close(&sm_logger);
+	data_logger_set_default(NULL);
+
+	k_sem_give(&convert_request);
+}
 #endif /* CONFIG_DATA_LOGGER */
 
 #if defined(CONFIG_AURORA_POWERFAIL)
@@ -532,6 +690,18 @@ void state_machine_task(void *, void *, void *)
 				orientation[2] = 0.0;
 			}
 #endif /* CONFIG_IMU */
+#if defined(CONFIG_DATA_LOGGER)
+			/* Flight-time logging lifecycle:
+			 *  - begin on IDLE→ARMED (opens a fresh binary file),
+			 *  - end on exit to IDLE/LANDED/ERROR (kicks converter).
+			 */
+			if (prev_state == SM_IDLE && state == SM_ARMED) {
+				log_begin_flight();
+			} else if (state == SM_IDLE || state == SM_LANDED ||
+				   state == SM_ERROR) {
+				log_end_flight();
+			}
+#endif /* CONFIG_DATA_LOGGER */
 			prev_state = state;
 		}
 
@@ -603,25 +773,11 @@ int main(void)
 {
 	LOG_INF("Auxspace AURORA %s", APP_VERSION_STRING);
 
-#if defined(CONFIG_DATA_LOGGER)
-	if (data_logger_init(&sm_logger, "flight") != 0) {
-		LOG_ERR("data_logger_init failed");
-	} else {
-		data_logger_set_default(&sm_logger);
-	}
-#endif /* CONFIG_DATA_LOGGER */
-
 #if defined(CONFIG_AURORA_POWERFAIL)
 	powerfail_setup(&powerfail_assert, &powerfail_deassert);
-
 #else
 	/* No powerfail module → assume always armed */
 	armed = 1;
-
-#if defined(CONFIG_DATA_LOGGER)
-	data_logger_start(&sm_logger);
-#endif /* CONFIG_DATA_LOGGER */
-
 #endif /* CONFIG_AURORA_POWERFAIL */
 
 #if defined(CONFIG_AURORA_NOTIFY)
