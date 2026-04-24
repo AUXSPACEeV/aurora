@@ -30,36 +30,11 @@ config IMU_TRIGGER
 		to run triggers in an interrupt context.
 
 # Only show frequency options when IMU is enabled
-choice IMU_FREQUENCY
-	prompt "IMU update frequency (Hz)"
-	depends on IMU
-	default IMU_FREQ_10HZ
-
-config IMU_FREQ_10HZ
-	bool "10 Hz"
-
-config IMU_FREQ_50HZ
-	bool "50 Hz"
-
-config IMU_FREQ_100HZ
-	bool "100 Hz"
-
-config IMU_FREQ_200HZ
-	bool "200 Hz"
-
-config IMU_FREQ_400HZ
-	bool "400 Hz"
-
-endchoice
-
-config IMU_FREQUENCY_VALUE
-	int
-	depends on IMU
-	default 10  if IMU_FREQ_10HZ
-	default 50  if IMU_FREQ_50HZ
-	default 100 if IMU_FREQ_100HZ
-	default 200 if IMU_FREQ_200HZ
-	default 400 if IMU_FREQ_400HZ
+config IMU_FREQUENCY
+	int "IMU update frequency (Hz)"
+	depends on IMU && !IMU_TRIGGER
+	default 100
+	range 1 1000
 
 choice IMU_UP_AXIS
 	prompt "IMU body axis pointing up the rocket's long axis"
@@ -106,8 +81,8 @@ config IMU_CALIBRATION_SAMPLES
 	help
 	  Number of IMU samples to average while the rocket is stationary in
 	  ARMED for accelerometer/gyroscope bias estimation and gravity
-	  magnitude measurement. At IMU_FREQUENCY_VALUE Hz, the calibration
-	  window is roughly IMU_CALIBRATION_SAMPLES / IMU_FREQUENCY_VALUE
+	  magnitude measurement. At IMU_FREQUENCY Hz, the calibration
+	  window is roughly IMU_CALIBRATION_SAMPLES / IMU_FREQUENCY
 	  seconds.
 
 config ATTITUDE
@@ -139,35 +114,10 @@ config BARO_TRIGGER
 		sensors to run triggers in an interrupt context.
 
 # Only show frequency options when BARO is enabled
-choice BARO_FREQUENCY
-	prompt "BARO update frequency (Hz)"
-	depends on BARO
-	default BARO_FREQ_10HZ
-
-config BARO_FREQ_10HZ
-	bool "10 Hz"
-
-config BARO_FREQ_50HZ
-	bool "50 Hz"
-
-config BARO_FREQ_100HZ
-	bool "100 Hz"
-
-config BARO_FREQ_200HZ
-	bool "200 Hz"
-
-config BARO_FREQ_400HZ
-	bool "400 Hz"
-
-endchoice
-
-config BARO_FREQUENCY_VALUE
-	int
-	depends on BARO
-	default 10  if BARO_FREQ_10HZ
-	default 50  if BARO_FREQ_50HZ
-	default 100 if BARO_FREQ_100HZ
-	default 200 if BARO_FREQ_200HZ
-	default 400 if BARO_FREQ_400HZ
+config BARO_FREQUENCY
+	int "BARO update frequency (Hz)"
+	depends on BARO && !BARO_TRIGGER
+	default 100
+	range 1 1000
 
 endmenu

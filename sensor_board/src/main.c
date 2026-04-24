@@ -320,7 +320,7 @@ void imu_task(void *, void *, void *)
 	imu_active = true;
 
 #if !defined(CONFIG_IMU_TRIGGER)
-	const int imu_hz = CONFIG_IMU_FREQUENCY_VALUE;
+	const int imu_hz = CONFIG_IMU_FREQUENCY;
 	while (1) {
 		int rc = imu_poll(imu0);
 		if (rc != 0) {
@@ -360,7 +360,7 @@ void baro_task(void *, void *, void *)
 	baro_active = true;
 
 #if !defined(CONFIG_BARO_TRIGGER)
-	const int baro_hz = CONFIG_BARO_FREQUENCY_VALUE;
+	const int baro_hz = CONFIG_BARO_FREQUENCY;
 	while (1) {
 		if (baro_measure(baro0)) {
 			LOG_ERR("Failed to measure baro0");
