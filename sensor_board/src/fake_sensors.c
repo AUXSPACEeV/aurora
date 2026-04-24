@@ -48,14 +48,15 @@ extern bool imu_active;
 /* Coordinate (not proper) acceleration produced by the motor during boost. */
 #define BOOST_COORD_ACCEL_MS2    30.0
 #define BOOST_DURATION_S         1.5
-/* Parachute descent rate applied after apogee. */
-#define PARACHUTE_RATE_MS         7.0
 /* Roll rate (rotation about the rocket's long axis) injected into the
  * gyro after launch.  Must be non-zero so the autotest can verify roll
  * is being integrated.  Held at zero pre-launch so attitude calibration
  * sees a stationary IMU and captures a zero gyro bias.
  */
 #define ROLL_RATE_DPS            30.0
+/* Parachute descent rate applied after apogee. */
+#define DROGUE_RATE_MS           12.0
+#define MAIN_RATE_MS             4.0
 
 /* ISA troposphere, matching the constants in lib/sensor/baro.c */
 #define SEA_LEVEL_PRESSURE_KPA   101.325
@@ -108,6 +109,8 @@ static void profile_launch_set(uint64_t v)
  */
 static void profile_sample(double t_s, double *altitude_m, double *accel_vert_ms2)
 {
+	static double t_to_main = 0.0;
+
 	if (t_s < 0.0) {
 		*altitude_m = 0.0;
 		*accel_vert_ms2 = GRAVITY_MS2;
@@ -124,7 +127,6 @@ static void profile_sample(double t_s, double *altitude_m, double *accel_vert_ms
 	const double h_burnout = 0.5 * BOOST_COORD_ACCEL_MS2 *
 				 BOOST_DURATION_S * BOOST_DURATION_S;
 	const double t_coast = t_s - BOOST_DURATION_S;
-
 	const double v = v_burnout - GRAVITY_MS2 * t_coast;
 	const enum sm_state state = sm_get_state();
 
@@ -136,6 +138,8 @@ static void profile_sample(double t_s, double *altitude_m, double *accel_vert_ms
 			      0.5 * GRAVITY_MS2 * t_coast * t_coast;
 		*accel_vert_ms2 = 0.0; /* ballistic coast: accelerometer reads 0 */
 		return;
+	} else if (state == SM_MAIN && t_to_main == 0.0) {
+		t_to_main = t_s;
 	}
 
 	/* After apogee: approximate instant parachute, constant descent rate. */
@@ -143,8 +147,11 @@ static void profile_sample(double t_s, double *altitude_m, double *accel_vert_ms
 	const double h_apogee = h_burnout + v_burnout * t_to_apogee -
 				0.5 * GRAVITY_MS2 * t_to_apogee * t_to_apogee;
 	const double t_after_apogee = t_coast - t_to_apogee;
+	const double t_main = t_to_main == 0.0 ? 0.0 : t_s - t_to_main;
+	const double t_apogee_to_main = t_after_apogee - t_main;
 
-	double h = h_apogee - PARACHUTE_RATE_MS * t_after_apogee;
+	double h = h_apogee - DROGUE_RATE_MS * t_apogee_to_main -
+		   MAIN_RATE_MS * t_main;
 	if (h < 0.0) {
 		h = 0.0;
 	}
@@ -181,12 +188,13 @@ static double flight_time_seconds(void)
 static void fake_imu_task(void *, void *, void *)
 {
 	const int hz = CONFIG_IMU_FREQUENCY;
-	const int period_ms = 1000 / hz;
+	const uint64_t period_ns = 1000000000 / hz;
 
 	LOG_INF("Fake IMU running at %d Hz", hz);
 	imu_active = true;
 
 	while (1) {
+		uint64_t start = k_ticks_to_ns_floor64(k_uptime_ticks());
 		double altitude, accel_vert;
 		profile_sample(flight_time_seconds(), &altitude, &accel_vert);
 
@@ -212,8 +220,9 @@ static void fake_imu_task(void *, void *, void *)
 		set_sensor_value_double(&msg.gyro[2], gyro_axes[2]);
 
 		(void)zbus_chan_pub(&imu_data_chan, &msg, K_NO_WAIT);
+		uint64_t delta = k_ticks_to_ns_floor64(k_uptime_ticks()) - start;
 
-		k_sleep(K_MSEC(period_ms));
+		k_sleep(K_NSEC(period_ns - delta));
 	}
 }
 
@@ -225,12 +234,13 @@ K_THREAD_DEFINE(imu_polling, 2048, fake_imu_task, NULL, NULL, NULL,
 static void fake_baro_task(void *, void *, void *)
 {
 	const int hz = CONFIG_BARO_FREQUENCY;
-	const int period_ms = 1000 / hz;
+	const uint64_t period_ns = 1000000000 / hz;
 
 	LOG_INF("Fake baro running at %d Hz", hz);
 	baro_active = true;
 
 	while (1) {
+		uint64_t start = k_ticks_to_ns_floor64(k_uptime_ticks());
 		double altitude, accel_vert;
 		profile_sample(flight_time_seconds(), &altitude, &accel_vert);
 
@@ -241,7 +251,9 @@ static void fake_baro_task(void *, void *, void *)
 
 		(void)zbus_chan_pub(&baro_data_chan, &msg, K_NO_WAIT);
 
-		k_sleep(K_MSEC(period_ms));
+		uint64_t delta = k_ticks_to_ns_floor64(k_uptime_ticks()) - start;
+
+		k_sleep(K_NSEC(period_ns - delta));
 	}
 }
 
