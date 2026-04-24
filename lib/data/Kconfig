@@ -6,8 +6,10 @@ config DATA_LOGGER
 	depends on FILE_SYSTEM
 	help
 	  Enable the format-agnostic data logger for flight telemetry.
-	  Sensor readings are captured as datapoints and serialised through
-	  a pluggable formatter backend (CSV, InfluxDB line protocol, ...).
+	  During flight (ARMED→LANDED), datapoints are appended to a
+	  compact fixed-size binary file.  On transition to IDLE, LANDED
+	  or ERROR the binary file is streamed through one or more
+	  conversion targets (CSV, InfluxDB line protocol).
 
 if DATA_LOGGER
 
@@ -15,30 +17,35 @@ module = DATA_LOGGER
 module-str = data_logger
 source "subsys/logging/Kconfig.template.log_config"
 
-choice DATA_LOGGER_TYPE
-	bool "Type of the data logger"
-	default DATA_LOGGER_CSV
-
-config DATA_LOGGER_CSV
-	bool "CSV formatter"
+config DATA_LOGGER_BIN
+	bool "Build fixed-size binary formatter (flight-time)"
+	default y
 	help
-	  Include the CSV formatter backend.  Produces a UTF-8 file with one
-	  header row followed by one row per datapoint.
-
-config DATA_LOGGER_INFLUX
-	bool "InfluxDB Line Protocol formatter"
-	help
-	  Include the InfluxDB Line Protocol formatter backend.  Produces one
-	  line per datapoint; no header row.
+	  Build the binary formatter and the streaming converter.  Each
+	  datapoint becomes a 40-byte little-endian record prefixed by a
+	  16-byte file header.  Converted post-flight via
+	  data_logger_convert().
 
 config DATA_LOGGER_MOCK
-	bool "Mock formatter (test only)"
+	bool "Build mock formatter (test only)"
 	help
-	  Select an externally provided mock formatter for unit testing the
-	  core dispatch layer.  The symbol data_logger_mock_formatter must be
-	  defined by the test application.
+	  Build against an externally provided mock formatter for unit
+	  testing the core dispatch layer.  The symbol
+	  data_logger_mock_formatter must be defined by the test
+	  application.
 
-endchoice
+config DATA_LOGGER_CONVERT_CSV
+	bool "Enable CSV conversion target"
+	default y
+	help
+	  Build the CSV formatter so data_logger_convert() can emit a
+	  header-prefixed UTF-8 CSV file from a binary log.
+
+config DATA_LOGGER_CONVERT_INFLUX
+	bool "Enable InfluxDB Line Protocol conversion target"
+	help
+	  Build the InfluxDB line-protocol formatter so data_logger_convert()
+	  can emit one InfluxDB line per datapoint from a binary log.
 
 config DATA_LOGGER_BASE_PATH
 	string "Output directory for data logger files"
@@ -57,7 +64,7 @@ config DATA_LOGGER_MAX_FILES
 	  output files.
 	  If the maximum is reached, old files are overwritten.
 
-if DATA_LOGGER_INFLUX
+if DATA_LOGGER_CONVERT_INFLUX
 
 config DATA_LOGGER_INFLUX_MEASUREMENT
 	string "InfluxDB measurement name"
@@ -75,7 +82,7 @@ config DATA_LOGGER_INFLUX_BUF_SIZE
 	  safety) but uses more RAM.  Data that has not been flushed is lost
 	  on power failure.
 
-endif # DATA_LOGGER_INFLUX
+endif # DATA_LOGGER_CONVERT_INFLUX
 
 config DATA_LOGGER_MAX_LOGGERS
 	int "Maximum number of data logger instances"

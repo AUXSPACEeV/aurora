@@ -98,34 +98,25 @@ const char *data_logger_type_name(enum aurora_data type)
 /* -------------------------------------------------------------------------- */
 
 /* data_logger_init – see data_logger.h */
-int data_logger_init(struct data_logger *logger, const char *filename)
+int data_logger_init(struct data_logger *logger, const char *filename,
+		     const struct data_logger_formatter *fmt)
 {
 	struct fs_dir_t ptr;
 	struct fs_dirent entry;
 	char dir[64];
 	char *sep;
 	int rc;
-	struct data_logger_state *state = k_calloc(1, sizeof(*state));
+	struct data_logger_state *state;
+	char full_path[DATA_LOGGER_PATH_MAX];
 
+	if (logger == NULL || fmt == NULL || filename == NULL) {
+		return -EINVAL;
+	}
+
+	state = k_calloc(1, sizeof(*state));
 	if (state == NULL) {
 		LOG_ERR("failed to allocate logger state");
 		return -ENOMEM;
-	}
-
-#if defined(CONFIG_DATA_LOGGER_CSV)
-	const struct data_logger_formatter *fmt = &data_logger_csv_formatter;
-#elif defined(CONFIG_DATA_LOGGER_INFLUX)
-	const struct data_logger_formatter *fmt = &data_logger_influx_formatter;
-#elif defined(CONFIG_DATA_LOGGER_MOCK)
-	const struct data_logger_formatter *fmt = &data_logger_mock_formatter;
-#else
-#error "Unknown data logger backend!"
-#endif /* CONFIG_DATA_LOGGER */
-	char full_path[64];
-
-	if (logger == NULL || fmt == NULL || filename == NULL) {
-		rc = -EINVAL;
-		goto out_err;
 	}
 
 	/* Build "<base_path>/<filename>_i.<file_ext>" */
@@ -160,6 +151,9 @@ int data_logger_init(struct data_logger *logger, const char *filename)
 
 	strncpy(logger->name, filename, sizeof(logger->name) - 1);
 	logger->name[sizeof(logger->name) - 1] = '\0';
+
+	strncpy(logger->path, full_path, sizeof(logger->path) - 1);
+	logger->path[sizeof(logger->path) - 1] = '\0';
 
 	logger->state = state;
 	k_mutex_init(&logger->state->mutex);

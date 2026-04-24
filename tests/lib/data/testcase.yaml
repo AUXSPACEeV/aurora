@@ -10,6 +10,7 @@ tests:
       - qemu_x86
     tags: test_data_logger
     extra_configs:
+      - CONFIG_DATA_LOGGER_BIN=n
       - CONFIG_DATA_LOGGER_MOCK=y
       - CONFIG_DATA_LOGGER_BASE_PATH="/RAM:/test"
 
@@ -20,7 +21,7 @@ tests:
       - qemu_x86
     tags: test_data_logger
     extra_configs:
-      - CONFIG_DATA_LOGGER_CSV=y
+      - CONFIG_DATA_LOGGER_CONVERT_CSV=y
       - CONFIG_DATA_LOGGER_BASE_PATH="/RAM:/test"
 
   aurora.lib.data.influx:
@@ -30,5 +31,17 @@ tests:
       - qemu_x86
     tags: test_data_logger
     extra_configs:
-      - CONFIG_DATA_LOGGER_INFLUX=y
+      - CONFIG_DATA_LOGGER_CONVERT_INFLUX=y
+      - CONFIG_DATA_LOGGER_BASE_PATH="/RAM:/test"
+
+  aurora.lib.data.convert:
+    integration_platforms:
+      - qemu_x86
+    platform_allow:
+      - qemu_x86
+    tags: test_data_logger
+    extra_configs:
+      - CONFIG_DATA_LOGGER_BIN=y
+      - CONFIG_DATA_LOGGER_CONVERT_CSV=y
+      - CONFIG_DATA_LOGGER_CONVERT_INFLUX=y
       - CONFIG_DATA_LOGGER_BASE_PATH="/RAM:/test"
