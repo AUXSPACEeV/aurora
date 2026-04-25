@@ -19,6 +19,7 @@ source "subsys/logging/Kconfig.template.log_config"
 config AURORA_FAKE_SENSORS
 	bool "Synthetic IMU/baro data source (no hardware)"
 	depends on IMU && BARO
+	select ASSERT
 	help
 	  Replaces the hardware IMU and barometer polling threads with a
 	  synthetic flight-profile generator. The generator publishes
@@ -27,6 +28,26 @@ config AURORA_FAKE_SENSORS
 	  Kalman filter and state machine can be exercised without real
 	  sensors. Intended for native_sim. A shell command "sim launch"
 	  kicks off the canned ascent/descent profile.
+
+config AURORA_SIM_AUTOTEST
+	bool "Automated simulation test (CI mode)"
+	depends on IMU && BARO
+	select AURORA_FAKE_SENSORS
+	help
+	  Enables the full automated flight simulation for CI. Pulls in fake
+	  sensors and assertion support, then starts a thread that waits for
+	  altitude calibration, and auto-launches the flight
+	  profile. Exits with code 0 on SM_LANDED, code 1 on SM_ERROR or after
+	  AURORA_SIM_AUTOLAUNCH_TIMEOUT_MS. Run ./zephyr.exe and check the process exit code.
+
+config AURORA_SIM_AUTOLAUNCH_TIMEOUT_MS
+	int "Autolaunch watchdog timeout (ms)"
+	depends on AURORA_SIM_AUTOTEST
+	default 120000
+	help
+	  Maximum time in milliseconds the autolaunch thread waits for SM_LANDED
+	  after triggering the flight profile. Exits with code 1 if this
+	  deadline is exceeded.
 
 menu "State Machine Configuration"
 

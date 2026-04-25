@@ -20,6 +20,7 @@
 #include "aurora/lib/state/state.h"
 #include <math.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/shell/shell.h>
@@ -50,6 +51,21 @@ extern bool imu_active;
 #define ISA_T0                   288.15
 #define ISA_L                    0.0065
 #define ISA_GMR_OVER_L           5.25588
+
+/* -------- Calibration signal (written by main.c, read by autolaunch) -------- */
+
+static struct k_spinlock cal_lock;
+static bool calibration_done;
+
+/**
+ * @brief Notify the automatic launch sequence that attitude calibration is complete.
+ */
+void fake_sensors_on_calibrated(void)
+{
+	k_spinlock_key_t key = k_spin_lock(&cal_lock);
+	calibration_done = true;
+	k_spin_unlock(&cal_lock, key);
+}
 
 /* -------- Launch trigger state (shared with shell command) -------- */
 
@@ -263,3 +279,54 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sim_subcmds,
 
 SHELL_CMD_REGISTER(sim, &sim_subcmds,
 		   "Synthetic flight-profile simulator", NULL);
+
+#if defined(CONFIG_AURORA_SIM_AUTOTEST)
+/**
+ * @brief run an automatic launch sequence and exit when it lands or hits an error.
+ */
+static void autolaunch_task(void *, void *, void *)
+{
+	LOG_INF("autolaunch: waiting for attitude calibration...");
+	bool done = false;
+	while (!done) {
+		k_spinlock_key_t key = k_spin_lock(&cal_lock);
+		done = calibration_done;
+		k_spin_unlock(&cal_lock, key);
+		if (done) {
+			break;
+		}
+		k_msleep(50);
+	}
+
+	LOG_INF("autolaunch: launching flight profile");
+	profile_launch_set(k_ticks_to_ns_floor64(k_uptime_ticks()));
+
+	int64_t deadline = k_uptime_get() + CONFIG_AURORA_SIM_AUTOLAUNCH_TIMEOUT_MS;
+
+	while (1) {
+		enum sm_state s = sm_get_state();
+
+		if (s == SM_LANDED) {
+			LOG_INF("autolaunch: LANDED - simulation complete");
+			k_msleep(2000); /* allow deferred log flush */
+			exit(0);
+		}
+		if (s == SM_ERROR) {
+			/* __ASSERT_NO_MSG in error handler likely fires first */
+			LOG_ERR("autolaunch: ERROR state - simulation failed");
+			k_msleep(2000); /* allow deferred log flush */
+			exit(1);
+		}
+		if (k_uptime_get() >= deadline) {
+			LOG_ERR("autolaunch: ERROR - timeout after %d ms without landing",
+				CONFIG_AURORA_SIM_AUTOLAUNCH_TIMEOUT_MS);
+			k_msleep(2000); /* allow deferred log flush */
+			exit(1);
+		}
+		k_msleep(100);
+	}
+}
+
+K_THREAD_DEFINE(autolaunch, 1024, autolaunch_task, NULL, NULL, NULL, 5, 0, 0);
+
+#endif /* CONFIG_AURORA_SIM_AUTOTEST */
