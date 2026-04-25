@@ -225,8 +225,52 @@ K_THREAD_DEFINE(baro_polling, 2048, baro_task, NULL, NULL, NULL,
  * ============================================================ */
 #if defined(CONFIG_AURORA_STATE_MACHINE)
 
+#if defined(CONFIG_AURORA_FAKE_SENSORS)
+/* make the function known (defined in fake_sensors.c) */
+void fake_sensors_on_calibrated(void);
+
+/**
+ * @brief checks if the state machine transition is valid in the context of the simulation
+ *
+ * @param from the previous state
+ * @param to the new state
+ * @retval true if the transition is valid
+ * @retval false if the transition is invalid
+ */
+static bool is_valid_transition(enum sm_state from, enum sm_state to)
+{
+	/* Disarm brings any non-IDLE state back to IDLE */
+	if (to == SM_IDLE) {
+		return true;
+	}
+
+	switch (from) {
+	case SM_IDLE:      return (to == SM_ARMED);
+	case SM_ARMED:     return (to == SM_BOOST);
+	case SM_BOOST:     return (to == SM_BURNOUT);
+	case SM_BURNOUT:   return (to == SM_APOGEE);
+	case SM_APOGEE:    return (to == SM_MAIN || to == SM_ERROR);
+	case SM_MAIN:      return (to == SM_REDUNDANT);
+	case SM_REDUNDANT: return (to == SM_LANDED || to == SM_ERROR);
+	case SM_ERROR:     return (to == SM_IDLE);
+	case SM_LANDED:    return false;
+	default:           return false;
+	}
+}
+#endif /* CONFIG_AURORA_FAKE_SENSORS */
+
+/**
+ * @brief Error handler for the state machine.
+ *
+ * @param args arguments passed from the state machine (unused here)
+ * @retval 0 on completion
+ */
 int state_machine_error_handler(void *args)
 {
+	ARG_UNUSED(args);
+#if defined(CONFIG_AURORA_FAKE_SENSORS)
+	__ASSERT(false, "State machine reached ERROR in simulation");
+#endif /* CONFIG_AURORA_FAKE_SENSORS */
 	LOG_WRN("WTF is error handling? Just go back to IDLE");
 	return 0;
 }
@@ -252,6 +296,7 @@ void state_machine_task(void *, void *, void *)
 	double tilt = 0.0;
 	bool baro_ready = false;
 	bool imu_ready = false;
+
 
 	struct sm_error_handling_args sm_error_handler = {
 		.cb = &state_machine_error_handler,
@@ -338,6 +383,9 @@ void state_machine_task(void *, void *, void *)
 										calibration_notified = true;
 									}
 #endif /* CONFIG_AURORA_NOTIFY */
+#if defined(CONFIG_AURORA_FAKE_SENSORS)
+									fake_sensors_on_calibrated();
+#endif /* CONFIG_AURORA_FAKE_SENSORS */
 								}
 							}
 						}
@@ -434,6 +482,11 @@ void state_machine_task(void *, void *, void *)
 #endif /* CONFIG_DATA_LOGGER */
 
 		if (state != prev_state) {
+#if defined(CONFIG_AURORA_FAKE_SENSORS)
+			__ASSERT(is_valid_transition(prev_state, state),
+				 "Invalid SM transition: %s -> %s",
+				 sm_state_str(prev_state), sm_state_str(state));
+#endif /* CONFIG_AURORA_FAKE_SENSORS */
 #if defined(CONFIG_AURORA_NOTIFY)
 			notify_state_change(prev_state, state);
 #endif /* CONFIG_AURORA_NOTIFY */
