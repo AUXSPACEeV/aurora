@@ -26,6 +26,66 @@ config DATA_LOGGER_BIN
 	  16-byte file header.  Converted post-flight via
 	  data_logger_convert().
 
+if DATA_LOGGER_BIN
+
+config DATA_LOGGER_BIN_BUF_SIZE
+	int "Per-buffer size for binary log staging (bytes)"
+	default 4096
+	help
+	  Size of each RAM staging buffer.  Records are accumulated in one
+	  of CONFIG_DATA_LOGGER_BIN_BUF_COUNT buffers and flushed to the
+	  underlying filesystem with a single fs_write() when the buffer
+	  fills.  Pick a multiple of the block-driver sector size (512 B for
+	  FAT, typically 4096 B for littlefs / NOR) so each fs_write lands
+	  on a sector boundary.
+
+config DATA_LOGGER_BIN_BUF_COUNT
+	int "Number of binary log staging buffers"
+	default 3
+	range 2 8
+	help
+	  2 (double-buffer) is the minimum: producer fills one while the
+	  writer drains the other.  3 (triple-buffer) gives one extra buffer
+	  of slack to absorb SD-card erase pauses without backpressure on
+	  the sensor pipeline.  More buffers cost more RAM with diminishing
+	  returns.
+
+config DATA_LOGGER_BIN_BUF_ALIGN
+	int "Alignment of binary log staging buffers (bytes)"
+	default 32
+	help
+	  Buffers are aligned to this many bytes so the underlying block
+	  driver can DMA into them without bounce-buffering.  32 covers the
+	  cache-line size of every supported MCU; bump it if your SD/NAND
+	  driver requires a stricter alignment.
+
+config DATA_LOGGER_BIN_WRITER_STACK_SIZE
+	int "Binary log writer thread stack size (bytes)"
+	default 1024
+
+config DATA_LOGGER_BIN_WRITER_PRIO
+	int "Binary log writer thread priority"
+	default 10
+	help
+	  Should be a lower priority (higher number) than the upstream
+	  logger thread that produces records, but high enough that the
+	  filesystem is serviced promptly.
+
+config DATA_LOGGER_BIN_PRODUCER_TIMEOUT_MS
+	int "Max time the producer waits for a free staging buffer (ms)"
+	default 50
+	help
+	  If every staging buffer is queued for the writer when a new
+	  record arrives, the producer waits up to this many ms for the
+	  writer to free one.  On timeout the rotation fails and upstream
+	  records are dropped until the writer catches up.
+
+config DATA_LOGGER_BIN_FLUSH_TIMEOUT_MS
+	int "Max time bin_flush() waits for the writer to drain (ms)"
+	default 2000
+
+endif # DATA_LOGGER_BIN
+
 config DATA_LOGGER_MOCK
 	bool "Build mock formatter (test only)"
 	help
