@@ -25,6 +25,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/shell/shell.h>
 #include <zephyr/zbus/zbus.h>
+#include <zephyr/logging/log_ctrl.h>
 
 #include <aurora/lib/imu.h>
 #include <aurora/lib/baro.h>
@@ -308,19 +309,19 @@ static void autolaunch_task(void *, void *, void *)
 
 		if (s == SM_LANDED) {
 			LOG_INF("autolaunch: LANDED - simulation complete");
-			k_msleep(2000); /* allow deferred log flush */
+			log_flush();
 			exit(0);
 		}
 		if (s == SM_ERROR) {
 			/* __ASSERT_NO_MSG in error handler likely fires first */
 			LOG_ERR("autolaunch: ERROR state - simulation failed");
-			k_msleep(2000); /* allow deferred log flush */
+			log_flush();
 			exit(1);
 		}
 		if (k_uptime_get() >= deadline) {
 			LOG_ERR("autolaunch: ERROR - timeout after %d ms without landing",
 				CONFIG_AURORA_SIM_AUTOLAUNCH_TIMEOUT_MS);
-			k_msleep(2000); /* allow deferred log flush */
+			log_flush();
 			exit(1);
 		}
 		k_msleep(100);
