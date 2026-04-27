@@ -18,7 +18,8 @@ gravity-removed world-vertical acceleration, and the three-way apogee vote.
 When invoked with ``--flight DIR``, the script instead loads real telemetry
 from ``DIR/flights.influx`` and state transitions from ``DIR/state_audit``,
 segments the log into individual flights using ARMED→BOOST transitions, and
-produces one plot per flight with state transitions drawn as vertical lines.
+plots the raw streams (accel, gyro, baro, on-board sm_kinematics and
+sm_pose) for each flight with state transitions drawn as vertical lines.
 """
 
 import argparse
@@ -373,15 +374,24 @@ def simulate_flight(apogee_m=500.0, dt=0.02, seed=42, pre_launch_s=1.0):
 # Real flight log parsing (InfluxDB line protocol + state_audit)
 # ---------------------------------------------------------------------------
 
+FIELD_SPECS = {
+    "accel":         ("x", "y", "z"),
+    "gyro":          ("x", "y", "z"),
+    "baro":          ("pres", "temp"),
+    "sm_kinematics": ("accel", "accel_vert", "velocity"),
+    "sm_pose":       ("orientation", "altitude"),
+}
+
+
 def parse_influx(path):
     """Parse AURORA telemetry in InfluxDB line protocol.
 
-    Returns dict with keys ``accel``, ``gyro``, ``baro`` mapping to
-    ``(t_ns, values)`` tuples where ``t_ns`` is a 1-D int array and
-    ``values`` is an (N, K) float array (K=3 for accel/gyro, 2 for baro
-    as ``[pres_kPa, temp_C]``).
+    Returns dict mapping each known type in :data:`FIELD_SPECS` to a
+    ``(t_ns, values)`` tuple where ``t_ns`` is a 1-D int64 array and
+    ``values`` is an (N, K) float array with columns in the order given
+    by :data:`FIELD_SPECS`.
     """
-    rows = {"accel": ([], []), "gyro": ([], []), "baro": ([], [])}
+    rows = {k: ([], []) for k in FIELD_SPECS}
     with open(path) as f:
         for line in f:
             line = line.strip()
@@ -396,14 +406,12 @@ def parse_influx(path):
                 continue
             tags = dict(kv.split("=", 1) for kv in meas_tags.split(",")[1:])
             ttype = tags.get("type")
-            if ttype not in rows:
+            spec = FIELD_SPECS.get(ttype)
+            if spec is None:
                 continue
-            fd = dict(kv.split("=", 1) for kv in fields.split(","))
             try:
-                if ttype in ("accel", "gyro"):
-                    vals = [float(fd["x"]), float(fd["y"]), float(fd["z"])]
-                else:  # baro
-                    vals = [float(fd["pres"]), float(fd["temp"])]
+                fd = dict(kv.split("=", 1) for kv in fields.split(","))
+                vals = [float(fd[k]) for k in spec]
             except (KeyError, ValueError):
                 continue
             rows[ttype][0].append(t_ns)
@@ -411,7 +419,8 @@ def parse_influx(path):
 
     out = {}
     for k, (ts, vs) in rows.items():
-        out[k] = (np.array(ts, dtype=np.int64), np.array(vs, dtype=float))
+        out[k] = (np.array(ts, dtype=np.int64),
+                  np.array(vs, dtype=float).reshape(-1, len(FIELD_SPECS[k])))
     return out
 
 
@@ -453,148 +462,41 @@ def segment_flights(events):
     return flights
 
 
-def process_real_flight(streams, events, boost_ns, end_ns,
-                        dt_s=0.02, pre_boost_s=10.0, cal_s=3.0,
-                        post_end_s=2.0, post_main_s=5.0,
-                        default_duration_s=120.0,
-                        q_alt=0.1, q_vel=0.5, r_meas=4.0,
-                        apogee_debounce=3):
-    """Run the real flight window through Attitude + KalmanFilter.
+def slice_real_flight(streams, events, boost_ns, end_ns,
+                      pre_boost_s=10.0, post_end_s=2.0,
+                      default_duration_s=120.0):
+    """Slice the raw telemetry streams to a single flight window.
 
-    Aligns t=0 to ``boost_ns - pre_boost_s*1000000000`` so that the first
-    ``cal_s`` seconds are stationary and usable for calibration, and the
-    BOOST transition lands at ``t = pre_boost_s``.
+    The window starts ``pre_boost_s`` seconds before the BOOST transition
+    and ends ``post_end_s`` seconds after the flight close-out (or after
+    ``default_duration_s`` if the audit log never closes the flight). All
+    timestamps are returned in seconds, with t=0 at the window start so
+    the BOOST transition lands at t = ``pre_boost_s``.
 
-    If a ``*→MAIN`` transition is present within ``[boost_ns, end_ns]``,
-    the analysis window is truncated to ``MAIN + post_main_s`` seconds to
-    discard the long post-parachute tail (where the state machine often
-    idles out instead of progressing to REDUNDANT).
-
-    Returns a dict with keys: t, pressure_pa, baro_alt, filtered_alt,
-    filtered_vel, g_b_hist, accel_vert_hist, vote_hist, apogee_idx,
-    computed_apogee_idx, state_transitions, g_mag, p_ref.
+    Returns ``(sliced_streams, transitions)`` where ``sliced_streams``
+    maps each stream name to ``(t_s, values)`` with t_s in seconds, and
+    ``transitions`` is a list of ``(t_s, from_state, to_state)``.
     """
-    if cal_s > pre_boost_s:
-        print(f"  warning: cal_s={cal_s:.1f}s > pre_boost_s={pre_boost_s:.1f}s, "
-              f"clamping cal_s to {pre_boost_s:.1f}s")
-        cal_s = pre_boost_s
-
     window_start_ns = boost_ns - int(pre_boost_s * 1000000000)
     raw_end_ns = (end_ns if end_ns is not None
                   else boost_ns + int(default_duration_s * 1000000000))
+    window_end_ns = raw_end_ns + int(post_end_s * 1000000000)
 
-    main_ns = None
-    landed_ns = None
-    for ev in events:
-        if ev[0] < boost_ns or ev[0] > raw_end_ns:
-            continue
-        if main_ns is None and ev[1] == "transition" and ev[3] == "MAIN":
-            main_ns = ev[0]
-            continue
-        if landed_ns is None and ev[1] == "transition" and ev[3] == "LANDED":
-            landed_ns = ev[0]
-
-    if main_ns is not None:
-        tail_ns = main_ns + int(post_main_s * 1000000000) if landed_ns is None else landed_ns
-    else:
-        tail_ns = raw_end_ns
-    window_end_ns = tail_ns + int(post_end_s * 1000000000)
-
-    duration_s = (window_end_ns - window_start_ns) / 1000000000.0
-    t = np.arange(0.0, duration_s, dt_s)
-
-    def resample(t_ns_raw, vals_raw):
+    sliced = {}
+    for name, (t_ns_raw, vals_raw) in streams.items():
         mask = (t_ns_raw >= window_start_ns) & (t_ns_raw <= window_end_ns)
-        ts = (t_ns_raw[mask] - window_start_ns) / 1000000000.0
-        vs = vals_raw[mask]
-        out = np.zeros((len(t), vs.shape[1]))
-        for k in range(vs.shape[1]):
-            out[:, k] = np.interp(t, ts, vs[:, k])
-        return out
+        t_s = (t_ns_raw[mask] - window_start_ns) / 1000000000.0
+        sliced[name] = (t_s, vals_raw[mask])
 
-    accel = resample(*streams["accel"])
-    gyro = resample(*streams["gyro"])
-    baro = resample(*streams["baro"])  # [pres_kPa, temp_C]
-
-    pressure_pa = baro[:, 0] * 1000.0  # kPa → Pa
-
-    # Ground reference: mean pressure over the calibration window.
-    cal_samples = int(cal_s / dt_s)
-    p_ref = float(np.mean(pressure_pa[:cal_samples]))
-    baro_alt = pressure_to_altitude(pressure_pa, p_ref)
-
-    kf = KalmanFilter(q_alt=q_alt, q_vel=q_vel, r_meas=r_meas,
-                      apogee_debounce=apogee_debounce)
-    att = Attitude()
-
-    for i in range(cal_samples):
-        att.calibrate_sample(accel[i], gyro[i])
-    att.calibrate_finish()
-
-    filtered_alt = np.zeros_like(t)
-    filtered_vel = np.zeros_like(t)
-    accel_vert_hist = np.zeros_like(t)
-    g_b_hist = np.tile(att.g_b, (len(t), 1))
-    vote_hist = np.zeros((len(t), 3), dtype=bool)
-    gated_hist = np.zeros(len(t), dtype=bool)
-    apogee_idx = None
-
-    # Skip apogee detection until the KF settles past calibration.
-    settle_idx = cal_samples + int(1.0 / dt_s)
-
-    for i in range(len(t)):
-        if i < cal_samples:
-            a_vert = 0.0
-        else:
-            a_vert = att.update(accel[i], gyro[i], dt_s)
-        accel_vert_hist[i] = a_vert
-        g_b_hist[i] = att.g_b
-
-        kf.predict(dt_s, a_vert)
-        kf.update(baro_alt[i])
-        gated_hist[i] = kf.last_update_gated
-        filtered_alt[i] = kf.state[0]
-        filtered_vel[i] = kf.state[1]
-
-        # Match the state machine: only run apogee detection once past
-        # the settle window.  In production this gating is the BOOST /
-        # BURNOUT state entry; here we approximate with a fixed delay.
-        if i > settle_idx:
-            detected = kf.detect_apogee()
-            vote_hist[i] = kf.last_votes
-            if apogee_idx is None and detected:
-                apogee_idx = i
-
-    state_transitions = []
+    transitions = []
     for ev in events:
         if ev[1] != "transition":
             continue
         if window_start_ns <= ev[0] <= window_end_ns:
             ts = (ev[0] - window_start_ns) / 1000000000.0
-            state_transitions.append((ts, ev[2], ev[3]))
+            transitions.append((ts, ev[2], ev[3]))
 
-    computed_apogee_idx = (int(np.argmax(filtered_alt))
-                         if len(filtered_alt) > 0 else None)
-
-    return {
-        "t": t,
-        "pressure_pa": pressure_pa,
-        "baro_alt": baro_alt,
-        "filtered_alt": filtered_alt,
-        "filtered_vel": filtered_vel,
-        "g_b_hist": g_b_hist,
-        "accel_vert_hist": accel_vert_hist,
-        "accel_body": accel,
-        "gyro_body": gyro,
-        "vote_hist": vote_hist,
-        "gated_hist": gated_hist,
-        "gated_updates": kf.gated_updates,
-        "apogee_idx": apogee_idx,
-        "computed_apogee_idx": computed_apogee_idx,
-        "state_transitions": state_transitions,
-        "g_mag": att.g_mag,
-        "p_ref": p_ref,
-    }
+    return sliced, transitions
 
 
 # ---------------------------------------------------------------------------
@@ -888,6 +790,137 @@ def plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
     return fig
 
 
+STATE_PALETTE = {
+    "IDLE":      "#9a9996",
+    "ARMED":     "#e5a50a",
+    "BOOST":     "#c01c28",
+    "BURNOUT":   "#ed333b",
+    "APOGEE":    "#9141ac",
+    "MAIN":      "#1a5fb4",
+    "REDUNDANT": "#26a269",
+    "LANDED":    "#613583",
+    "ERROR":     "#a51d2d",
+}
+
+
+def plot_raw_flight(sliced, transitions, theme_name, out_path, title=None):
+    """Plot every raw stream found in ``sliced`` against time, with state
+    transitions drawn as labelled vertical lines on every panel.
+
+    ``sliced`` is the dict returned by :func:`slice_real_flight`. Panels
+    are created only for stream types that have at least one sample in
+    the window.
+    """
+    c = apply_theme(theme_name)
+
+    panels = []
+    if sliced["baro"][0].size:
+        panels.append("baro")
+    if sliced["sm_pose"][0].size:
+        panels.append("altitude")
+        panels.append("orientation")
+    if sliced["sm_kinematics"][0].size:
+        panels.append("velocity")
+        panels.append("sm_accel")
+    if sliced["accel"][0].size:
+        panels.append("body_accel")
+    if sliced["gyro"][0].size:
+        panels.append("body_gyro")
+
+    if not panels:
+        raise SystemExit("error: no telemetry samples in flight window")
+
+    fig, axes = plt.subplots(len(panels), 1, figsize=(12, 2.4 * len(panels)),
+                             sharex=True)
+    if len(panels) == 1:
+        axes = [axes]
+
+    def mark_states(ax, with_labels=False):
+        if not transitions:
+            return
+        ymin, ymax = ax.get_ylim()
+        for ts, _frm, to in transitions:
+            col = STATE_PALETTE.get(to, c["zero_line"])
+            ax.axvline(ts, color=col, linestyle="-", linewidth=1.0, alpha=0.7)
+            if with_labels:
+                ax.text(ts, ymax, f" {to}", color=col, fontsize=8,
+                        va="top", ha="left", rotation=90,
+                        bbox=dict(boxstyle="round,pad=0.15",
+                                  facecolor=c["legend_bg"],
+                                  edgecolor=col, linewidth=0.5, alpha=0.85))
+
+    for ax, panel in zip(axes, panels):
+        if panel == "baro":
+            t_s, vals = sliced["baro"]
+            ax.plot(t_s, vals[:, 0] * 10.0, color=c["pressure"],
+                    linewidth=1.2, label="Pressure")
+            ax.set_ylabel("Pressure (hPa)")
+            ax.invert_yaxis()
+            ax2 = ax.twinx()
+            ax2.plot(t_s, vals[:, 1], color=c["velocity"], linewidth=0.8,
+                     alpha=0.7, label="Temperature")
+            ax2.set_ylabel("Temp (°C)", color=c["velocity"])
+            ax2.tick_params(axis="y", colors=c["velocity"])
+            ax.legend(loc="upper left")
+            ax2.legend(loc="upper right")
+            if title is not None:
+                ax.set_title(title, color=c["brand"], fontweight="bold")
+        elif panel == "altitude":
+            t_s, vals = sliced["sm_pose"]
+            ax.plot(t_s, vals[:, 1], color=c["true_alt"], linewidth=1.5,
+                    label="sm_pose.altitude")
+            ax.set_ylabel("Altitude (m)")
+            ax.legend(loc="upper right")
+        elif panel == "velocity":
+            t_s, vals = sliced["sm_kinematics"]
+            ax.plot(t_s, vals[:, 2], color=c["velocity"], linewidth=1.5,
+                    label="sm_kinematics.velocity")
+            ax.axhline(0, color=c["zero_line"], linewidth=0.5)
+            ax.set_ylabel("Velocity (m/s)")
+            ax.legend(loc="upper right")
+        elif panel == "sm_accel":
+            t_s, vals = sliced["sm_kinematics"]
+            ax.plot(t_s, vals[:, 0], color=c["g_z"], linewidth=1.0,
+                    alpha=0.6, label="|accel|")
+            ax.plot(t_s, vals[:, 1], color=c["accel_vert"], linewidth=1.5,
+                    label="accel_vert (world)")
+            ax.axhline(0, color=c["zero_line"], linewidth=0.5)
+            ax.set_ylabel("a (m/s²)")
+            ax.legend(loc="upper right")
+        elif panel == "body_accel":
+            t_s, vals = sliced["accel"]
+            ax.plot(t_s, vals[:, 0], color=c["g_x"], linewidth=0.8, label="a_body[x]")
+            ax.plot(t_s, vals[:, 1], color=c["g_y"], linewidth=0.8, label="a_body[y]")
+            ax.plot(t_s, vals[:, 2], color=c["g_z"], linewidth=0.8, label="a_body[z]")
+            ax.axhline(0, color=c["zero_line"], linewidth=0.5)
+            ax.set_ylabel("a_body (m/s²)")
+            ax.legend(loc="upper right", ncol=3)
+        elif panel == "body_gyro":
+            t_s, vals = sliced["gyro"]
+            ax.plot(t_s, vals[:, 0], color=c["g_x"], linewidth=0.8, label="ω[x]")
+            ax.plot(t_s, vals[:, 1], color=c["g_y"], linewidth=0.8, label="ω[y]")
+            ax.plot(t_s, vals[:, 2], color=c["g_z"], linewidth=0.8, label="ω[z]")
+            ax.axhline(0, color=c["zero_line"], linewidth=0.5)
+            ax.set_ylabel("ω (rad/s)")
+            ax.legend(loc="upper right", ncol=3)
+        elif panel == "orientation":
+            t_s, vals = sliced["sm_pose"]
+            ax.plot(t_s, vals[:, 0], color=c["accel_vert"], linewidth=1.2,
+                    label="sm_pose.orientation")
+            ax.set_ylabel("Orientation")
+            ax.legend(loc="upper right")
+
+        ax.grid(True, color=c["grid"], alpha=0.5)
+        mark_states(ax, with_labels=(panel == panels[0]))
+
+    axes[-1].set_xlabel("Time (s)")
+
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150)
+    print(f"[{theme_name}] Plot saved to {out_path}")
+    return fig
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -982,9 +1015,8 @@ def run_real_flight(args):
 
     print(f"Loading telemetry from {influx_path} ...")
     streams = parse_influx(influx_path)
-    print(f"  accel: {len(streams['accel'][0])} samples")
-    print(f"  gyro:  {len(streams['gyro'][0])} samples")
-    print(f"  baro:  {len(streams['baro'][0])} samples")
+    for name in FIELD_SPECS:
+        print(f"  {name}: {len(streams[name][0])} samples")
 
     events = parse_state_audit(audit_path)
     flights = segment_flights(events)
@@ -992,56 +1024,26 @@ def run_real_flight(args):
         raise SystemExit("error: no ARMED->BOOST transitions found")
     print(f"Detected {len(flights)} flight(s):")
     for n, (b, e) in enumerate(flights, start=1):
-        end_str = f"{e} ms" if e is not None else "end-of-log"
-        print(f"  flight {n}: BOOST @ {b} ms → close @ {end_str}")
+        end_str = f"{e} ns" if e is not None else "end-of-log"
+        print(f"  flight {n}: BOOST @ {b} ns → close @ {end_str}")
 
     themes = ["light", "dark"] if args.theme == "both" else [args.theme]
 
     for n, (boost_ns, end_ns) in enumerate(flights, start=1):
-        print(f"\n--- Processing flight {n} ---")
-        result = process_real_flight(streams, events, boost_ns, end_ns,
-                                     dt_s=args.dt, pre_boost_s=args.pre_boost,
-                                     cal_s=args.cal,
-                                     post_main_s=args.post_main,
-                                     q_alt=args.q_alt, q_vel=args.q_vel,
-                                     r_meas=args.r_meas,
-                                     apogee_debounce=args.debounce)
+        print(f"\n--- Plotting flight {n} ---")
+        sliced, transitions = slice_real_flight(
+            streams, events, boost_ns, end_ns,
+            pre_boost_s=args.pre_boost, post_end_s=args.post_end)
 
-        apogee_idx = result["apogee_idx"]
-        computed_idx = result["computed_apogee_idx"]
-        print(f"  p_ref:         {result['p_ref']:.0f} Pa "
-              f"({result['p_ref']/100:.1f} hPa)")
-        print(f"  g_mag:         {result['g_mag']:.3f} m/s²")
-        print(f"  peak baro alt: {result['baro_alt'].max():.1f} m")
-        if computed_idx is not None:
-            print(f"  computed apogee: {result['filtered_alt'][computed_idx]:.1f} m "
-                  f"(t = {result['t'][computed_idx]:.2f} s)")
-        if apogee_idx is not None:
-            delta = (result['t'][apogee_idx] - result['t'][computed_idx]
-                     if computed_idx is not None else None)
-            delta_str = f", Δ={delta:+.2f} s" if delta is not None else ""
-            print(f"  filter apogee: {result['filtered_alt'][apogee_idx]:.1f} m "
-                  f"(t = {result['t'][apogee_idx]:.2f} s{delta_str})")
-        else:
-            print("  filter apogee: not detected")
-        print(f"  transitions:   {len(result['state_transitions'])}")
-        print(f"  gated baro:    {result['gated_updates']}")
+        for name, (t_s, vals) in sliced.items():
+            print(f"  {name}: {len(t_s)} samples in window")
+        print(f"  transitions: {len(transitions)}")
 
         title = f"AURORA Flight {n} - {os.path.basename(flight_dir.rstrip('/'))}"
         for theme in themes:
             suffix = f"_{theme}" if args.theme == "both" else ""
             out_path = f"flight{n}{suffix}.png"
-            plot_flight(result["t"], result["pressure_pa"],
-                        result["baro_alt"], result["filtered_alt"],
-                        result["filtered_vel"], result["g_b_hist"],
-                        result["accel_vert_hist"], result["vote_hist"],
-                        apogee_idx, theme, out_path,
-                        state_transitions=result["state_transitions"],
-                        computed_apogee_idx=result["computed_apogee_idx"],
-                        accel_body=result["accel_body"],
-                        gyro_body=result["gyro_body"],
-                        gated_hist=result["gated_hist"],
-                        title=title)
+            plot_raw_flight(sliced, transitions, theme, out_path, title=title)
 
 
 def main():
@@ -1060,29 +1062,12 @@ def main():
              "state_audit). Produces one plot per flight segmented on "
              "ARMED→BOOST transitions.")
     parser.add_argument(
-        "--dt", type=float, default=0.02,
-        help="Resampling period in seconds for real flight data (default 0.02)")
-    parser.add_argument(
         "--pre-boost", type=float, default=10.0, dest="pre_boost",
         help="Seconds of pre-boost data to include per flight (default 10)")
     parser.add_argument(
-        "--cal", type=float, default=3.0,
-        help="Seconds of calibration window before BOOST (default 3)")
-    parser.add_argument(
-        "--post-main", type=float, default=5.0, dest="post_main",
-        help="Seconds of data to keep after the MAIN transition "
-             "(default 5) — trims the long post-parachute tail")
-    parser.add_argument("--q-alt", type=float, default=0.1, dest="q_alt",
-                        help="KF process noise on altitude (default 0.1)")
-    parser.add_argument("--q-vel", type=float, default=0.5, dest="q_vel",
-                        help="KF process noise on velocity (default 0.5, "
-                             "matches Kconfig)")
-    parser.add_argument("--r-meas", type=float, default=4.0, dest="r_meas",
-                        help="KF measurement noise variance "
-                             "(default 4.0, matches Kconfig)")
-    parser.add_argument("--debounce", type=int, default=3,
-                        help="Apogee debounce ticks (default 3, "
-                             "matches Kconfig)")
+        "--post-end", type=float, default=2.0, dest="post_end",
+        help="Seconds of data to keep after the flight close-out "
+             "transition (default 2)")
     args = parser.parse_args()
 
     if args.flight:
