@@ -83,6 +83,7 @@ static inline void _sm_update(const struct sm_inputs *in,
  *----------------------------------------------------------*/
 static enum sm_state current_state = SM_IDLE; /**< Active flight state. */
 static struct sm_thresholds th; /**< Loaded threshold configuration. */
+static struct sm_inputs last_inputs; /**< Last inputs evaluated by _sm_update(). */
 
 static struct k_spinlock err_lock; /**< Spinlock protecting error callback invocation. */
 static struct sm_error_handling_args err_hdl = {
@@ -218,6 +219,7 @@ void sm_init(const struct sm_thresholds *cfg,
 void sm_deinit(void)
 {
 	memset(&th, 0, sizeof(th));
+	memset(&last_inputs, 0, sizeof(last_inputs));
 	stop_timers();
 	SM_EVENT("state machine reset");
 	current_state = SM_IDLE;
@@ -439,9 +441,11 @@ void sm_update(const struct sm_inputs *inputs)
 
 	_sm_update(&filtered_inputs, previous_altitude);
 	previous_altitude = filtered_inputs.altitude;
+	last_inputs = filtered_inputs;
 #else
 	_sm_update(inputs, previous_altitude);
 	previous_altitude = inputs->altitude;
+	last_inputs = *inputs;
 #endif /* CONFIG_FILTER */
 }
 
@@ -453,6 +457,12 @@ void sm_update(const struct sm_inputs *inputs)
 enum sm_state sm_get_state(void)
 {
 	return current_state;
+}
+
+/* sm_get_inputs – see state.h */
+void sm_get_inputs(struct sm_inputs *out)
+{
+	*out = last_inputs;
 }
 
 /* sm_state_str – see simple.h */

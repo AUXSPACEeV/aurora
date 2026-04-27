@@ -88,6 +88,21 @@ void sm_update(const struct sm_inputs *inputs);
  */
 enum sm_state sm_get_state(void);
 
+/**
+ * @brief Retrieve the most recent inputs the state machine evaluated.
+ *
+ * When CONFIG_FILTER is enabled, ``altitude`` and ``velocity`` are the
+ * Kalman-filtered values; the remaining fields are passed through from
+ * the last sm_update() call.  When CONFIG_FILTER is disabled, all
+ * fields are the raw sm_update() inputs (and ``velocity`` is whatever
+ * the caller set, typically 0).
+ *
+ * Before the first sm_update() call the returned struct is zeroed.
+ *
+ * @param out Destination struct, must be non-NULL.
+ */
+void sm_get_inputs(struct sm_inputs *out);
+
 /** @} */
 
 #endif /* APP_LIB_STATE_H_ */

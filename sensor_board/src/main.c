@@ -459,15 +459,18 @@ void state_machine_task(void *, void *, void *)
 
 #if defined(CONFIG_DATA_LOGGER)
 		{
+			struct sm_inputs sm_in;
+			sm_get_inputs(&sm_in);
+
 			uint64_t ts = k_ticks_to_ns_floor64(k_uptime_ticks());
 			struct datapoint kin_dp = {
 				.timestamp_ns = ts,
 				.type = AURORA_DATA_SM_KINEMATICS,
 				.channel_count = 3,
 			};
-			sensor_value_from_double(&kin_dp.channels[0], inputs.acceleration);
-			sensor_value_from_double(&kin_dp.channels[1], inputs.accel_vert);
-			sensor_value_from_double(&kin_dp.channels[2], inputs.velocity);
+			sensor_value_from_double(&kin_dp.channels[0], sm_in.acceleration);
+			sensor_value_from_double(&kin_dp.channels[1], sm_in.accel_vert);
+			sensor_value_from_double(&kin_dp.channels[2], sm_in.velocity);
 			log_enqueue(&kin_dp);
 
 			struct datapoint pose_dp = {
@@ -475,8 +478,8 @@ void state_machine_task(void *, void *, void *)
 				.type = AURORA_DATA_SM_POSE,
 				.channel_count = 2,
 			};
-			sensor_value_from_double(&pose_dp.channels[0], inputs.orientation);
-			sensor_value_from_double(&pose_dp.channels[1], inputs.altitude);
+			sensor_value_from_double(&pose_dp.channels[0], sm_in.orientation);
+			sensor_value_from_double(&pose_dp.channels[1], sm_in.altitude);
 			log_enqueue(&pose_dp);
 		}
 #endif /* CONFIG_DATA_LOGGER */
