@@ -40,7 +40,7 @@ This issue has been fixed in `f788cd50cffa705b049117e93fb963d218b2784d`
 ````
 
 ````{note}
-Voting was also disabled in the graphs, since incoming data was would have
+Voting was also disabled in the graphs, since the faulty data would have
 shown the votes as always triggered.
 ````
 
