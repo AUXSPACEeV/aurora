@@ -1020,23 +1020,43 @@ ZTEST(data_logger_influx, test_influx_multiple_lines)
 
 #if defined(CONFIG_DATA_LOGGER_BIN) && defined(CONFIG_DATA_LOGGER_CONVERT_CSV)
 
-#define RT_BIN_PATH CONFIG_DATA_LOGGER_BASE_PATH "/rt_0.bin"
+#include <zephyr/storage/flash_map.h>
+#include <zephyr/devicetree.h>
+
 #define RT_CSV_PATH CONFIG_DATA_LOGGER_BASE_PATH "/rt.csv"
+#define RT_FLIGHT_LOG_ID DT_FIXED_PARTITION_ID(DT_CHOSEN(auxspace_flight_log))
 
 static struct data_logger rt_logger;
 
+/* Erase the flight_log partition so each test starts on virgin (0xFF)
+ * flash; otherwise leftover frames from a prior test would be picked up
+ * by data_logger_convert via the flight_id mismatch boundary, but only
+ * after at least one valid frame — which is fragile. Wipe to be safe.
+ */
 static void rt_before(void *fixture)
 {
 	(void)fixture;
 	memset(&rt_logger, 0, sizeof(rt_logger));
-	fs_unlink(RT_BIN_PATH);
 	fs_unlink(RT_CSV_PATH);
+
+	const struct flash_area *fa;
+
+	if (flash_area_open(RT_FLIGHT_LOG_ID, &fa) == 0) {
+		(void)flash_area_erase(fa, 0, fa->fa_size);
+		flash_area_close(fa);
+	}
 }
 
 ZTEST_SUITE(data_logger_convert, NULL, NULL, rt_before, NULL, NULL);
 
 /**
- * @brief Write binary datapoints, then convert to CSV and verify content.
+ * @brief Write datapoints to the raw-flash binary log, convert to CSV,
+ *        and verify lossless reconstruction of the channels.
+ *
+ * Per-record timestamps are stored as a µs delta from each frame's
+ * base_ts_ns; sub-µs precision is intentionally dropped, so we don't
+ * assert on the exact reconstructed timestamp here. The channel
+ * sensor_value pairs are preserved bit-exactly.
  */
 ZTEST(data_logger_convert, test_bin_to_csv_roundtrip)
 {
@@ -1072,8 +1092,7 @@ ZTEST(data_logger_convert, test_bin_to_csv_roundtrip)
 	zassert_ok(data_logger_write(&rt_logger, &dp2), NULL);
 	zassert_ok(data_logger_close(&rt_logger), NULL);
 
-	zassert_ok(data_logger_convert(RT_BIN_PATH,
-				       &data_logger_csv_formatter,
+	zassert_ok(data_logger_convert(&data_logger_csv_formatter,
 				       RT_CSV_PATH),
 		   "convert must succeed");
 
@@ -1082,22 +1101,29 @@ ZTEST(data_logger_convert, test_bin_to_csv_roundtrip)
 	zassert_true(n > 0, "CSV output must not be empty");
 	zassert_not_null(strstr(buf, "timestamp_ns"),
 			 "Converted CSV must include a header row");
-	zassert_not_null(strstr(buf, "1234"), NULL);
 	zassert_not_null(strstr(buf, "baro"), NULL);
 	zassert_not_null(strstr(buf, "25.500000"), NULL);
 	zassert_not_null(strstr(buf, "101500.000000"), NULL);
-	zassert_not_null(strstr(buf, "2345"), NULL);
 	zassert_not_null(strstr(buf, "accel"), NULL);
 	zassert_not_null(strstr(buf, "9.810000"), NULL);
 }
 
-ZTEST(data_logger_convert, test_convert_missing_file)
+/**
+ * @brief Conversion of a freshly-erased partition produces a header-only
+ *        CSV (no records) and returns success.
+ */
+ZTEST(data_logger_convert, test_convert_empty_partition)
 {
-	zassert_not_equal(data_logger_convert(CONFIG_DATA_LOGGER_BASE_PATH
-					      "/does_not_exist.bin",
-					      &data_logger_csv_formatter,
-					      RT_CSV_PATH),
-			  0, "convert on missing file must fail");
+	char buf[256];
+
+	zassert_ok(data_logger_convert(&data_logger_csv_formatter,
+				       RT_CSV_PATH),
+		   "convert on empty partition must succeed");
+
+	int n = read_file(RT_CSV_PATH, buf, sizeof(buf));
+
+	zassert_true(n > 0, "CSV must at least carry the header row");
+	zassert_not_null(strstr(buf, "timestamp_ns"), NULL);
 }
 
 #endif /* CONFIG_DATA_LOGGER_BIN && CONFIG_DATA_LOGGER_CONVERT_CSV */

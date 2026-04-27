@@ -285,52 +285,76 @@ extern const struct data_logger_formatter data_logger_mock_formatter;
  * @ingroup lib_data_logger
  * @{
  *
- * The binary file starts with an @ref aurora_bin_header followed by a
- * dense stream of fixed-size @ref aurora_bin_record entries.  All
- * multi-byte integers are native little-endian.
+ * The flight-time log is written to a raw flash partition (no filesystem).
+ * The partition is laid out as a sequence of fixed-size @b frames, each
+ * sized to one flash erase block (@ref CONFIG_DATA_LOGGER_BIN_FRAME_SIZE,
+ * typically 4096 B).  Each frame begins with an @ref aurora_bin_frame_header
+ * followed by densely packed @ref aurora_bin_record entries; any unused
+ * bytes at the tail of a partially-filled frame remain in the erased
+ * (0xFF) state.
+ *
+ * Records preserve the @c sensor_value channels @b losslessly so the host
+ * can re-run filters and the state machine bit-exactly.  Per-record
+ * timestamps are stored as a @c uint32_t µs delta from the frame's
+ * @c base_ts_ns; nanosecond precision below 1 µs is dropped (the upstream
+ * tick clock is already coarser than 1 µs on every supported target).
+ *
+ * All multi-byte integers are native little-endian.
  */
 
-/** 8-byte magic string at the start of every binary log. */
-#define AURORA_BIN_MAGIC "AURLOG\0"
+/** 4-byte magic string at the start of every frame. */
+#define AURORA_BIN_FRAME_MAGIC "AURF"
 
-/** Current binary format version. */
-#define AURORA_BIN_VERSION 1U
+/** Current binary format version (bumped from 1 → 2 for the frame layout). */
+#define AURORA_BIN_VERSION 2U
 
-/** File header (16 bytes). */
-struct aurora_bin_header {
-	char     magic[8];     /**< @ref AURORA_BIN_MAGIC */
-	uint16_t version;      /**< @ref AURORA_BIN_VERSION */
-	uint16_t record_size;  /**< sizeof(struct aurora_bin_record) */
-	uint32_t reserved;     /**< Zero (reserved for future use). */
+/** Per-frame header (32 bytes). */
+struct aurora_bin_frame_header {
+	char     magic[4];        /**< @ref AURORA_BIN_FRAME_MAGIC */
+	uint16_t version;         /**< @ref AURORA_BIN_VERSION */
+	uint16_t reserved0;       /**< Zero */
+	uint32_t seq;             /**< Monotonic, starts at 0 each flight */
+	uint64_t flight_id;       /**< Unique per flight (uptime at start) */
+	uint64_t base_ts_ns;      /**< Absolute reference for record deltas */
+	uint32_t reserved1;       /**< Zero (pad to 32 B / record alignment) */
 } __packed;
 
-/** Per-datapoint record (40 bytes). */
+/** Per-datapoint record (32 bytes). Channels are stored losslessly. */
 struct aurora_bin_record {
-	uint64_t timestamp_ns;  /**< ns since launch */
-	uint8_t  type;          /**< @ref aurora_data */
-	uint8_t  channel_count; /**< Valid channels in @ref channels */
-	uint8_t  _pad[6];       /**< Zero */
+	uint8_t  type;            /**< @ref aurora_data; 0xFF marks end-of-frame */
+	uint8_t  channel_count;   /**< Valid channels in @ref channels */
+	uint16_t reserved;        /**< Zero */
+	uint32_t ts_delta_us;     /**< µs since this frame's base_ts_ns */
 	struct {
-		int32_t val1;
-		int32_t val2;
+		int32_t val1;     /**< sensor_value.val1 (integer part) */
+		int32_t val2;     /**< sensor_value.val2 (µ-fractional part) */
 	} channels[DP_MAX_CHANNELS];
 } __packed;
 
+BUILD_ASSERT(sizeof(struct aurora_bin_frame_header) == 32,
+	     "frame header size changed — bump AURORA_BIN_VERSION");
+BUILD_ASSERT(sizeof(struct aurora_bin_record) == 32,
+	     "record size changed — bump AURORA_BIN_VERSION");
+
 /**
- * @brief Convert a binary log file to a text formatter output.
+ * @brief Convert the live flight log on raw flash to a text formatter output.
  *
- * Reads @p bin_path in small chunks and re-emits every record through
- * @p out_fmt at @p out_path.  The binary file is left intact.  The
- * caller is responsible for not running conversion concurrently with
- * logging to the same binary file.
+ * Walks frames in the configured @c auxspace,flight-log partition starting
+ * at offset 0; for each valid frame reconstructs the original
+ * @ref datapoint stream and feeds it through @p out_fmt at @p out_path.
+ * Reading stops at the first frame whose magic is invalid (== unwritten
+ * flash) or whose @c flight_id differs from the first frame's — that's
+ * how the boundary between the current flight and any leftover data from
+ * a previous flight is detected.
  *
- * @param bin_path  Path to the binary log file to convert.
+ * The flash partition is left intact.  The caller is responsible for not
+ * running conversion concurrently with active logging.
+ *
  * @param out_fmt   Target formatter (e.g. @ref data_logger_csv_formatter).
  * @param out_path  Destination path for the converted output.
  * @retval 0 on success, negative errno on failure.
  */
-int data_logger_convert(const char *bin_path,
-			const struct data_logger_formatter *out_fmt,
+int data_logger_convert(const struct data_logger_formatter *out_fmt,
 			const char *out_path);
 
 /** @} */

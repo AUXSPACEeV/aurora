@@ -3,13 +3,13 @@
 
 config DATA_LOGGER
 	bool "Generic telemetry data logger"
-	depends on FILE_SYSTEM
 	help
 	  Enable the format-agnostic data logger for flight telemetry.
 	  During flight (ARMED→LANDED), datapoints are appended to a
-	  compact fixed-size binary file.  On transition to IDLE, LANDED
-	  or ERROR the binary file is streamed through one or more
-	  conversion targets (CSV, InfluxDB line protocol).
+	  raw flash partition (see DATA_LOGGER_BIN).  On transition to
+	  IDLE, LANDED or ERROR the binary log is streamed through one
+	  or more conversion targets (CSV, InfluxDB line protocol)
+	  written to the filesystem.
 
 if DATA_LOGGER
 
@@ -18,46 +18,51 @@ module-str = data_logger
 source "subsys/logging/Kconfig.template.log_config"
 
 config DATA_LOGGER_BIN
-	bool "Build fixed-size binary formatter (flight-time)"
+	bool "Build raw-flash binary formatter (flight-time)"
 	default y
+	select FLASH
+	select FLASH_MAP
 	help
-	  Build the binary formatter and the streaming converter.  Each
-	  datapoint becomes a 40-byte little-endian record prefixed by a
-	  16-byte file header.  Converted post-flight via
-	  data_logger_convert().
+	  Build the live flight-time binary log writer and the post-flight
+	  converter.  The log is written directly to the fixed flash
+	  partition selected by the device-tree chosen entry
+	  'auxspace,flight-log' — no filesystem in the live path.  Records
+	  preserve the sensor_value channels losslessly; per-flight framing
+	  carries a flight_id so the converter can find the boundary between
+	  the current flight and any leftover data on the partition.
 
 if DATA_LOGGER_BIN
 
-config DATA_LOGGER_BIN_BUF_SIZE
-	int "Per-buffer size for binary log staging (bytes)"
+config DATA_LOGGER_BIN_FRAME_SIZE
+	int "Binary log frame size (bytes)"
 	default 4096
 	help
-	  Size of each RAM staging buffer.  Records are accumulated in one
-	  of CONFIG_DATA_LOGGER_BIN_BUF_COUNT buffers and flushed to the
-	  underlying filesystem with a single fs_write() when the buffer
-	  fills.  Pick a multiple of the block-driver sector size (512 B for
-	  FAT, typically 4096 B for littlefs / NOR) so each fs_write lands
-	  on a sector boundary.
+	  Size of one on-flash frame.  Each frame begins with a 32-byte
+	  header followed by densely packed 32-byte records; the writer
+	  thread issues one flash_area_erase() + flash_area_write() per
+	  frame.  Set this to the flash erase block size of the underlying
+	  partition (typically 4096 for QSPI NOR).  Must be a multiple of
+	  32 bytes and the flight_log partition size must be a multiple of
+	  it.
 
 config DATA_LOGGER_BIN_BUF_COUNT
 	int "Number of binary log staging buffers"
 	default 3
 	range 2 8
 	help
-	  2 (double-buffer) is the minimum: producer fills one while the
-	  writer drains the other.  3 (triple-buffer) gives one extra buffer
-	  of slack to absorb SD-card erase pauses without backpressure on
-	  the sensor pipeline.  More buffers cost more RAM with diminishing
-	  returns.
+	  2 (double-buffer) is the minimum: the producer fills one while
+	  the writer erases+programs the other.  3 (triple-buffer) gives
+	  one extra buffer of slack to absorb the per-sector erase latency
+	  (~25 ms on QSPI NOR) without backpressure on the sensor pipeline.
+	  More buffers cost more RAM with diminishing returns.
 
 config DATA_LOGGER_BIN_BUF_ALIGN
 	int "Alignment of binary log staging buffers (bytes)"
 	default 32
 	help
-	  Buffers are aligned to this many bytes so the underlying block
-	  driver can DMA into them without bounce-buffering.  32 covers the
-	  cache-line size of every supported MCU; bump it if your SD/NAND
-	  driver requires a stricter alignment.
+	  Staging buffers are aligned to this many bytes so the underlying
+	  flash driver can DMA out of them without bounce-buffering.  32
+	  covers the cache-line size of every supported MCU.
 
 config DATA_LOGGER_BIN_WRITER_STACK_SIZE
 	int "Binary log writer thread stack size (bytes)"
@@ -69,7 +74,7 @@ config DATA_LOGGER_BIN_WRITER_PRIO
 	help
 	  Should be a lower priority (higher number) than the upstream
 	  logger thread that produces records, but high enough that the
-	  filesystem is serviced promptly.
+	  flash partition is serviced promptly.
 
 config DATA_LOGGER_BIN_PRODUCER_TIMEOUT_MS
 	int "Max time the producer waits for a free staging buffer (ms)"
@@ -97,15 +102,17 @@ config DATA_LOGGER_MOCK
 config DATA_LOGGER_CONVERT_CSV
 	bool "Enable CSV conversion target"
 	default y
+	depends on FILE_SYSTEM
 	help
 	  Build the CSV formatter so data_logger_convert() can emit a
-	  header-prefixed UTF-8 CSV file from a binary log.
+	  header-prefixed UTF-8 CSV file from the binary log.
 
 config DATA_LOGGER_CONVERT_INFLUX
 	bool "Enable InfluxDB Line Protocol conversion target"
+	depends on FILE_SYSTEM
 	help
 	  Build the InfluxDB line-protocol formatter so data_logger_convert()
-	  can emit one InfluxDB line per datapoint from a binary log.
+	  can emit one InfluxDB line per datapoint from the binary log.
 
 config DATA_LOGGER_BASE_PATH
 	string "Output directory for data logger files"

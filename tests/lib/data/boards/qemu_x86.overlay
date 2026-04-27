@@ -2,9 +2,9 @@
  * Copyright (c) 2026 Auxspace e.V.
  * SPDX-License-Identifier: Apache-2.0
  *
- * RAM disk (64 KiB) with an auto-mounted FatFS volume for the data
- * logger formatter tests.  Zephyr's fstab init hook mounts the volume
- * before any test suite runs, so no explicit fs_mount() is needed.
+ * RAM disk + auto-mounted FatFS for the post-flight conversion targets,
+ * plus a small fixed partition on the qemu_x86 sim-flash for the live
+ * flight log (raw flash, no filesystem).
  */
 
 / {
@@ -23,6 +23,29 @@
 			mount-point = "/RAM:";
 			automount;
 			disk-access;
+		};
+	};
+
+	chosen {
+		auxspace,flight-log = &flight_log;
+	};
+};
+
+/*
+ * qemu_x86's sim_flash is 1 MiB at offset 0 with 1 KiB erase blocks. Use
+ * a small dedicated 64 KiB partition for the test flight log; pair this
+ * with CONFIG_DATA_LOGGER_BIN_FRAME_SIZE=1024 in prj.conf so each
+ * frame == one erase block.
+ */
+&flash_sim0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells  = <1>;
+
+		flight_log: partition@0 {
+			label = "flight_log";
+			reg = <0x00000000 DT_SIZE_K(64)>;
 		};
 	};
 };

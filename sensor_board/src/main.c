@@ -32,9 +32,11 @@
 #include <aurora/drivers/pyro.h>
 #endif /* CONFIG_PYRO */
 
-#if defined(CONFIG_DATA_LOGGER)
+#if defined(CONFIG_DATA_LOGGER_BIN)
+#include <stdio.h>
+#include <zephyr/fs/fs.h>
 #include <aurora/lib/data_logger.h>
-#endif /* CONFIG_DATA_LOGGER */
+#endif /* CONFIG_DATA_LOGGER_BIN */
 
 #if defined(CONFIG_AURORA_NOTIFY)
 #include <aurora/lib/notify.h>
@@ -75,7 +77,7 @@ ZBUS_MSG_SUBSCRIBER_DEFINE(sm_sub);
 ZBUS_CHAN_ADD_OBS(imu_data_chan, sm_sub, 1);
 ZBUS_CHAN_ADD_OBS(baro_data_chan, sm_sub, 1);
 
-#if defined(CONFIG_DATA_LOGGER)
+#if defined(CONFIG_DATA_LOGGER_BIN)
 static struct data_logger sm_logger;
 static atomic_t sm_logger_live = ATOMIC_INIT(0);
 
@@ -103,12 +105,6 @@ K_SEM_DEFINE(convert_idle, 1, 1);
  * closed binary file.
  */
 K_SEM_DEFINE(convert_request, 0, 1);
-
-/* Binary path captured at logger close, read by the converter thread.
- * Single-producer (SM) / single-consumer (converter); the request sem
- * acts as the handoff fence.
- */
-static char convert_bin_path[DATA_LOGGER_PATH_MAX];
 
 static inline void log_enqueue(const struct datapoint *dp)
 {
@@ -146,26 +142,40 @@ static void logger_task(void *, void *, void *)
 K_THREAD_DEFINE(logger_thread, 2048, logger_task, NULL, NULL, NULL,
 		8, 0, 0);
 
-static void swap_extension(char *dst, size_t dst_sz, const char *src,
-			   const char *new_ext)
+/* Pick the next free /<base>/flight_<N>.<probe_ext> on the filesystem,
+ * writing "/<base>/flight_<N>" (without extension) into @p out. The
+ * converter then appends each formatter's file_ext. Falls back to
+ * index 0 (overwrites) if every slot is taken.
+ */
+static void pick_convert_out_base(char *out, size_t out_sz)
 {
-	strncpy(dst, src, dst_sz - 1);
-	dst[dst_sz - 1] = '\0';
+#if defined(CONFIG_DATA_LOGGER_CONVERT_CSV)
+	const char *probe_ext = data_logger_csv_formatter.file_ext;
+#elif defined(CONFIG_DATA_LOGGER_CONVERT_INFLUX)
+	const char *probe_ext = data_logger_influx_formatter.file_ext;
+#else
+	const char *probe_ext = "out";
+#endif
 
-	char *dot = strrchr(dst, '.');
-	char *slash = strrchr(dst, '/');
+	for (int i = 0; i <= CONFIG_DATA_LOGGER_MAX_FILES; i++) {
+		char probe[DATA_LOGGER_PATH_MAX];
+		struct fs_dirent entry;
 
-	if (dot != NULL && (slash == NULL || dot > slash)) {
-		*dot = '\0';
+		int n = snprintf(probe, sizeof(probe), "%s/flight_%d.%s",
+				 CONFIG_DATA_LOGGER_BASE_PATH, i, probe_ext);
+		if (n < 0 || n >= (int)sizeof(probe)) {
+			break;
+		}
+		if (fs_stat(probe, &entry) == -ENOENT) {
+			(void)snprintf(out, out_sz, "%s/flight_%d",
+				       CONFIG_DATA_LOGGER_BASE_PATH, i);
+			return;
+		}
 	}
 
-	size_t len = strlen(dst);
-
-	if (len + 1 + strlen(new_ext) + 1 > dst_sz) {
-		return;
-	}
-	dst[len] = '.';
-	strcpy(dst + len + 1, new_ext);
+	LOG_WRN("convert: out of /flight_N slots — overwriting flight_0");
+	(void)snprintf(out, out_sz, "%s/flight_0",
+		       CONFIG_DATA_LOGGER_BASE_PATH);
 }
 
 static void converter_task(void *, void *, void *)
@@ -174,26 +184,24 @@ static void converter_task(void *, void *, void *)
 		k_sem_take(&convert_request, K_FOREVER);
 		k_sem_take(&convert_idle, K_FOREVER);
 
-		char in_path[DATA_LOGGER_PATH_MAX];
+		char base[DATA_LOGGER_PATH_MAX];
 
-		strncpy(in_path, convert_bin_path, sizeof(in_path) - 1);
-		in_path[sizeof(in_path) - 1] = '\0';
+		pick_convert_out_base(base, sizeof(base));
 
 #if defined(CONFIG_DATA_LOGGER_CONVERT_CSV)
 		{
 			char out_path[DATA_LOGGER_PATH_MAX];
 
-			swap_extension(out_path, sizeof(out_path), in_path,
-				       data_logger_csv_formatter.file_ext);
-			int rc = data_logger_convert(in_path,
-						     &data_logger_csv_formatter,
+			(void)snprintf(out_path, sizeof(out_path), "%s.%s",
+				       base, data_logger_csv_formatter.file_ext);
+			int rc = data_logger_convert(&data_logger_csv_formatter,
 						     out_path);
 
 			if (rc != 0) {
-				LOG_ERR("CSV conversion of %s failed (%d)",
-					in_path, rc);
+				LOG_ERR("CSV conversion → %s failed (%d)",
+					out_path, rc);
 			} else {
-				LOG_INF("converted %s → %s", in_path, out_path);
+				LOG_INF("converted flight_log → %s", out_path);
 			}
 		}
 #endif /* CONFIG_DATA_LOGGER_CONVERT_CSV */
@@ -202,17 +210,17 @@ static void converter_task(void *, void *, void *)
 		{
 			char out_path[DATA_LOGGER_PATH_MAX];
 
-			swap_extension(out_path, sizeof(out_path), in_path,
+			(void)snprintf(out_path, sizeof(out_path), "%s.%s",
+				       base,
 				       data_logger_influx_formatter.file_ext);
-			int rc = data_logger_convert(in_path,
-						     &data_logger_influx_formatter,
+			int rc = data_logger_convert(&data_logger_influx_formatter,
 						     out_path);
 
 			if (rc != 0) {
-				LOG_ERR("Influx conversion of %s failed (%d)",
-					in_path, rc);
+				LOG_ERR("Influx conversion → %s failed (%d)",
+					out_path, rc);
 			} else {
-				LOG_INF("converted %s → %s", in_path, out_path);
+				LOG_INF("converted flight_log → %s", out_path);
 			}
 		}
 #endif /* CONFIG_DATA_LOGGER_CONVERT_INFLUX */
@@ -268,16 +276,12 @@ static void log_end_flight(void)
 	atomic_set(&sm_logger_live, 0);
 
 	(void)data_logger_stop(&sm_logger);
-
-	strncpy(convert_bin_path, sm_logger.path, sizeof(convert_bin_path) - 1);
-	convert_bin_path[sizeof(convert_bin_path) - 1] = '\0';
-
 	(void)data_logger_close(&sm_logger);
 	data_logger_set_default(NULL);
 
 	k_sem_give(&convert_request);
 }
-#endif /* CONFIG_DATA_LOGGER */
+#endif /* CONFIG_DATA_LOGGER_BIN */
 
 #if defined(CONFIG_AURORA_POWERFAIL)
 static void powerfail_assert()
@@ -580,7 +584,7 @@ void state_machine_task(void *, void *, void *)
 					last_imu_ns = now_ns;
 				}
 #endif /* CONFIG_IMU */
-#if defined(CONFIG_DATA_LOGGER)
+#if defined(CONFIG_DATA_LOGGER_BIN)
 				uint64_t ts = k_ticks_to_ns_floor64(k_uptime_ticks());
 				struct datapoint dp = {
 					.timestamp_ns = ts,
@@ -599,9 +603,9 @@ void state_machine_task(void *, void *, void *)
 				dp.channels[1] = msg_buf.imu.gyro[1];
 				dp.channels[2] = msg_buf.imu.gyro[2];
 				log_enqueue(&dp);
-#endif /* CONFIG_DATA_LOGGER */
+#endif /* CONFIG_DATA_LOGGER_BIN */
 			} else if (data_chan == &baro_data_chan) {
-#if defined(CONFIG_DATA_LOGGER)
+#if defined(CONFIG_DATA_LOGGER_BIN)
 				uint64_t ts = k_ticks_to_ns_floor64(k_uptime_ticks());
 				struct datapoint dp = {
 					.timestamp_ns = ts,
@@ -610,7 +614,7 @@ void state_machine_task(void *, void *, void *)
 					.channels = {msg_buf.baro.temperature, msg_buf.baro.pressure},
 				};
 				log_enqueue(&dp);
-#endif /* CONFIG_DATA_LOGGER */
+#endif /* CONFIG_DATA_LOGGER_BIN */
 				if (baro_sensor_value_to_altitude(&msg_buf.baro.pressure, &altitude) == 0) {
 					baro_ready = true;
 				}
@@ -634,7 +638,7 @@ void state_machine_task(void *, void *, void *)
 		state = sm_get_state();
 		LOG_DBG("STATE = %d", state);
 
-#if defined(CONFIG_DATA_LOGGER)
+#if defined(CONFIG_DATA_LOGGER_BIN)
 		{
 			struct sm_inputs sm_in;
 			sm_get_inputs(&sm_in);
@@ -668,7 +672,7 @@ void state_machine_task(void *, void *, void *)
 			sensor_value_from_double(&or_dp.channels[2], sm_in.orientation[2]);
 			log_enqueue(&or_dp);
 		}
-#endif /* CONFIG_DATA_LOGGER */
+#endif /* CONFIG_DATA_LOGGER_BIN */
 
 		if (state != prev_state) {
 #if defined(CONFIG_AURORA_FAKE_SENSORS)
@@ -690,7 +694,7 @@ void state_machine_task(void *, void *, void *)
 				orientation[2] = 0.0;
 			}
 #endif /* CONFIG_IMU */
-#if defined(CONFIG_DATA_LOGGER)
+#if defined(CONFIG_DATA_LOGGER_BIN)
 			/* Flight-time logging lifecycle:
 			 *  - begin on IDLE→ARMED (opens a fresh binary file),
 			 *  - end on exit to IDLE/LANDED/ERROR (kicks converter).
@@ -701,7 +705,7 @@ void state_machine_task(void *, void *, void *)
 				   state == SM_ERROR) {
 				log_end_flight();
 			}
-#endif /* CONFIG_DATA_LOGGER */
+#endif /* CONFIG_DATA_LOGGER_BIN */
 			prev_state = state;
 		}
 
