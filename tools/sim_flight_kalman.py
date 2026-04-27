@@ -1004,6 +1004,39 @@ def run_simulation(args):
                     title="AURORA Kalman Filter - Simulated 500 m Rocket Flight")
 
 
+def trim_flight_log(influx_path, windows_ns, out_dir):
+    """Write a trimmed copy of ``influx_path`` containing only lines whose
+    nanosecond timestamp falls inside any of ``windows_ns`` (a list of
+    ``(start_ns, end_ns)`` tuples).
+
+    Influx lines have the timestamp as the final whitespace-separated token.
+    Lines whose timestamp cannot be parsed are kept verbatim so that header
+    or comment lines pass through unchanged.
+    """
+    def in_any_window(ts):
+        return any(s <= ts <= e for s, e in windows_ns)
+
+    out_influx = os.path.join(out_dir, "flights_trimmed.influx")
+
+    kept = total = 0
+    with open(influx_path) as fin, open(out_influx, "w") as fout:
+        for line in fin:
+            total += 1
+            stripped = line.strip()
+            if not stripped:
+                fout.write(line)
+                continue
+            try:
+                ts = int(stripped.rsplit(" ", 1)[1])
+            except (ValueError, IndexError):
+                fout.write(line)
+                continue
+            if in_any_window(ts):
+                fout.write(line)
+                kept += 1
+    print(f"Trimmed influx: kept {kept}/{total} lines -> {out_influx}")
+
+
 def run_real_flight(args):
     flight_dir = args.flight
     influx_path = os.path.join(flight_dir, "flights.influx")
@@ -1026,6 +1059,19 @@ def run_real_flight(args):
     for n, (b, e) in enumerate(flights, start=1):
         end_str = f"{e} ns" if e is not None else "end-of-log"
         print(f"  flight {n}: BOOST @ {b} ns → close @ {end_str}")
+
+    if args.trim is not None:
+        default_duration_s = 120.0
+        pad_ns = int(args.trim * 1000000000)
+        windows_ns = []
+        for boost_ns, end_ns in flights:
+            window_start_ns = boost_ns - int(args.pre_boost * 1000000000)
+            raw_end_ns = (end_ns if end_ns is not None
+                          else boost_ns + int(default_duration_s * 1000000000))
+            window_end_ns = raw_end_ns + int(args.post_end * 1000000000)
+            windows_ns.append((window_start_ns - pad_ns,
+                               window_end_ns + pad_ns))
+        trim_flight_log(influx_path, windows_ns, flight_dir)
 
     themes = ["light", "dark"] if args.theme == "both" else [args.theme]
 
@@ -1068,6 +1114,12 @@ def main():
         "--post-end", type=float, default=2.0, dest="post_end",
         help="Seconds of data to keep after the flight close-out "
              "transition (default 2)")
+    parser.add_argument(
+        "--trim", type=float, nargs="?", const=10.0, default=None,
+        metavar="SECONDS",
+        help="Write a trimmed copy of flights.influx covering each "
+             "flight's plot window expanded by SECONDS on each side "
+             "(default 10 s when --trim is given without a value)")
     args = parser.parse_args()
 
     if args.flight:
