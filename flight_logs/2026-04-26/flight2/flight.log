@@ -1,0 +1,51 @@
+[00:00:00.065,000] <inf> [  0 main] LSM6DSO: Initialize device lsm6dso32@6b
+[00:00:00.066,000] <inf> [  0 main] LSM6DSO: chip id 0x6c
+*** Booting AURORA 3638fc57328a ***
+[00:00:00.156,000] <inf> [  0 main] main: Auxspace AURORA 0.2.1
+[00:00:00.186,000] <inf> [  0 main] powerfail: powerfail mitigation ready on gpio@60004000 pin 0
+[00:00:00.203,000] <inf> [  6 state_machine] state_audit: State machine audit file created: /MMC:/state/audit.11
+[00:00:00.207,000] <inf> [  6 state_machine] state_audit: 186600000    event        IDLE         state machine initialized
+[00:00:00.215,000] <inf> [  7 imu_polling] main: IMU ready
+[00:00:00.216,000] <inf> [  7 baro_polling] main: Baro ready
+[00:02:33.553,000] <inf> [  6 state_machine] state_audit: 153550500000 transition   IDLE         ARMED
+[00:02:33.560,000] <inf> [  6 state_machine] main: Armed pyro0 channel 0
+[00:02:33.560,000] <inf> [  6 state_machine] main: Armed pyro0 channel 1
+[00:02:34.452,000] <inf> [  6 state_machine] state_audit: 154449900000 event        ARMED        orientation below threshold
+[00:02:34.462,000] <inf> [  6 state_machine] state_audit: 154461700000 transition   ARMED        IDLE
+[00:02:34.466,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 0
+[00:02:34.466,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 1
+[00:03:13.789,000] <inf> [  6 state_machine] state_audit: 193786900000 transition   IDLE         ARMED
+[00:03:13.794,000] <inf> [  6 state_machine] main: Armed pyro0 channel 0
+[00:03:13.794,000] <inf> [  6 state_machine] main: Armed pyro0 channel 1
+[00:03:15.831,000] <inf> [  6 state_machine] attitude: Attitude calibrated: n=200 g_mag=9.903 g_b=[0.00 -1.00 0.00]
+[00:03:16.162,000] <inf> [  6 state_machine] state_audit: 196160100000 event        ARMED        orientation below threshold
+[00:03:16.168,000] <inf> [  6 state_machine] state_audit: 196167600000 transition   ARMED        IDLE
+[00:03:16.172,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 0
+[00:03:16.172,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 1
+[00:07:04.443,000] <inf> [  6 state_machine] state_audit: 424439300000 transition   IDLE         ARMED
+[00:07:04.448,000] <inf> [  6 state_machine] main: Armed pyro0 channel 0
+[00:07:04.448,000] <inf> [  6 state_machine] main: Armed pyro0 channel 1
+[00:07:05.936,000] <inf> [  6 state_machine] state_audit: 425933500000 event        ARMED        orientation below threshold
+[00:07:05.942,000] <inf> [  6 state_machine] state_audit: 425941200000 transition   ARMED        IDLE
+[00:07:05.945,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 0
+[00:07:05.946,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 1
+[00:09:11.101,000] <inf> [  6 state_machine] state_audit: 551098600000 transition   IDLE         ARMED
+[00:09:11.106,000] <inf> [  6 state_machine] main: Armed pyro0 channel 0
+[00:09:11.106,000] <inf> [  6 state_machine] main: Armed pyro0 channel 1
+[00:09:13.143,000] <inf> [  6 state_machine] attitude: Attitude calibrated: n=200 g_mag=10.033 g_b=[0.00 -1.00 0.00]
+[00:13:12.628,000] <inf> [  6 state_machine] state_audit: 792625300000 event        ARMED        orientation and altitude threshold reached
+[00:13:12.842,000] <inf> [  6 state_machine] state_audit: 792840100000 event        ARMED        orientation, altitude and timing threshold reached
+[00:13:12.847,000] <inf> [  6 state_machine] state_audit: 792846100000 transition   ARMED        BOOST
+[00:13:13.405,000] <inf> [  6 state_machine] state_audit: 793402600000 transition   BOOST        BURNOUT
+[00:13:15.655,000] <inf> [  6 state_machine] state_audit: 795652700000 transition   BURNOUT      APOGEE
+[00:13:15.664,000] <inf> [  6 state_machine] main: Triggered pyro0 channel 0
+[00:13:15.664,000] <inf> [  6 state_machine] main: Charging pyro0 channel 1
+[00:13:17.620,000] <inf> [  6 state_machine] state_audit: 797616500000 transition   APOGEE       MAIN
+[00:13:17.625,000] <inf> [  6 state_machine] main: Triggered pyro0 channel 1
+[00:13:17.625,000] <inf> [  6 state_machine] main: Recharging pyro0 channel 1
+[00:13:19.622,000] <inf> [  6 state_machine] state_audit: 799621300000 transition   MAIN         REDUNDANT
+[00:13:19.627,000] <inf> [  6 state_machine] main: Re-triggered pyro0 channel 1
+[00:13:22.078,000] <inf> [  6 state_machine] state_audit: 802076500000 transition   REDUNDANT    LANDED
+[00:14:53.004,000] <inf> [  6 state_machine] state_audit: 893002200000 transition   LANDED       IDLE
+[00:14:53.009,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 0
+[00:14:53.009,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 1

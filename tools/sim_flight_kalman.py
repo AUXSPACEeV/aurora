@@ -1001,7 +1001,8 @@ def run_simulation(args):
                     computed_apogee_idx=computed_apogee_idx,
                     accel_body=accel_body, gyro_body=gyro_body,
                     gated_hist=gated_hist,
-                    title="AURORA Kalman Filter - Simulated 500 m Rocket Flight")
+                    title=(args.title if args.title is not None
+                           else "AURORA Kalman Filter - Simulated 500 m Rocket Flight"))
 
 
 def trim_flight_log(influx_path, windows_ns, out_dir):
@@ -1075,6 +1076,8 @@ def run_real_flight(args):
 
     themes = ["light", "dark"] if args.theme == "both" else [args.theme]
 
+    single_flight = len(flights) == 1
+
     for n, (boost_ns, end_ns) in enumerate(flights, start=1):
         print(f"\n--- Plotting flight {n} ---")
         sliced, transitions = slice_real_flight(
@@ -1085,7 +1088,12 @@ def run_real_flight(args):
             print(f"  {name}: {len(t_s)} samples in window")
         print(f"  transitions: {len(transitions)}")
 
-        title = f"AURORA Flight {n} - {os.path.basename(flight_dir.rstrip('/'))}"
+        if args.title is not None:
+            title = args.title
+        elif single_flight:
+            title = f"AURORA - {os.path.basename(flight_dir.rstrip('/'))}"
+        else:
+            title = f"AURORA Flight {n} - {os.path.basename(flight_dir.rstrip('/'))}"
         for theme in themes:
             suffix = f"_{theme}" if args.theme == "both" else ""
             out_path = f"flight{n}{suffix}.png"
@@ -1114,6 +1122,9 @@ def main():
         "--post-end", type=float, default=2.0, dest="post_end",
         help="Seconds of data to keep after the flight close-out "
              "transition (default 2)")
+    parser.add_argument(
+        "--title", type=str, default=None,
+        help="Override the plot title (applies to all generated plots)")
     parser.add_argument(
         "--trim", type=float, nargs="?", const=10.0, default=None,
         metavar="SECONDS",
