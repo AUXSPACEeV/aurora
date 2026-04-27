@@ -20,6 +20,9 @@ from ``DIR/flights.influx`` and state transitions from ``DIR/state_audit``,
 segments the log into individual flights using ARMED→BOOST transitions, and
 plots the raw streams (accel, gyro, baro, on-board sm_kinematics and
 sm_pose) for each flight with state transitions drawn as vertical lines.
+The NIS gate and the three-vote apogee detector are replayed from the
+logged streams alone — gating is approximated under a steady-state
+assumption since the on-board covariance is not telemetered.
 """
 
 import argparse
@@ -500,6 +503,60 @@ def slice_real_flight(streams, events, boost_ns, end_ns,
 
 
 # ---------------------------------------------------------------------------
+# Replay helpers: derive apogee votes and NIS-gating from logged streams
+# ---------------------------------------------------------------------------
+
+def compute_log_votes(sliced):
+    """Replay the three apogee votes from sm_kinematics + sm_pose alone.
+
+    Returns ``(t_s, votes)`` where ``votes`` is an (N, 3) bool array with
+    columns matching :func:`KalmanFilter.detect_apogee` — velocity ≤ 0,
+    altitude < running peak, |accel_vert| < FILTER_APOGEE_ACCEL_BAND.
+    Returns ``(None, None)`` if either stream is empty.
+    """
+    t_kin, kin = sliced["sm_kinematics"]
+    t_pose, pose = sliced["sm_pose"]
+    if t_kin.size == 0 or t_pose.size == 0:
+        return None, None
+    altitude = np.interp(t_kin, t_pose, pose[:, 1])
+    accel_vert = kin[:, 1]
+    velocity = kin[:, 2]
+    peak = np.maximum.accumulate(altitude)
+    votes = np.column_stack([
+        velocity <= 0.0,
+        altitude < peak,
+        np.abs(accel_vert) < FILTER_APOGEE_ACCEL_BAND,
+    ])
+    return t_kin, votes
+
+
+def compute_log_gated(sliced, r_meas, warmup=FILTER_NIS_WARMUP):
+    """Approximate the firmware NIS gate from logged baro + sm_pose only.
+
+    The on-board P[0,0] is not telemetered, so we assume the steady-state
+    case (P[0,0] has converged below R, S ≈ R) and flag baro samples whose
+    residual against the logged Kalman altitude exceeds the firmware gate
+    threshold.  Returns ``(t_s, gated, baro_alt)`` with ``gated`` a bool
+    array over the baro timeline; ``(None, None, None)`` if either stream
+    is empty.
+    """
+    t_baro, baro = sliced["baro"]
+    t_pose, pose = sliced["sm_pose"]
+    if t_baro.size == 0 or t_pose.size == 0:
+        return None, None, None
+    # Logged baro pressure is in kPa (matches the *10 → hPa scaling in
+    # plot_raw_flight); the ISA helpers expect Pa.
+    p_pa = baro[:, 0] * 1000.0
+    baro_alt = pressure_to_altitude(p_pa, p_pa[0])
+    kalman_alt = np.interp(t_baro, t_pose, pose[:, 1])
+    y = baro_alt - kalman_alt
+    gated = (y * y) > FILTER_NIS_GATE * r_meas
+    if warmup > 0:
+        gated[:warmup] = False
+    return t_baro, gated, baro_alt
+
+
+# ---------------------------------------------------------------------------
 # Furo-matched colour themes (from Sphinx conf.py)
 # ---------------------------------------------------------------------------
 
@@ -803,22 +860,29 @@ STATE_PALETTE = {
 }
 
 
-def plot_raw_flight(sliced, transitions, theme_name, out_path, title=None):
+def plot_raw_flight(sliced, transitions, theme_name, out_path, title=None,
+                    r_meas=6.0, disable_votes=False):
     """Plot every raw stream found in ``sliced`` against time, with state
     transitions drawn as labelled vertical lines on every panel.
 
     ``sliced`` is the dict returned by :func:`slice_real_flight`. Panels
     are created only for stream types that have at least one sample in
     the window.
+
+    ``r_meas`` is the assumed measurement variance used to approximate the
+    NIS gate from the logged baro and Kalman-altitude streams; it should
+    match ``CONFIG_FILTER_R_MILLISCALE / 1000`` for the flight build.
     """
     c = apply_theme(theme_name)
+
+    t_gated, gated_mask, baro_alt = compute_log_gated(sliced, r_meas=r_meas)
+    t_votes, votes = compute_log_votes(sliced)
 
     panels = []
     if sliced["baro"][0].size:
         panels.append("baro")
     if sliced["sm_pose"][0].size:
-        panels.append("altitude")
-        panels.append("orientation")
+        panels.append("sm_pose")
     if sliced["sm_kinematics"][0].size:
         panels.append("velocity")
         panels.append("sm_accel")
@@ -826,6 +890,8 @@ def plot_raw_flight(sliced, transitions, theme_name, out_path, title=None):
         panels.append("body_accel")
     if sliced["gyro"][0].size:
         panels.append("body_gyro")
+    if votes is not None and not disable_votes:
+        panels.append("apogee_votes")
 
     if not panels:
         raise SystemExit("error: no telemetry samples in flight window")
@@ -854,6 +920,12 @@ def plot_raw_flight(sliced, transitions, theme_name, out_path, title=None):
             t_s, vals = sliced["baro"]
             ax.plot(t_s, vals[:, 0] * 10.0, color=c["pressure"],
                     linewidth=1.2, label="Pressure")
+            if gated_mask is not None and np.any(gated_mask):
+                idx = np.flatnonzero(gated_mask)
+                ax.scatter(t_gated[idx], vals[idx, 0] * 10.0,
+                           color=c["apogee"], marker="x", s=28,
+                           linewidths=1.2, zorder=5,
+                           label=f"NIS-gated (~{len(idx)})")
             ax.set_ylabel("Pressure (hPa)")
             ax.invert_yaxis()
             ax2 = ax.twinx()
@@ -865,12 +937,18 @@ def plot_raw_flight(sliced, transitions, theme_name, out_path, title=None):
             ax2.legend(loc="upper right")
             if title is not None:
                 ax.set_title(title, color=c["brand"], fontweight="bold")
-        elif panel == "altitude":
+        elif panel == "sm_pose":
             t_s, vals = sliced["sm_pose"]
             ax.plot(t_s, vals[:, 1], color=c["true_alt"], linewidth=1.5,
                     label="sm_pose.altitude")
             ax.set_ylabel("Altitude (m)")
-            ax.legend(loc="upper right")
+            ax2 = ax.twinx()
+            ax2.plot(t_s, vals[:, 0], color=c["accel_vert"], linewidth=0.8,
+                     alpha=0.7, label="sm_pose.orientation")
+            ax2.set_ylabel("Orientation (deg)", color=c["accel_vert"])
+            ax2.tick_params(axis="y", colors=c["accel_vert"])
+            ax.legend(loc="upper left")
+            ax2.legend(loc="upper right")
         elif panel == "velocity":
             t_s, vals = sliced["sm_kinematics"]
             ax.plot(t_s, vals[:, 2], color=c["velocity"], linewidth=1.5,
@@ -885,7 +963,7 @@ def plot_raw_flight(sliced, transitions, theme_name, out_path, title=None):
             ax.plot(t_s, vals[:, 1], color=c["accel_vert"], linewidth=1.5,
                     label="accel_vert (world)")
             ax.axhline(0, color=c["zero_line"], linewidth=0.5)
-            ax.set_ylabel("a (m/s²)")
+            ax.set_ylabel("Acceleration (m/s²)")
             ax.legend(loc="upper right")
         elif panel == "body_accel":
             t_s, vals = sliced["accel"]
@@ -903,12 +981,26 @@ def plot_raw_flight(sliced, transitions, theme_name, out_path, title=None):
             ax.axhline(0, color=c["zero_line"], linewidth=0.5)
             ax.set_ylabel("ω (rad/s)")
             ax.legend(loc="upper right", ncol=3)
-        elif panel == "orientation":
-            t_s, vals = sliced["sm_pose"]
-            ax.plot(t_s, vals[:, 0], color=c["accel_vert"], linewidth=1.2,
-                    label="sm_pose.orientation")
-            ax.set_ylabel("Orientation")
-            ax.legend(loc="upper right")
+        elif panel == "apogee_votes":
+            vote_labels = [
+                "velocity ≤ 0",
+                "altitude < peak",
+                "|a_vert| < 20 m/s²",
+            ]
+            vote_colors = [c["vote_vel"], c["vote_desc"], c["vote_acc"]]
+            n_votes = len(vote_labels)
+            for row, (label, color) in enumerate(zip(vote_labels,
+                                                     vote_colors)):
+                base = (n_votes - 1) - row
+                ax.fill_between(t_votes, base,
+                                base + votes[:, row].astype(float) * 0.8,
+                                step="pre", color=color, alpha=0.55,
+                                linewidth=0, label=label)
+            ax.set_ylabel("Apogee votes")
+            ax.set_yticks([0.4 + i for i in range(n_votes)])
+            ax.set_yticklabels(list(reversed(vote_labels)))
+            ax.set_ylim(-0.1, n_votes)
+            ax.legend(loc="upper right", ncol=3, fontsize=8)
 
         ax.grid(True, color=c["grid"], alpha=0.5)
         mark_states(ax, with_labels=(panel == panels[0]))
@@ -1097,7 +1189,8 @@ def run_real_flight(args):
         for theme in themes:
             suffix = f"_{theme}" if args.theme == "both" else ""
             out_path = f"flight{n}{suffix}.png"
-            plot_raw_flight(sliced, transitions, theme, out_path, title=title)
+            plot_raw_flight(sliced, transitions, theme, out_path,
+                            title=title, r_meas=args.r_meas, disable_votes=args.disable_votes)
 
 
 def main():
@@ -1110,6 +1203,9 @@ def main():
     parser.add_argument(
         "--show", action="store_true",
         help="Open an interactive matplotlib window")
+    parser.add_argument(
+        "--disable-votes", action="store_true",
+        help="Disable the voting graph.")
     parser.add_argument(
         "--flight", metavar="DIR",
         help="Load real flight data from DIR (expects flights.influx + "
@@ -1131,6 +1227,12 @@ def main():
         help="Write a trimmed copy of flights.influx covering each "
              "flight's plot window expanded by SECONDS on each side "
              "(default 10 s when --trim is given without a value)")
+    parser.add_argument(
+        "--r-meas", type=float, default=6.0, dest="r_meas",
+        help="Assumed Kalman measurement variance (m²) used to "
+             "approximate the NIS gate from logged baro vs sm_pose. "
+             "Match CONFIG_FILTER_R_MILLISCALE/1000 for the flight "
+             "build (default 6.0)")
     args = parser.parse_args()
 
     if args.flight:
