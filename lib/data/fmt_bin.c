@@ -1,30 +1,49 @@
 /**
  * @file fmt_bin.c
- * @brief Fixed-size binary formatter backend with N-buffered async writes.
+ * @brief Raw-flash binary formatter for the live flight log.
  *
- * Writes a 16-byte file header followed by one 40-byte record per datapoint.
- * The on-disk layout is unchanged from the original single-write design;
- * what changed is how the bytes get there.
+ * Writes a frame-aligned binary log directly to a fixed flash partition —
+ * no filesystem in the live path. The partition is selected via the device
+ * tree chosen entry @c auxspace,flight-log:
+ *
+ * @code{.dts}
+ * &flash0 {
+ *     partitions {
+ *         compatible = "fixed-partitions";
+ *         #address-cells = <1>;
+ *         #size-cells  = <1>;
+ *         flight_log: partition@300000 {
+ *             label = "flight_log";
+ *             reg   = <0x300000 DT_SIZE_M(1)>;
+ *         };
+ *     };
+ * };
+ * / { chosen { auxspace,flight-log = &flight_log; }; };
+ * @endcode
+ *
+ * On-disk layout (see data_logger.h for the structs):
+ *
+ *   offset 0          [frame_header][record][record]...[record][0xFF padding]
+ *   offset frame_size [frame_header][record]...
+ *   ...
+ *   first frame whose magic != "AURF" or whose flight_id differs from the
+ *   first frame's marks the end of the current flight.
  *
  * Producer side (called under the data_logger mutex by the upstream logger
- * thread) memcpys the record straight into a DMA-aligned RAM staging buffer.
- * When the active buffer fills, the producer hands its index to a writer
+ * thread) memcpys each record straight into a DMA-aligned RAM staging
+ * buffer. When a buffer fills, the producer hands its index to a writer
  * thread via a small free/flush index ring and immediately picks up a fresh
- * buffer. A dedicated writer thread drains the flush ring with one large
- * `fs_write(buf, BIN_BUF_SIZE)` per buffer — so 1 kHz × ~5 records (40 B
- * each) collapses from ~5000 tiny fs_write calls/s into ~50 sector-aligned
- * ones, which is what FATFS/littlefs on SD/NOR actually want.
+ * buffer with a new frame header. The writer thread issues one
+ * @c flash_area_erase + @c flash_area_write per frame — so 1 kHz × ~5
+ * records collapses from ~5000 tiny fs_writes/s into ~50 page-aligned
+ * raw-flash writes/s, with no FATFS / littlefs overhead in the path.
  *
- * The staging buffers are statically allocated with a stricter alignment
- * (`CONFIG_DATA_LOGGER_BIN_BUF_ALIGN`, default 32 B) so the underlying
- * block driver can DMA into them without bounce-buffering.
+ * Records preserve the @c sensor_value channels losslessly (val1+val2),
+ * so post-flight conversion can replay filters and the state machine
+ * bit-exactly.
  *
- * Multi-byte fields are stored in native little-endian layout; every
- * supported target (RP2040, RP2350, ESP32-S3, qemu_x86) is LE.
- *
- * Only one bin logger instance can be live at a time — `bin_init` rejects a
- * second concurrent open. The formatter is intended for the live flight log;
- * conversion targets (CSV, InfluxDB) use their own formatters.
+ * Only one bin logger instance can be live at a time; @ref bin_init
+ * rejects a second concurrent open.
  *
  * Copyright (c) 2026 Auxspace e.V.
  *
@@ -35,37 +54,59 @@
 #include <string.h>
 
 #include <zephyr/kernel.h>
-#include <zephyr/fs/fs.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/storage/flash_map.h>
 #include <zephyr/logging/log.h>
 
 #include <aurora/lib/data_logger.h>
 
 LOG_MODULE_DECLARE(data_logger, CONFIG_DATA_LOGGER_LOG_LEVEL);
 
-#define BIN_REC_SIZE    ((size_t)sizeof(struct aurora_bin_record))
-#define BIN_HDR_SIZE    ((size_t)sizeof(struct aurora_bin_header))
-#define BIN_BUF_SIZE    ((size_t)CONFIG_DATA_LOGGER_BIN_BUF_SIZE)
-#define BIN_BUF_COUNT   CONFIG_DATA_LOGGER_BIN_BUF_COUNT
-#define BIN_BUF_ALIGN   CONFIG_DATA_LOGGER_BIN_BUF_ALIGN
+/* -------------------------------------------------------------------------- */
+/*  DT partition lookup                                                       */
+/* -------------------------------------------------------------------------- */
 
-BUILD_ASSERT(BIN_BUF_SIZE >= BIN_REC_SIZE + BIN_HDR_SIZE,
-	     "DATA_LOGGER_BIN_BUF_SIZE must hold the header plus one record");
+#if !DT_HAS_CHOSEN(auxspace_flight_log)
+#error "DATA_LOGGER_BIN requires DT chosen 'auxspace,flight-log' to point at a fixed-partition node. See aurora/lib/data/fmt_bin.c file header for an example overlay."
+#endif
+
+#define BIN_FLASH_PARTITION  DT_CHOSEN(auxspace_flight_log)
+#define BIN_FLASH_AREA_ID    DT_FIXED_PARTITION_ID(BIN_FLASH_PARTITION)
+#define BIN_FLASH_AREA_SIZE  DT_REG_SIZE(BIN_FLASH_PARTITION)
+
+/* -------------------------------------------------------------------------- */
+/*  Frame & buffer geometry                                                   */
+/* -------------------------------------------------------------------------- */
+
+#define BIN_REC_SIZE   ((size_t)sizeof(struct aurora_bin_record))
+#define BIN_HDR_SIZE   ((size_t)sizeof(struct aurora_bin_frame_header))
+#define BIN_FRAME_SIZE ((size_t)CONFIG_DATA_LOGGER_BIN_FRAME_SIZE)
+#define BIN_BUF_COUNT  CONFIG_DATA_LOGGER_BIN_BUF_COUNT
+#define BIN_BUF_ALIGN  CONFIG_DATA_LOGGER_BIN_BUF_ALIGN
+
+BUILD_ASSERT(BIN_FRAME_SIZE >= BIN_HDR_SIZE + BIN_REC_SIZE,
+	     "frame must hold at least one header + one record");
+BUILD_ASSERT((BIN_FRAME_SIZE - BIN_HDR_SIZE) % BIN_REC_SIZE == 0,
+	     "frame payload should be a whole number of records");
 BUILD_ASSERT(BIN_BUF_COUNT >= 2, "BIN needs at least double-buffering");
+BUILD_ASSERT(BIN_FLASH_AREA_SIZE % BIN_FRAME_SIZE == 0,
+	     "flight_log partition size must be a multiple of the frame size");
 
-/* Cache-line / DMA-aligned staging buffers. The data array is the only
- * thing the block driver touches, so it gets the alignment.
- */
 struct bin_buf {
-	uint8_t data[BIN_BUF_SIZE];
+	uint8_t data[BIN_FRAME_SIZE];
 	size_t  used;
 };
 
+/* DMA-aligned static pool. Single live bin formatter is supported. */
 static struct bin_buf bin_bufs[BIN_BUF_COUNT] __aligned(BIN_BUF_ALIGN);
 
 struct bin_ctx {
-	struct fs_file_t file;
-	int active_idx;       /* buffer currently held by producer */
-	atomic_t sticky_err;  /* first FS error observed by writer  */
+	const struct flash_area *fa;
+	uint64_t flight_id;
+	uint32_t next_seq;        /* producer side */
+	off_t    write_offset;    /* writer side: next frame offset */
+	int      active_idx;      /* producer's currently-held buffer */
+	atomic_t sticky_err;      /* first error observed (writer or producer) */
 };
 
 /* Single live instance — see file comment. */
@@ -77,7 +118,7 @@ static atomic_t g_bin_open = ATOMIC_INIT(0);
  */
 K_MSGQ_DEFINE(bin_free_q, sizeof(int), BIN_BUF_COUNT, 4);
 
-/* Submit pool: indices the writer should fs_write. Capacity = BIN_BUF_COUNT
+/* Submit pool: indices the writer should write. Capacity = BIN_BUF_COUNT
  * for buffers, plus one extra slot for the drain sentinel value (-1).
  */
 K_MSGQ_DEFINE(bin_flush_q, sizeof(int), BIN_BUF_COUNT + 1, 4);
@@ -86,6 +127,10 @@ K_MSGQ_DEFINE(bin_flush_q, sizeof(int), BIN_BUF_COUNT + 1, 4);
  * every buffer submitted before the sentinel has already been written.
  */
 K_SEM_DEFINE(bin_drain_sem, 0, 1);
+
+/* -------------------------------------------------------------------------- */
+/*  Writer thread                                                             */
+/* -------------------------------------------------------------------------- */
 
 static void bin_writer_fn(void *p1, void *p2, void *p3)
 {
@@ -106,17 +151,31 @@ static void bin_writer_fn(void *p1, void *p2, void *p3)
 		struct bin_buf *b = &bin_bufs[idx];
 
 		if (atomic_get(&g_bin_open) && b->used > 0) {
-			ssize_t wr = fs_write(&g_bin_ctx.file, b->data, b->used);
+			off_t off = g_bin_ctx.write_offset;
 
-			if (wr < 0) {
+			if ((size_t)off + BIN_FRAME_SIZE >
+			    (size_t)BIN_FLASH_AREA_SIZE) {
 				(void)atomic_cas(&g_bin_ctx.sticky_err, 0,
-						 (atomic_val_t)wr);
-				LOG_ERR("bin: fs_write failed (%zd)", wr);
-			} else if ((size_t)wr != b->used) {
-				(void)atomic_cas(&g_bin_ctx.sticky_err, 0,
-						 (atomic_val_t)-EIO);
-				LOG_ERR("bin: short write %zd/%zu",
-					wr, b->used);
+						 (atomic_val_t)-ENOSPC);
+				LOG_ERR("bin: flight_log partition full at "
+					"offset %ld", (long)off);
+			} else {
+				int rc = flash_area_erase(g_bin_ctx.fa, off,
+							  BIN_FRAME_SIZE);
+				if (rc == 0) {
+					rc = flash_area_write(g_bin_ctx.fa, off,
+							      b->data, b->used);
+				}
+
+				if (rc != 0) {
+					(void)atomic_cas(&g_bin_ctx.sticky_err, 0,
+							 (atomic_val_t)rc);
+					LOG_ERR("bin: flash write at %ld "
+						"failed (%d)", (long)off, rc);
+				} else {
+					g_bin_ctx.write_offset =
+						off + BIN_FRAME_SIZE;
+				}
 			}
 		}
 
@@ -129,7 +188,33 @@ K_THREAD_DEFINE(bin_writer_th, CONFIG_DATA_LOGGER_BIN_WRITER_STACK_SIZE,
 		bin_writer_fn, NULL, NULL, NULL,
 		CONFIG_DATA_LOGGER_BIN_WRITER_PRIO, 0, 0);
 
-/* Take the next free buffer for the producer. */
+/* -------------------------------------------------------------------------- */
+/*  Producer-side helpers                                                     */
+/* -------------------------------------------------------------------------- */
+
+/* Initialize a fresh frame at the start of a buffer. */
+static void bin_frame_init(struct bin_ctx *ctx, struct bin_buf *b)
+{
+	/* Clear so any unwritten record slot reads as type=0xFF (matches
+	 * the post-erase flash state and the converter's stop condition).
+	 */
+	memset(b->data, 0xFF, sizeof(b->data));
+
+	struct aurora_bin_frame_header *h =
+		(struct aurora_bin_frame_header *)b->data;
+
+	memcpy(h->magic, AURORA_BIN_FRAME_MAGIC, sizeof(h->magic));
+	h->version     = AURORA_BIN_VERSION;
+	h->reserved0   = 0;
+	h->reserved1   = 0;
+	h->seq         = ctx->next_seq++;
+	h->flight_id   = ctx->flight_id;
+	h->base_ts_ns  = k_ticks_to_ns_floor64(k_uptime_ticks());
+
+	b->used = BIN_HDR_SIZE;
+}
+
+/* Take the next free buffer for the producer and start a new frame in it. */
 static int bin_take_free(struct bin_ctx *ctx, k_timeout_t to)
 {
 	int idx;
@@ -139,32 +224,24 @@ static int bin_take_free(struct bin_ctx *ctx, k_timeout_t to)
 		return rc;
 	}
 
-	bin_bufs[idx].used = 0;
 	ctx->active_idx = idx;
+	bin_frame_init(ctx, &bin_bufs[idx]);
 	return 0;
 }
 
-/* Submit the active buffer (if non-empty) and pick up a fresh one. */
+/* Submit the active buffer (always non-empty, contains at least the header)
+ * to the writer and pick up a fresh one.
+ */
 static int bin_rotate(struct bin_ctx *ctx)
 {
 	int idx = ctx->active_idx;
 
-	if (bin_bufs[idx].used > 0) {
-		if (k_msgq_put(&bin_flush_q, &idx, K_NO_WAIT) != 0) {
-			/* flush_q only fills if the writer is wedged. Drop
-			 * this buffer's contents so we don't lose forward
-			 * progress, but report so the upstream knows.
-			 */
-			bin_bufs[idx].used = 0;
-			(void)atomic_cas(&g_bin_ctx.sticky_err, 0,
-					 (atomic_val_t)-EBUSY);
-			return -EBUSY;
-		}
-	} else {
-		/* Empty buffer — return it directly without bothering the
-		 * writer. K_NO_WAIT is safe: free_q has BIN_BUF_COUNT slots.
-		 */
-		(void)k_msgq_put(&bin_free_q, &idx, K_NO_WAIT);
+	if (k_msgq_put(&bin_flush_q, &idx, K_NO_WAIT) != 0) {
+		/* flush_q only fills if the writer is wedged. */
+		bin_bufs[idx].used = 0;
+		(void)atomic_cas(&g_bin_ctx.sticky_err, 0,
+				 (atomic_val_t)-EBUSY);
+		return -EBUSY;
 	}
 
 	return bin_take_free(ctx,
@@ -173,7 +250,7 @@ static int bin_rotate(struct bin_ctx *ctx)
 
 /* Inject a sentinel and wait for the writer to acknowledge it. After this
  * returns, every buffer submitted to flush_q before the sentinel has been
- * written to the underlying file (modulo FS errors).
+ * committed to flash (modulo flash errors, which become sticky).
  */
 static int bin_drain_writer(void)
 {
@@ -194,8 +271,18 @@ static int bin_drain_writer(void)
 	return 0;
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Formatter vtable                                                          */
+/* -------------------------------------------------------------------------- */
+
+/* The bin formatter ignores @p path — its destination is the flash
+ * partition selected via DT chosen. The path argument is preserved by the
+ * core only to satisfy the formatter signature.
+ */
 static int bin_init(struct data_logger *logger, const char *path)
 {
+	ARG_UNUSED(path);
+
 	if (!atomic_cas(&g_bin_open, 0, 1)) {
 		LOG_ERR("bin: a binary logger is already open");
 		return -EBUSY;
@@ -207,7 +294,22 @@ static int bin_init(struct data_logger *logger, const char *path)
 
 	memset(ctx, 0, sizeof(*ctx));
 	atomic_set(&ctx->sticky_err, 0);
-	fs_file_t_init(&ctx->file);
+
+	rc = flash_area_open(BIN_FLASH_AREA_ID, &ctx->fa);
+	if (rc != 0) {
+		LOG_ERR("bin: flash_area_open(id=%u) failed (%d)",
+			(unsigned)BIN_FLASH_AREA_ID, rc);
+		atomic_set(&g_bin_open, 0);
+		return rc;
+	}
+
+	/* Use the high-resolution monotonic clock for a per-flight ID; two
+	 * concurrent flights would need to share a boot, which can't happen.
+	 */
+	ctx->flight_id    = k_ticks_to_ns_floor64(k_uptime_ticks());
+	ctx->next_seq     = 0;
+	ctx->write_offset = 0;
+	ctx->active_idx   = -1;
 
 	/* Drop any leftovers from a prior aborted session and re-prime the
 	 * free pool with every buffer.
@@ -219,17 +321,10 @@ static int bin_init(struct data_logger *logger, const char *path)
 		(void)k_msgq_put(&bin_free_q, &i, K_NO_WAIT);
 	}
 
-	rc = fs_open(&ctx->file, path,
-		     FS_O_CREATE | FS_O_WRITE | FS_O_TRUNC);
-	if (rc != 0) {
-		LOG_ERR("failed to open %s (%d)", path, rc);
-		atomic_set(&g_bin_open, 0);
-		return rc;
-	}
-
 	rc = bin_take_free(ctx, K_NO_WAIT);
 	if (rc != 0) {
-		(void)fs_close(&ctx->file);
+		flash_area_close(ctx->fa);
+		ctx->fa = NULL;
 		atomic_set(&g_bin_open, 0);
 		return rc;
 	}
@@ -238,32 +333,14 @@ static int bin_init(struct data_logger *logger, const char *path)
 	return 0;
 }
 
+/* The legacy "file header" hook is a no-op now — every frame on flash
+ * carries its own header, so there's no separate one-shot preamble to
+ * write. The flush that data_logger_init issues immediately after this
+ * still drains the (empty-of-records) frame; that's harmless.
+ */
 static int bin_write_header(struct data_logger *logger)
 {
-	struct bin_ctx *ctx = logger->ctx;
-	struct aurora_bin_header hdr = {
-		.magic        = AURORA_BIN_MAGIC,
-		.version      = AURORA_BIN_VERSION,
-		.record_size  = (uint16_t)sizeof(struct aurora_bin_record),
-		.reserved     = 0,
-	};
-
-	struct bin_buf *b = &bin_bufs[ctx->active_idx];
-
-	/* The header is written before any datapoint, so the active buffer
-	 * is fresh and definitely has room. The size check is a guard.
-	 */
-	if (b->used + sizeof(hdr) > BIN_BUF_SIZE) {
-		int rc = bin_rotate(ctx);
-
-		if (rc != 0) {
-			return rc;
-		}
-		b = &bin_bufs[ctx->active_idx];
-	}
-
-	memcpy(b->data + b->used, &hdr, sizeof(hdr));
-	b->used += sizeof(hdr);
+	ARG_UNUSED(logger);
 	return 0;
 }
 
@@ -279,7 +356,7 @@ static int bin_write_datapoint(struct data_logger *logger,
 
 	struct bin_buf *b = &bin_bufs[ctx->active_idx];
 
-	if (b->used + BIN_REC_SIZE > BIN_BUF_SIZE) {
+	if (b->used + BIN_REC_SIZE > BIN_FRAME_SIZE) {
 		int rc = bin_rotate(ctx);
 
 		if (rc != 0) {
@@ -288,16 +365,18 @@ static int bin_write_datapoint(struct data_logger *logger,
 		b = &bin_bufs[ctx->active_idx];
 	}
 
-	/* Build the record straight into the staging buffer to skip a copy.
-	 * struct aurora_bin_record is __packed so a byte-offset cast is fine.
-	 */
+	struct aurora_bin_frame_header *h =
+		(struct aurora_bin_frame_header *)b->data;
 	struct aurora_bin_record *rec =
 		(struct aurora_bin_record *)(b->data + b->used);
 
-	rec->timestamp_ns  = dp->timestamp_ns;
+	uint64_t delta_ns = dp->timestamp_ns >= h->base_ts_ns
+		? dp->timestamp_ns - h->base_ts_ns : 0;
+
 	rec->type          = (uint8_t)dp->type;
 	rec->channel_count = dp->channel_count;
-	memset(rec->_pad, 0, sizeof(rec->_pad));
+	rec->reserved      = 0;
+	rec->ts_delta_us   = (uint32_t)(delta_ns / 1000U);
 
 	for (int i = 0; i < DP_MAX_CHANNELS; i++) {
 		if (i < dp->channel_count) {
@@ -318,7 +397,11 @@ static int bin_flush(struct data_logger *logger)
 	struct bin_ctx *ctx = logger->ctx;
 	int rc;
 
-	if (bin_bufs[ctx->active_idx].used > 0) {
+	/* Push the current frame (header + however many records so far) and
+	 * pick up a fresh one. The partial frame's tail stays 0xFF so the
+	 * converter stops at the first unwritten record slot.
+	 */
+	if (bin_bufs[ctx->active_idx].used > BIN_HDR_SIZE) {
 		rc = bin_rotate(ctx);
 		if (rc != 0) {
 			LOG_ERR("bin_flush: rotate failed (%d)", rc);
@@ -334,11 +417,7 @@ static int bin_flush(struct data_logger *logger)
 
 	int err = (int)atomic_get(&ctx->sticky_err);
 
-	if (err != 0) {
-		return err;
-	}
-
-	return fs_sync(&ctx->file);
+	return err;
 }
 
 static int bin_close(struct data_logger *logger)
@@ -346,19 +425,25 @@ static int bin_close(struct data_logger *logger)
 	struct bin_ctx *ctx = logger->ctx;
 
 	/* Drain whatever's still buffered. Keep going on flush errors so we
-	 * still close the file and release the active buffer.
+	 * still close the partition and release the active buffer.
 	 */
 	(void)bin_flush(logger);
 
-	int rc = fs_close(&ctx->file);
+	if (ctx->fa != NULL) {
+		flash_area_close(ctx->fa);
+		ctx->fa = NULL;
+	}
 
-	int idx = ctx->active_idx;
+	if (ctx->active_idx >= 0) {
+		int idx = ctx->active_idx;
 
-	(void)k_msgq_put(&bin_free_q, &idx, K_NO_WAIT);
+		(void)k_msgq_put(&bin_free_q, &idx, K_NO_WAIT);
+		ctx->active_idx = -1;
+	}
 
 	logger->ctx = NULL;
 	atomic_set(&g_bin_open, 0);
-	return rc;
+	return 0;
 }
 
 const struct data_logger_formatter data_logger_bin_formatter = {

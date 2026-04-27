@@ -8,3 +8,27 @@
 &timer {
 	status = "okay";
 };
+
+/*
+ * Carve a 512 KiB raw-flash partition out of the top of internal QSPI for
+ * the live flight log (no filesystem). Code partition shrinks from
+ * (2 MiB - 0x100) → (1.5 MiB - 0x100).
+ */
+&code_partition {
+	reg = <0x100 (DT_SIZE_K(1536) - 0x100)>;
+};
+
+&flash0 {
+	partitions {
+		flight_log: partition@180000 {
+			label = "flight_log";
+			reg = <0x180000 DT_SIZE_K(512)>;
+		};
+	};
+};
+
+/ {
+	chosen {
+		auxspace,flight-log = &flight_log;
+	};
+};
