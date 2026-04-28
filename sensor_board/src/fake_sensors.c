@@ -1,12 +1,13 @@
 /**
  * @file fake_sensors.c
- * @brief Synthetic IMU and baro data source for native_sim-based testing.
+ * @brief Synthetic IMU and baro data source for sim-based testing.
  *
  * When CONFIG_AURORA_FAKE_SENSORS is enabled, replaces the real polling
  * threads in main.c with a canned flight profile generator. Publishes on
  * the same zbus channels (imu_data_chan, baro_data_chan) at the same
  * cadence and priorities, so downstream code (attitude, Kalman filter,
- * state machine, data logger) runs unchanged.
+ * state machine, data logger) runs unchanged. Works on native_sim and on
+ * real hardware targets; layer via the `sim` snippet (-S sim).
  *
  * The profile is kicked off by the shell command `sim launch` and can
  * be returned to pad-stationary with `sim reset`. Altitude and pressure

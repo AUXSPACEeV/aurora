@@ -1,0 +1,15 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Layer the flight-profile generator and `sim` shell commands
+# on top of any board build, e.g.:
+#   west build -b sensor_board_v2/rp2040 -S sim aurora/sensor_board
+#   west build -b native_sim             -S sim aurora/sensor_board
+#
+# Replaces the hardware IMU/baro polling threads with the canned profile;
+# downstream zbus consumers (attitude, filter, state machine, logger) run
+# unchanged.
+
+name: sim
+append:
+  EXTRA_CONF_FILE: sim.conf

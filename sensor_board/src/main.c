@@ -403,7 +403,9 @@ K_THREAD_DEFINE(baro_polling, 2048, baro_task, NULL, NULL, NULL,
 #if defined(CONFIG_AURORA_FAKE_SENSORS)
 /* make the function known (defined in fake_sensors.c) */
 void fake_sensors_on_calibrated(void);
+#endif /* CONFIG_AURORA_FAKE_SENSORS */
 
+#if defined(CONFIG_AURORA_SIM_AUTOTEST)
 /**
  * @brief checks if the state machine transition is valid in the context of the simulation
  *
@@ -432,7 +434,7 @@ static bool is_valid_transition(enum sm_state from, enum sm_state to)
 	default:           return false;
 	}
 }
-#endif /* CONFIG_AURORA_FAKE_SENSORS */
+#endif /* CONFIG_AURORA_SIM_AUTOTEST */
 
 /**
  * @brief Error handler for the state machine.
