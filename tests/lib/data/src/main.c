@@ -21,6 +21,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "zephyr/logging/log.h"
 #include <string.h>
 #include <errno.h>
 
@@ -670,8 +671,6 @@ ZTEST(data_logger_csv, test_csv_header_present)
 	zassert_true(n > 0, "File should not be empty after init+close");
 	zassert_not_null(strstr(buf, "timestamp_ns"),
 			 "Header must contain \"timestamp_ns\"");
-	zassert_not_null(strstr(buf, "type"),
-			 "Header must contain \"type\"");
 }
 
 /**
@@ -773,9 +772,9 @@ ZTEST(data_logger_csv, test_csv_negative_value)
 }
 
 /**
- * @brief Multiple datapoints produce multiple data rows.
+ * @brief Multiple datapoints produce one data row (DATA_LOGGER_CSV_WINDOW_NS).
  */
-ZTEST(data_logger_csv, test_csv_multiple_rows)
+ZTEST(data_logger_csv, test_csv_multiple_data_single_row)
 {
 	char buf[CSV_BUF_SIZE];
 
@@ -802,6 +801,50 @@ ZTEST(data_logger_csv, test_csv_multiple_rows)
 
 	zassert_true(n > 0, NULL);
 
+	/* Count newlines: 1 header + 1 data rows = 2 lines. */
+	int newlines = 0;
+
+	for (int i = 0; i < n; i++) {
+		if (buf[i] == '\n') {
+			newlines++;
+		}
+	}
+
+	zassert_equal(newlines, 2,
+		      "Expected 1 header row + 1 data row = 2 newlines");
+}
+
+
+/**
+ * @brief Multiple datapoints produce multiple data rows (DATA_LOGGER_CSV_WINDOW_NS).
+ */
+ZTEST(data_logger_csv, test_csv_multiple_rows)
+{
+	char buf[CSV_BUF_SIZE];
+
+	zassert_ok(data_logger_init(&csv_logger, "test",
+				    &data_logger_csv_formatter), NULL);
+	zassert_ok(data_logger_start(&csv_logger), NULL);
+
+	for (int i = 0; i < 3; i++) {
+		struct datapoint dp = {
+			.timestamp_ns  = (uint64_t)(i + 1) * 10000001,
+			.type          = AURORA_DATA_BARO,
+			.channel_count = 2,
+			.channels = {
+				{.val1 = 20 + i, .val2 = 0},
+				{.val1 = 101000 + i * 100, .val2 = 0},
+			},
+		};
+		zassert_ok(data_logger_write(&csv_logger, &dp), NULL);
+	}
+
+	zassert_ok(data_logger_close(&csv_logger), NULL);
+
+	int n = read_file(CSV_FILE_PATH, buf, sizeof(buf));
+
+	zassert_true(n > 0, NULL);
+
 	/* Count newlines: 1 header + 3 data rows = 4 lines. */
 	int newlines = 0;
 
@@ -812,7 +855,7 @@ ZTEST(data_logger_csv, test_csv_multiple_rows)
 	}
 
 	zassert_equal(newlines, 4,
-		      "Expected 1 header row + 3 data rows = 4 newlines");
+		      "Expected 1 header row + 3 data row = 4 newlines");
 }
 
 #endif /* CONFIG_DATA_LOGGER_CONVERT_CSV */

@@ -23,6 +23,7 @@ tests:
     extra_configs:
       - CONFIG_DATA_LOGGER_CONVERT_CSV=y
       - CONFIG_DATA_LOGGER_BASE_PATH="/RAM:/test"
+      - CONFIG_DATA_LOGGER_CSV_WINDOW_NS=10000000
 
   aurora.lib.data.influx:
     integration_platforms:
