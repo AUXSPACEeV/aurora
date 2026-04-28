@@ -6,10 +6,11 @@
  * logger formatter tests.  Zephyr's fstab init hook mounts the volume
  * before any test suite runs, so no explicit fs_mount() is needed.
  *
- * A 512 KiB partition is also carved out of the simulated flash for the
+ * A 1 MiB partition is also carved out of the simulated flash for the
  * raw-flash flight log (no filesystem).  The base sim-flash partition
  * layout uses 0x000000–0x100000; the trailing 1 MiB is unused, so we
- * place the flight log at 0x100000.
+ * place the flight log at 0x100000 and use the full slice so circular
+ * mode has a comfortable pre-boost ring during ground tests.
  */
 
 / {
@@ -40,7 +41,7 @@
 	partitions {
 		flight_log: partition@100000 {
 			label = "flight_log";
-			reg = <0x00100000 DT_SIZE_K(512)>;
+			reg = <0x00100000 DT_SIZE_M(1)>;
 		};
 	};
 };
