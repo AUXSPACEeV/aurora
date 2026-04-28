@@ -18,20 +18,54 @@ module-str = data_logger
 source "subsys/logging/Kconfig.template.log_config"
 
 config DATA_LOGGER_BIN
-	bool "Build raw-flash binary formatter (flight-time)"
+	bool "Build the binary formatter (flight-time)"
 	default y
+	help
+	  Build the live flight-time binary log writer and the post-flight
+	  converter.  The on-storage layout is the same regardless of
+	  backend: a sequence of fixed-size frames, each containing a
+	  32-byte header and densely packed 32-byte records that preserve
+	  the sensor_value channels losslessly.  Pick the backend below.
+
+if DATA_LOGGER_BIN
+
+choice DATA_LOGGER_BIN_BACKEND
+	prompt "Binary log backend"
+	default DATA_LOGGER_BIN_BACKEND_FLASH
+	help
+	  Select where the live binary log is written.  FLASH targets a
+	  fixed flash partition (DT chosen 'auxspace,flight-log') and
+	  treats the partition as a circular ring with boost-freeze
+	  semantics.  DISK writes raw sectors of a Zephyr disk-access
+	  block device (DT chosen 'auxspace,flight-log-disk') linearly
+	  from the configured offset; sized for many minutes of flight on
+	  an SD card without circular tricks.
+
+config DATA_LOGGER_BIN_BACKEND_FLASH
+	bool "Internal flash partition (circular)"
 	select FLASH
 	select FLASH_MAP
 	help
-	  Build the live flight-time binary log writer and the post-flight
-	  converter.  The log is written directly to the fixed flash
-	  partition selected by the device-tree chosen entry
-	  'auxspace,flight-log' — no filesystem in the live path.  Records
-	  preserve the sensor_value channels losslessly; per-flight framing
-	  carries a flight_id so the converter can find the boundary between
-	  the current flight and any leftover data on the partition.
+	  Live log lives on a fixed-partition node selected via DT chosen
+	  'auxspace,flight-log'.  Recommended for boards with limited
+	  flash where the partition holds well under one flight worth of
+	  data — circular pre-boost capture trades old data for new while
+	  preserving the BOOST→LANDED window once the BOOST event fires.
 
-if DATA_LOGGER_BIN
+config DATA_LOGGER_BIN_BACKEND_DISK
+	bool "Disk-access block device (linear)"
+	select DISK_ACCESS
+	help
+	  Live log lives on a sector range of a Zephyr disk-access device
+	  (typically an SD card via zephyr,sdmmc-disk).  The region is
+	  described by the DT chosen 'auxspace,flight-log-disk' node, an
+	  'auxspaceev,flight-log-disk' compatible providing disk-name,
+	  offset-sectors and size-sectors.  Capacity is large enough that
+	  the writer is purely linear from the offset; circular wrap is
+	  not used and BOOST events are recorded but do not freeze the
+	  ring.
+
+endchoice
 
 config DATA_LOGGER_BIN_FRAME_SIZE
 	int "Binary log frame size (bytes)"
@@ -47,14 +81,18 @@ config DATA_LOGGER_BIN_FRAME_SIZE
 
 config DATA_LOGGER_BIN_BUF_COUNT
 	int "Number of binary log staging buffers"
+	default 6 if DATA_LOGGER_BIN_BACKEND_DISK
 	default 3
 	range 2 8
 	help
 	  2 (double-buffer) is the minimum: the producer fills one while
-	  the writer erases+programs the other.  3 (triple-buffer) gives
-	  one extra buffer of slack to absorb the per-sector erase latency
-	  (~25 ms on QSPI NOR) without backpressure on the sensor pipeline.
-	  More buffers cost more RAM with diminishing returns.
+	  the writer commits the other.  3 (triple-buffer) is enough for
+	  the FLASH backend to absorb the per-sector erase latency (~25 ms
+	  on QSPI NOR).  The DISK backend defaults to 6 because SD cards
+	  occasionally stall for 100+ ms during internal garbage
+	  collection; without slack the producer would back-pressure the
+	  sensor pipeline during those stalls.  More buffers cost more RAM
+	  with diminishing returns.
 
 config DATA_LOGGER_BIN_BUF_ALIGN
 	int "Alignment of binary log staging buffers (bytes)"
