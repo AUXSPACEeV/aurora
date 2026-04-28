@@ -360,3 +360,27 @@ int data_logger_start(struct data_logger *logger)
 	k_mutex_unlock(&logger->state->mutex);
 	return 0;
 }
+
+/* data_logger_event – see data_logger.h */
+int data_logger_event(struct data_logger *logger, enum data_logger_event ev)
+{
+	int rc;
+
+	if (logger == NULL || logger->fmt == NULL || logger->state == NULL) {
+		return -EINVAL;
+	}
+
+	if (logger->fmt->on_event == NULL) {
+		return 0;
+	}
+
+	rc = k_mutex_lock(&logger->state->mutex, K_MSEC(100));
+	if (rc != 0) {
+		LOG_ERR("data_logger_event: mutex lock failed (%d)", rc);
+		return rc;
+	}
+
+	rc = logger->fmt->on_event(logger, ev);
+	k_mutex_unlock(&logger->state->mutex);
+	return rc;
+}

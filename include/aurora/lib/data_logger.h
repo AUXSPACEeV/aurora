@@ -67,6 +67,20 @@ struct datapoint {
 struct data_logger;
 
 /**
+ * @brief Lifecycle events the upstream application can deliver to a
+ *        formatter via @ref data_logger_event.
+ *
+ * The @ref lib_data_logger_bin formatter uses these to switch from
+ * circular pre-boost capture to linear "freeze" mode at BOOST and to
+ * mark the end of the recorded flight at LANDED.  Other formatters may
+ * ignore them.
+ */
+enum data_logger_event {
+	DLE_BOOST,	/**< Boost detected; freeze the ring forward from here. */
+	DLE_LANDED,	/**< Landed; the post-landed pad window starts now.     */
+};
+
+/**
  * @brief Formatter vtable.
  *
  * Implement all mandatory callbacks and export a
@@ -98,6 +112,14 @@ struct data_logger_formatter {
 
 	/** Optional preparation to start logging. */
 	int (*start)(struct data_logger *logger);
+
+	/**
+	 * Optional flight-lifecycle event hook (BOOST / LANDED).
+	 *
+	 * Called from @ref data_logger_event under the logger mutex.
+	 * Formatters that don't care about transitions may leave this NULL.
+	 */
+	int (*on_event)(struct data_logger *logger, enum data_logger_event ev);
 
 	/** File suffix */
 	char file_ext[8];
@@ -215,6 +237,19 @@ int data_logger_stop(struct data_logger *logger);
  * @retval 0 on success, negative errno on failure.
  */
 int data_logger_start(struct data_logger *logger);
+
+/**
+ * @brief Deliver a flight-lifecycle event to the formatter.
+ *
+ * Dispatches to the formatter's optional @c on_event hook under the
+ * logger mutex.  Formatters that do not implement the hook silently
+ * accept the event.
+ *
+ * @param logger  Initialised logger instance.
+ * @param ev      Event to deliver.
+ * @retval 0 on success or no-op, negative errno on failure.
+ */
+int data_logger_event(struct data_logger *logger, enum data_logger_event ev);
 
 /**
  * @brief Return the human-readable name for an @ref aurora_data value.
