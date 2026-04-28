@@ -735,6 +735,14 @@ def plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
                     label="True altitude")
     ax_alt.plot(t, filtered_alt, color=c["filtered"], linewidth=2,
                 label="Kalman filter output")
+    peak_idx = int(np.argmax(filtered_alt))
+    peak_alt = float(filtered_alt[peak_idx])
+    peak_t = float(t[peak_idx])
+    ax_alt.axhline(peak_alt, color=c["fg"], linestyle=":", linewidth=0.8,
+                   alpha=0.4,
+                   label=f"Peak altitude ({peak_alt:.1f} m @ {peak_t:.2f} s)")
+    ax_alt.axvline(peak_t, color=c["fg"], linestyle=":", linewidth=0.8,
+                   alpha=0.4)
     if computed_apogee_idx is not None:
         mark_computed_apogee(ax_alt,
                            f"Computed apogee (t={t[computed_apogee_idx]:.2f} s)")
@@ -941,6 +949,16 @@ def plot_raw_flight(sliced, transitions, theme_name, out_path, title=None,
             t_s, vals = sliced["sm_pose"]
             ax.plot(t_s, vals[:, 1], color=c["true_alt"], linewidth=1.5,
                     label="sm_pose.altitude")
+            if vals[:, 1].size:
+                peak_idx = int(np.argmax(vals[:, 1]))
+                peak_alt = float(vals[peak_idx, 1])
+                peak_t = float(t_s[peak_idx])
+                ax.axhline(peak_alt, color=c["fg"], linestyle=":",
+                           linewidth=0.8, alpha=0.4,
+                           label=f"Peak altitude ({peak_alt:.1f} m @ "
+                                 f"{peak_t:.2f} s)")
+                ax.axvline(peak_t, color=c["fg"], linestyle=":",
+                           linewidth=0.8, alpha=0.4)
             ax.set_ylabel("Altitude (m)")
             ax2 = ax.twinx()
             ax2.plot(t_s, vals[:, 0], color=c["accel_vert"], linewidth=0.8,
