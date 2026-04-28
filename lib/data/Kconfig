@@ -80,19 +80,43 @@ config DATA_LOGGER_BIN_FRAME_SIZE
 	  it.
 
 config DATA_LOGGER_BIN_BUF_COUNT
-	int "Number of binary log staging buffers"
-	default 6 if DATA_LOGGER_BIN_BACKEND_DISK
+	int "Number of binary log staging buffers (FLASH backend)"
+	depends on DATA_LOGGER_BIN_BACKEND_FLASH
 	default 3
 	range 2 8
 	help
-	  2 (double-buffer) is the minimum: the producer fills one while
-	  the writer commits the other.  3 (triple-buffer) is enough for
-	  the FLASH backend to absorb the per-sector erase latency (~25 ms
-	  on QSPI NOR).  The DISK backend defaults to 6 because SD cards
-	  occasionally stall for 100+ ms during internal garbage
-	  collection; without slack the producer would back-pressure the
-	  sensor pipeline during those stalls.  More buffers cost more RAM
-	  with diminishing returns.
+	  Only used by the FLASH backend.  2 (double-buffer) is the minimum:
+	  the producer fills one while the writer commits the other.  3
+	  (triple-buffer) is enough to absorb the per-sector erase latency
+	  (~25 ms on QSPI NOR).  More buffers cost more RAM with diminishing
+	  returns.
+
+config DATA_LOGGER_BIN_RING_FRAMES
+	int "Frame slots in the binary log ring (DISK backend)"
+	depends on DATA_LOGGER_BIN_BACKEND_DISK
+	default 16
+	help
+	  Number of BIN_FRAME_SIZE slots in the contiguous ring buffer that
+	  feeds the disk writer thread.  Must be a power of two.  Effective
+	  capacity is RING_FRAMES - 1 committed frames (one slot is always
+	  reserved for the producer).  SD cards stall for 100+ ms during
+	  internal garbage collection; ring depth times frame size sets how
+	  much telemetry can be buffered through such a stall before the
+	  producer back-pressures.  At a 4 KiB frame size, 16 slots = 64 KiB
+	  RAM and absorbs ~5 s of telemetry at the nominal record rate.
+
+config DATA_LOGGER_BIN_MAX_BATCH_FRAMES
+	int "Max frames coalesced into one disk_access_write (DISK backend)"
+	depends on DATA_LOGGER_BIN_BACKEND_DISK
+	default 8
+	help
+	  Cap on how many contiguous committed frames the writer thread
+	  hands to disk_access_write() in a single call.  Larger batches
+	  amortise the per-call overhead of the SD stack and the FTL prefers
+	  multi-block transfers, but increase the size of any single bounce
+	  buffer the lower layer might allocate.  The effective batch is
+	  also bounded by the number of committed frames and the distance
+	  to the physical ring wrap.
 
 config DATA_LOGGER_BIN_BUF_ALIGN
 	int "Alignment of binary log staging buffers (bytes)"
