@@ -1,0 +1,53 @@
+# Flight log on a Zephyr disk-access block device
+#
+# Describes the byte region of a SD/MMC card (or any zephyr,...-disk
+# device) that the binary data logger writes the live flight log into,
+# bypassing the filesystem.  Selected via the chosen entry
+# `auxspace,flight-log-disk`.
+#
+# Example:
+#
+#   / {
+#       chosen {
+#           auxspace,flight-log-disk = &flight_log_disk;
+#       };
+#
+#       flight_log_disk: flight-log-disk {
+#           compatible = "auxspaceev,flight-log-disk";
+#           disk-name = "MMC";
+#           offset-sectors = <2097152>;  /* skip first 1 GiB of card */
+#           size-sectors   = <1048576>;  /* 512 MiB region */
+#       };
+#   };
+#
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+description: Raw-disk region for the binary flight log.
+
+compatible: "auxspaceev,flight-log-disk"
+
+properties:
+  disk-name:
+    type: string
+    required: true
+    description: |
+      Zephyr disk-access name of the underlying block device (e.g. "MMC"
+      for an SD card slot exposed as zephyr,sdmmc-disk).
+
+  offset-sectors:
+    type: int
+    required: true
+    description: |
+      First sector of the flight-log region (zero-based).  Allows the
+      flight log to coexist with a filesystem that uses the rest of the
+      card; the application is responsible for ensuring the filesystem
+      does not overlap this range.
+
+  size-sectors:
+    type: int
+    required: true
+    description: |
+      Number of sectors reserved for the flight log.  The byte size
+      (size-sectors * sector-size) must be a whole multiple of
+      CONFIG_DATA_LOGGER_BIN_FRAME_SIZE.

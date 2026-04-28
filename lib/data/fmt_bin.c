@@ -75,6 +75,8 @@
 
 #include <aurora/lib/data_logger.h>
 
+#include "bin_io.h"
+
 LOG_MODULE_DECLARE(data_logger, CONFIG_DATA_LOGGER_LOG_LEVEL);
 
 /* -------------------------------------------------------------------------- */
@@ -549,3 +551,42 @@ const struct data_logger_formatter data_logger_bin_formatter = {
 	.file_ext        = "bin",
 	.name            = "bin",
 };
+
+/* -------------------------------------------------------------------------- */
+/*  Converter IO (separate flash_area handle so the converter can run after  */
+/*  the writer has closed its own).                                          */
+/* -------------------------------------------------------------------------- */
+
+static const struct flash_area *g_convert_fa;
+
+int bin_io_open(void)
+{
+	int rc = flash_area_open(BIN_FLASH_AREA_ID, &g_convert_fa);
+
+	if (rc != 0) {
+		LOG_ERR("bin_io: flash_area_open failed (%d)", rc);
+	}
+	return rc;
+}
+
+int bin_io_close(void)
+{
+	if (g_convert_fa != NULL) {
+		flash_area_close(g_convert_fa);
+		g_convert_fa = NULL;
+	}
+	return 0;
+}
+
+int bin_io_read(off_t off, void *buf, size_t len)
+{
+	if (g_convert_fa == NULL) {
+		return -ENODEV;
+	}
+	return flash_area_read(g_convert_fa, off, buf, len);
+}
+
+size_t bin_io_total_size(void)
+{
+	return (size_t)BIN_FLASH_AREA_SIZE;
+}

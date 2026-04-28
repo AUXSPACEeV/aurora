@@ -1,6 +1,14 @@
 /*
  * Copyright (c) 2026 Auxspace e.V.
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * RP2350a sensor board overlay.  The flight log lives on a sector
+ * range of the SD card (DATA_LOGGER_BIN_BACKEND_DISK), so internal
+ * flash is reserved entirely for code.
+ *
+ * The flight-log region starts 1 GiB into the card and reserves
+ * 256 MiB.  The FATFS volume mounted at /MMC: must be sized to the
+ * first 1 GiB of the card so it does not overlap the raw region.
  */
 
 #include "sensor_board_v2.dtsi"
@@ -9,26 +17,15 @@
 	status = "okay";
 };
 
-/*
- * Carve a 1 MiB raw-flash partition out of the top of internal QSPI for
- * the live flight log (no filesystem). Code partition shrinks from
- * 4 MiB → 3 MiB.
- */
-&code_partition {
-	reg = <0x00000000 DT_SIZE_M(3)>;
-};
-
-&flash0 {
-	partitions {
-		flight_log: partition@300000 {
-			label = "flight_log";
-			reg = <0x300000 DT_SIZE_M(1)>;
-		};
-	};
-};
-
 / {
 	chosen {
-		auxspace,flight-log = &flight_log;
+		auxspace,flight-log-disk = &flight_log_disk;
+	};
+
+	flight_log_disk: flight-log-disk {
+		compatible = "auxspaceev,flight-log-disk";
+		disk-name = "MMC";
+		offset-sectors = <2097152>;
+		size-sectors   = <524288>;
 	};
 };

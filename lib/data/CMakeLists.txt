@@ -6,7 +6,12 @@ zephyr_library()
 zephyr_library_sources(data_logger.c)
 
 if(CONFIG_DATA_LOGGER_BIN)
-    zephyr_library_sources(fmt_bin.c convert.c)
+    zephyr_library_sources(convert.c)
+    if(CONFIG_DATA_LOGGER_BIN_BACKEND_FLASH)
+        zephyr_library_sources(fmt_bin.c)
+    elseif(CONFIG_DATA_LOGGER_BIN_BACKEND_DISK)
+        zephyr_library_sources(fmt_bin_disk.c)
+    endif()
 endif()
 
 if(CONFIG_DATA_LOGGER_CONVERT_CSV)
