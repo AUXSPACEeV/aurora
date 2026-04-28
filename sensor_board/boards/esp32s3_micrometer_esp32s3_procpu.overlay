@@ -17,7 +17,7 @@
 		auxspace,buzzer = &buzzer0;
 		auxspace,led = &pwmleds;
 		auxspace,pfm = &button0;
-		auxspace,flight-log = &flight_log;
+		auxspace,flight-log-disk = &flight_log_disk;
 	};
 
 	fstab {
@@ -30,22 +30,12 @@
 			mount-point = "/MMC:";
 		};
 	};
-};
 
-/*
- * Reclaim the OTA second-slot partition for the live flight log. MCUboot
- * is not enabled on this target, so slot1_partition is unused. 1344 KiB
- * of internal QSPI carries ~30 s of pre-boost ring + a 30-40 s flight at
- * the configured sample rates with comfortable headroom.
- */
-&flash0 {
-	partitions {
-		/delete-node/ partition@170000;
-
-		flight_log: partition@170000 {
-			label = "flight_log";
-			reg = <0x170000 DT_SIZE_K(1344)>;
-		};
+	flight_log_disk: flight-log-disk {
+		compatible = "auxspaceev,flight-log-disk";
+		disk-name = "MMC";
+		offset-sectors = <2097152>;
+		size-sectors   = <524288>;
 	};
 };
 
