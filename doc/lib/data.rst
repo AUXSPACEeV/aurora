@@ -15,7 +15,8 @@ post-flight conversion targets.
 - **Binary** (``CONFIG_DATA_LOGGER_BIN``): live flight-time log, raw
   flash, no filesystem.  See :ref:`bin-format` below.
 - **CSV** (``CONFIG_DATA_LOGGER_CONVERT_CSV``): conversion target.  One
-  header row then one data row per datapoint.
+  header row then ``CONFIG_DATA_LOGGER_CSV_WINDOW_NS``-sized lines with
+  collected data points for that time window's duration.
 - **InfluxDB Line Protocol** (``CONFIG_DATA_LOGGER_CONVERT_INFLUX``):
   conversion target.  One line per datapoint, no header row.
 
