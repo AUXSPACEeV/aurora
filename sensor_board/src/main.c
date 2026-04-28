@@ -281,6 +281,17 @@ static void log_end_flight(void)
 
 	k_sem_give(&convert_request);
 }
+
+/* Delayable close: scheduled by the state-machine task on entry to
+ * LANDED so the post-landed pad window gets logged before the logger is
+ * closed and conversion kicks in.
+ */
+static void log_end_work_handler(struct k_work *work)
+{
+	ARG_UNUSED(work);
+	log_end_flight();
+}
+static K_WORK_DELAYABLE_DEFINE(log_end_work, log_end_work_handler);
 #endif /* CONFIG_DATA_LOGGER_BIN */
 
 #if defined(CONFIG_AURORA_POWERFAIL)
@@ -696,13 +707,29 @@ void state_machine_task(void *, void *, void *)
 #endif /* CONFIG_IMU */
 #if defined(CONFIG_DATA_LOGGER_BIN)
 			/* Flight-time logging lifecycle:
-			 *  - begin on IDLE→ARMED (opens a fresh binary file),
-			 *  - end on exit to IDLE/LANDED/ERROR (kicks converter).
+			 *  - IDLE→ARMED:  open a fresh binary log (cancel any
+			 *                 still-pending deferred close from a
+			 *                 previous flight first).
+			 *  - ARMED→BOOST: hand the formatter a BOOST event so
+			 *                 the circular ring freezes forward.
+			 *  - →LANDED:     hand a LANDED event and schedule the
+			 *                 close POST_LANDED_PAD_MS later so the
+			 *                 tail of the flight gets captured.
+			 *  - →IDLE/ERROR: close immediately (no pad); cancel
+			 *                 any pending deferred close.
 			 */
 			if (prev_state == SM_IDLE && state == SM_ARMED) {
+				(void)k_work_cancel_delayable(&log_end_work);
 				log_begin_flight();
-			} else if (state == SM_IDLE || state == SM_LANDED ||
-				   state == SM_ERROR) {
+			} else if (prev_state == SM_ARMED &&
+				   state == SM_BOOST) {
+				(void)data_logger_event(&sm_logger, DLE_BOOST);
+			} else if (state == SM_LANDED) {
+				(void)data_logger_event(&sm_logger, DLE_LANDED);
+				(void)k_work_schedule(&log_end_work,
+					K_MSEC(CONFIG_DATA_LOGGER_BIN_POST_LANDED_PAD_MS));
+			} else if (state == SM_IDLE || state == SM_ERROR) {
+				(void)k_work_cancel_delayable(&log_end_work);
 				log_end_flight();
 			}
 #endif /* CONFIG_DATA_LOGGER_BIN */

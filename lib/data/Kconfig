@@ -89,6 +89,18 @@ config DATA_LOGGER_BIN_FLUSH_TIMEOUT_MS
 	int "Max time bin_flush() waits for the writer to drain (ms)"
 	default 2000
 
+config DATA_LOGGER_BIN_POST_LANDED_PAD_MS
+	int "Milliseconds of telemetry to capture after LANDED"
+	default 5000
+	help
+	  After the state machine enters LANDED, the upstream caller keeps
+	  the data logger open for this many ms before closing it.  Records
+	  arriving during this window are normal post-landed telemetry;
+	  combined with the pre-boost data already captured by the circular
+	  ring, the converted log spans roughly
+	  [BOOST minus whatever pre-boost padding fits in the ring,
+	   LANDED + this value].
+
 endif # DATA_LOGGER_BIN
 
 config DATA_LOGGER_MOCK
