@@ -30,12 +30,18 @@
  * The application is responsible for ensuring the configured sector
  * range does not overlap any filesystem mounted on the same disk.
  *
- * The writer thread submits one @c disk_access_write of
- * @c BIN_FRAME_SIZE / sector_size sectors per frame.  No erase is
- * needed; SD cards translate writes through their FTL and unwritten
- * regions read as the manufacturer's default fill.  The frame layout
- * (header + records) is identical to the flash backend, so the
- * converter walks both with the same algorithm.
+ * Buffering: a single contiguous power-of-two ring of BIN_FRAME_SIZE
+ * slots sits in RAM.  The producer fills the slot at @c head; on
+ * rotate it does an atomic increment of @c head and signals the
+ * writer.  The writer pulls all contiguous committed frames between
+ * @c tail and @c head (capped by physical-ring wrap and a max-batch
+ * knob) and hands them to one @c disk_access_write call.  This both
+ * drops the per-frame producer mutex and lets the SD card's FTL see
+ * large multi-block transfers, which it handles dramatically better
+ * under garbage-collection stalls than a stream of single-frame
+ * writes.  The on-storage frame layout (header + records) is
+ * identical to the flash backend, so the converter walks both with
+ * the same algorithm.
  *
  * Copyright (c) 2026 Auxspace e.V.
  *
@@ -50,6 +56,7 @@
 #include <zephyr/storage/disk_access.h>
 #include <zephyr/drivers/disk.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/util.h>
 
 #include <aurora/lib/data_logger.h>
 
@@ -71,27 +78,35 @@ LOG_MODULE_DECLARE(data_logger, CONFIG_DATA_LOGGER_LOG_LEVEL);
 #define BIN_DISK_SIZE_SEC    DT_PROP(BIN_DISK_NODE, size_sectors)
 
 /* -------------------------------------------------------------------------- */
-/*  Frame & buffer geometry                                                   */
+/*  Frame & ring geometry                                                     */
 /* -------------------------------------------------------------------------- */
 
-#define BIN_REC_SIZE   ((size_t)sizeof(struct aurora_bin_record))
-#define BIN_HDR_SIZE   ((size_t)sizeof(struct aurora_bin_frame_header))
-#define BIN_FRAME_SIZE ((size_t)CONFIG_DATA_LOGGER_BIN_FRAME_SIZE)
-#define BIN_BUF_COUNT  CONFIG_DATA_LOGGER_BIN_BUF_COUNT
-#define BIN_BUF_ALIGN  CONFIG_DATA_LOGGER_BIN_BUF_ALIGN
+#define BIN_REC_SIZE         ((size_t)sizeof(struct aurora_bin_record))
+#define BIN_HDR_SIZE         ((size_t)sizeof(struct aurora_bin_frame_header))
+#define BIN_FRAME_SIZE       ((size_t)CONFIG_DATA_LOGGER_BIN_FRAME_SIZE)
+#define BIN_BUF_ALIGN        CONFIG_DATA_LOGGER_BIN_BUF_ALIGN
+#define BIN_RING_FRAMES      ((uint32_t)CONFIG_DATA_LOGGER_BIN_RING_FRAMES)
+#define BIN_RING_MASK        (BIN_RING_FRAMES - 1U)
+#define BIN_RING_BYTES       (BIN_RING_FRAMES * BIN_FRAME_SIZE)
+#define BIN_MAX_BATCH_FRAMES ((uint32_t)CONFIG_DATA_LOGGER_BIN_MAX_BATCH_FRAMES)
 
 BUILD_ASSERT(BIN_FRAME_SIZE >= BIN_HDR_SIZE + BIN_REC_SIZE,
 	     "frame must hold at least one header + one record");
 BUILD_ASSERT((BIN_FRAME_SIZE - BIN_HDR_SIZE) % BIN_REC_SIZE == 0,
 	     "frame payload should be a whole number of records");
-BUILD_ASSERT(BIN_BUF_COUNT >= 2, "BIN needs at least double-buffering");
+BUILD_ASSERT(BIN_RING_FRAMES >= 2U,
+	     "ring needs at least 2 frame slots");
+BUILD_ASSERT((BIN_RING_FRAMES & BIN_RING_MASK) == 0U,
+	     "BIN_RING_FRAMES must be a power of two");
+BUILD_ASSERT(BIN_MAX_BATCH_FRAMES >= 1U,
+	     "BIN_MAX_BATCH_FRAMES must be at least 1");
 
-struct bin_buf {
-	uint8_t data[BIN_FRAME_SIZE];
-	size_t  used;
-};
+static uint8_t bin_ring[BIN_RING_BYTES] __aligned(BIN_BUF_ALIGN);
 
-static struct bin_buf bin_bufs[BIN_BUF_COUNT] __aligned(BIN_BUF_ALIGN);
+static inline uint8_t *frame_ptr(uint32_t idx)
+{
+	return &bin_ring[(idx & BIN_RING_MASK) * BIN_FRAME_SIZE];
+}
 
 struct bin_disk_ctx {
 	uint64_t flight_id;
@@ -99,16 +114,22 @@ struct bin_disk_ctx {
 	uint32_t cur_sector_offset; /* writer side: sectors past disk offset */
 	uint32_t sector_size;       /* queried at init from DISK_IOCTL */
 	uint32_t sectors_per_frame; /* BIN_FRAME_SIZE / sector_size */
-	int      active_idx;
+	size_t   prod_used;         /* bytes filled in the slot at head */
+	atomic_t head;              /* next frame to commit (producer-owned slot) */
+	atomic_t tail;              /* next frame to write to disk */
 	atomic_t sticky_err;
 };
 
 static struct bin_disk_ctx g_bin_ctx;
 static atomic_t g_bin_open = ATOMIC_INIT(0);
 
-K_MSGQ_DEFINE(bin_free_q, sizeof(int), BIN_BUF_COUNT, 4);
-K_MSGQ_DEFINE(bin_flush_q, sizeof(int), BIN_BUF_COUNT + 1, 4);
+/* Writer wakes when the producer commits a frame or flush is requested. */
+K_SEM_DEFINE(bin_data_sem,  0, K_SEM_MAX_LIMIT);
+/* Producer wakes when the writer drains one or more committed frames. */
+K_SEM_DEFINE(bin_space_sem, 0, K_SEM_MAX_LIMIT);
+/* Drain handshake for bin_flush(). */
 K_SEM_DEFINE(bin_drain_sem, 0, 1);
+static atomic_t bin_drain_req = ATOMIC_INIT(0);
 
 /* -------------------------------------------------------------------------- */
 /*  Writer thread                                                             */
@@ -118,29 +139,31 @@ static void bin_writer_fn(void *p1, void *p2, void *p3)
 {
 	ARG_UNUSED(p1); ARG_UNUSED(p2); ARG_UNUSED(p3);
 
-	int idx;
-
 	for (;;) {
-		if (k_msgq_get(&bin_flush_q, &idx, K_FOREVER) != 0) {
+		(void)k_sem_take(&bin_data_sem, K_FOREVER);
+
+		if (!atomic_get(&g_bin_open)) {
 			continue;
 		}
 
-		if (idx < 0) {
-			k_sem_give(&bin_drain_sem);
-			continue;
-		}
+		uint32_t head  = (uint32_t)atomic_get(&g_bin_ctx.head);
+		uint32_t tail  = (uint32_t)atomic_get(&g_bin_ctx.tail);
+		uint32_t avail = head - tail;
 
-		struct bin_buf *b = &bin_bufs[idx];
+		if (avail > 0U) {
+			uint32_t to_wrap = BIN_RING_FRAMES - (tail & BIN_RING_MASK);
+			uint32_t batch   = MIN(avail, to_wrap);
 
-		if (atomic_get(&g_bin_open) && b->used > 0) {
-			uint32_t sec = g_bin_ctx.cur_sector_offset;
+			batch = MIN(batch, BIN_MAX_BATCH_FRAMES);
 
-			if (sec + g_bin_ctx.sectors_per_frame >
-			    (uint32_t)BIN_DISK_SIZE_SEC) {
-				/* Linear region exhausted. Stop quietly so
-				 * the producer's sticky_err propagates and
-				 * the rest of the flight is dropped instead
-				 * of corrupting whatever follows the region.
+			uint32_t sec      = g_bin_ctx.cur_sector_offset;
+			uint32_t n_sec    = batch * g_bin_ctx.sectors_per_frame;
+
+			if (sec + n_sec > (uint32_t)BIN_DISK_SIZE_SEC) {
+				/* Linear region exhausted. Drop the batch so
+				 * the producer doesn't hang; sticky_err will
+				 * propagate and the rest of the flight is
+				 * silently discarded.
 				 */
 				(void)atomic_cas(&g_bin_ctx.sticky_err, 0,
 						 (atomic_val_t)-ENOSPC);
@@ -148,25 +171,46 @@ static void bin_writer_fn(void *p1, void *p2, void *p3)
 					BIN_DISK_OFFSET_SEC + sec);
 			} else {
 				int rc = disk_access_write(BIN_DISK_NAME,
-					b->data,
+					frame_ptr(tail),
 					BIN_DISK_OFFSET_SEC + sec,
-					g_bin_ctx.sectors_per_frame);
+					n_sec);
 
 				if (rc != 0) {
 					(void)atomic_cas(&g_bin_ctx.sticky_err, 0,
 							 (atomic_val_t)rc);
 					LOG_ERR("bin_disk: write at sector %u "
-						"failed (%d)",
-						BIN_DISK_OFFSET_SEC + sec, rc);
+						"(n=%u) failed (%d)",
+						BIN_DISK_OFFSET_SEC + sec,
+						n_sec, rc);
 				} else {
-					g_bin_ctx.cur_sector_offset =
-						sec + g_bin_ctx.sectors_per_frame;
+					g_bin_ctx.cur_sector_offset = sec + n_sec;
 				}
+			}
+
+			(void)atomic_add(&g_bin_ctx.tail, (atomic_val_t)batch);
+
+			for (uint32_t i = 0; i < batch; i++) {
+				k_sem_give(&bin_space_sem);
+			}
+
+			/* If more frames are queued (or remained after wrap),
+			 * keep the writer hot.
+			 */
+			head = (uint32_t)atomic_get(&g_bin_ctx.head);
+			tail = (uint32_t)atomic_get(&g_bin_ctx.tail);
+			if (head != tail) {
+				k_sem_give(&bin_data_sem);
 			}
 		}
 
-		b->used = 0;
-		(void)k_msgq_put(&bin_free_q, &idx, K_NO_WAIT);
+		if (atomic_get(&bin_drain_req)) {
+			head = (uint32_t)atomic_get(&g_bin_ctx.head);
+			tail = (uint32_t)atomic_get(&g_bin_ctx.tail);
+			if (head == tail) {
+				atomic_set(&bin_drain_req, 0);
+				k_sem_give(&bin_drain_sem);
+			}
+		}
 	}
 }
 
@@ -178,66 +222,77 @@ K_THREAD_DEFINE(bin_writer_th, CONFIG_DATA_LOGGER_BIN_WRITER_STACK_SIZE,
 /*  Producer-side helpers                                                     */
 /* -------------------------------------------------------------------------- */
 
-static void bin_frame_init(struct bin_disk_ctx *ctx, struct bin_buf *b)
+static void bin_frame_init(struct bin_disk_ctx *ctx, uint8_t *frame)
 {
-	memset(b->data, 0xFF, sizeof(b->data));
+	memset(frame, 0xFF, BIN_FRAME_SIZE);
 
 	struct aurora_bin_frame_header *h =
-		(struct aurora_bin_frame_header *)b->data;
+		(struct aurora_bin_frame_header *)frame;
 
 	memcpy(h->magic, AURORA_BIN_FRAME_MAGIC, sizeof(h->magic));
-	h->version     = AURORA_BIN_VERSION;
-	h->reserved0   = 0;
-	h->reserved1   = 0;
-	h->seq         = ctx->next_seq++;
-	h->flight_id   = ctx->flight_id;
-	h->base_ts_ns  = k_ticks_to_ns_floor64(k_uptime_ticks());
+	h->version    = AURORA_BIN_VERSION;
+	h->reserved0  = 0;
+	h->reserved1  = 0;
+	h->seq        = ctx->next_seq++;
+	h->flight_id  = ctx->flight_id;
+	h->base_ts_ns = k_ticks_to_ns_floor64(k_uptime_ticks());
 
-	b->used = BIN_HDR_SIZE;
+	ctx->prod_used = BIN_HDR_SIZE;
 }
 
-static int bin_take_free(struct bin_disk_ctx *ctx, k_timeout_t to)
+static int bin_wait_space(struct bin_disk_ctx *ctx, k_timeout_t to)
 {
-	int idx;
-	int rc = k_msgq_get(&bin_free_q, &idx, to);
+	for (;;) {
+		uint32_t head = (uint32_t)atomic_get(&ctx->head);
+		uint32_t tail = (uint32_t)atomic_get(&ctx->tail);
 
-	if (rc != 0) {
-		return rc;
+		/* Capacity is BIN_RING_FRAMES - 1 committed frames; the head
+		 * slot is always reserved for the producer to fill.
+		 */
+		if ((head - tail) < (BIN_RING_FRAMES - 1U)) {
+			return 0;
+		}
+
+		int rc = k_sem_take(&bin_space_sem, to);
+
+		if (rc != 0) {
+			return rc;
+		}
 	}
-
-	ctx->active_idx = idx;
-	bin_frame_init(ctx, &bin_bufs[idx]);
-	return 0;
 }
 
 static int bin_rotate(struct bin_disk_ctx *ctx)
 {
-	int idx = ctx->active_idx;
+	/* Commit the current head frame. */
+	(void)atomic_inc(&ctx->head);
+	k_sem_give(&bin_data_sem);
 
-	if (k_msgq_put(&bin_flush_q, &idx, K_NO_WAIT) != 0) {
-		bin_bufs[idx].used = 0;
-		(void)atomic_cas(&g_bin_ctx.sticky_err, 0,
+	/* Wait for room to reserve the next head slot. */
+	int rc = bin_wait_space(ctx,
+		K_MSEC(CONFIG_DATA_LOGGER_BIN_PRODUCER_TIMEOUT_MS));
+
+	if (rc != 0) {
+		(void)atomic_cas(&ctx->sticky_err, 0,
 				 (atomic_val_t)-EBUSY);
+		ctx->prod_used = 0;
 		return -EBUSY;
 	}
 
-	return bin_take_free(ctx,
-		K_MSEC(CONFIG_DATA_LOGGER_BIN_PRODUCER_TIMEOUT_MS));
+	uint32_t head = (uint32_t)atomic_get(&ctx->head);
+
+	bin_frame_init(ctx, frame_ptr(head));
+	return 0;
 }
 
 static int bin_drain_writer(void)
 {
-	int sentinel = -1;
-
 	k_sem_reset(&bin_drain_sem);
-
-	if (k_msgq_put(&bin_flush_q, &sentinel,
-		       K_MSEC(CONFIG_DATA_LOGGER_BIN_PRODUCER_TIMEOUT_MS)) != 0) {
-		return -EBUSY;
-	}
+	atomic_set(&bin_drain_req, 1);
+	k_sem_give(&bin_data_sem);
 
 	if (k_sem_take(&bin_drain_sem,
 		       K_MSEC(CONFIG_DATA_LOGGER_BIN_FLUSH_TIMEOUT_MS)) != 0) {
+		atomic_set(&bin_drain_req, 0);
 		return -ETIMEDOUT;
 	}
 
@@ -258,11 +313,12 @@ static int bin_init(struct data_logger *logger, const char *path)
 	}
 
 	struct bin_disk_ctx *ctx = &g_bin_ctx;
-	int idx;
 	int rc;
 
 	memset(ctx, 0, sizeof(*ctx));
 	atomic_set(&ctx->sticky_err, 0);
+	atomic_set(&ctx->head, 0);
+	atomic_set(&ctx->tail, 0);
 
 	rc = disk_access_init(BIN_DISK_NAME);
 	if (rc != 0) {
@@ -304,20 +360,13 @@ static int bin_init(struct data_logger *logger, const char *path)
 	ctx->flight_id         = k_ticks_to_ns_floor64(k_uptime_ticks());
 	ctx->next_seq          = 0;
 	ctx->cur_sector_offset = 0;
-	ctx->active_idx        = -1;
 
-	while (k_msgq_get(&bin_flush_q, &idx, K_NO_WAIT) == 0) { }
-	while (k_msgq_get(&bin_free_q,  &idx, K_NO_WAIT) == 0) { }
-	for (int i = 0; i < BIN_BUF_COUNT; i++) {
-		bin_bufs[i].used = 0;
-		(void)k_msgq_put(&bin_free_q, &i, K_NO_WAIT);
-	}
+	k_sem_reset(&bin_data_sem);
+	k_sem_reset(&bin_space_sem);
+	k_sem_reset(&bin_drain_sem);
+	atomic_set(&bin_drain_req, 0);
 
-	rc = bin_take_free(ctx, K_NO_WAIT);
-	if (rc != 0) {
-		atomic_set(&g_bin_open, 0);
-		return rc;
-	}
+	bin_frame_init(ctx, frame_ptr(0));
 
 	logger->ctx = ctx;
 	return 0;
@@ -339,21 +388,20 @@ static int bin_write_datapoint(struct data_logger *logger,
 		return err;
 	}
 
-	struct bin_buf *b = &bin_bufs[ctx->active_idx];
-
-	if (b->used + BIN_REC_SIZE > BIN_FRAME_SIZE) {
+	if (ctx->prod_used + BIN_REC_SIZE > BIN_FRAME_SIZE) {
 		int rc = bin_rotate(ctx);
 
 		if (rc != 0) {
 			return rc;
 		}
-		b = &bin_bufs[ctx->active_idx];
 	}
 
+	uint32_t head    = (uint32_t)atomic_get(&ctx->head);
+	uint8_t *frame   = frame_ptr(head);
 	struct aurora_bin_frame_header *h =
-		(struct aurora_bin_frame_header *)b->data;
+		(struct aurora_bin_frame_header *)frame;
 	struct aurora_bin_record *rec =
-		(struct aurora_bin_record *)(b->data + b->used);
+		(struct aurora_bin_record *)(frame + ctx->prod_used);
 
 	uint64_t delta_ns = dp->timestamp_ns >= h->base_ts_ns
 		? dp->timestamp_ns - h->base_ts_ns : 0;
@@ -373,7 +421,7 @@ static int bin_write_datapoint(struct data_logger *logger,
 		}
 	}
 
-	b->used += BIN_REC_SIZE;
+	ctx->prod_used += BIN_REC_SIZE;
 	return 0;
 }
 
@@ -382,7 +430,7 @@ static int bin_flush(struct data_logger *logger)
 	struct bin_disk_ctx *ctx = logger->ctx;
 	int rc;
 
-	if (bin_bufs[ctx->active_idx].used > BIN_HDR_SIZE) {
+	if (ctx->prod_used > BIN_HDR_SIZE) {
 		rc = bin_rotate(ctx);
 		if (rc != 0) {
 			LOG_ERR("bin_disk_flush: rotate failed (%d)", rc);
@@ -423,16 +471,7 @@ static int bin_on_event(struct data_logger *logger, enum data_logger_event ev)
 
 static int bin_close(struct data_logger *logger)
 {
-	struct bin_disk_ctx *ctx = logger->ctx;
-
 	(void)bin_flush(logger);
-
-	if (ctx->active_idx >= 0) {
-		int idx = ctx->active_idx;
-
-		(void)k_msgq_put(&bin_free_q, &idx, K_NO_WAIT);
-		ctx->active_idx = -1;
-	}
 
 	logger->ctx = NULL;
 	atomic_set(&g_bin_open, 0);
