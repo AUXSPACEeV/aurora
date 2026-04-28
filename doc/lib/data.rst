@@ -8,12 +8,99 @@ through a pluggable formatter backend (vtable pattern).
 Built-in Formatters
 -------------------
 
-Two formatters are provided out of the box:
+The flight-time path uses a fixed-size **binary** formatter that writes
+directly to a raw flash partition.  Two text formatters are provided as
+post-flight conversion targets.
 
-- **CSV** (``CONFIG_DATA_LOGGER_CSV``) — one header row then one data
-  row per datapoint.
-- **InfluxDB Line Protocol** (``CONFIG_DATA_LOGGER_INFLUX``) — one line
-  per datapoint, no header row.
+- **Binary** (``CONFIG_DATA_LOGGER_BIN``): live flight-time log, raw
+  flash, no filesystem.  See :ref:`bin-format` below.
+- **CSV** (``CONFIG_DATA_LOGGER_CONVERT_CSV``): conversion target.  One
+  header row then one data row per datapoint.
+- **InfluxDB Line Protocol** (``CONFIG_DATA_LOGGER_CONVERT_INFLUX``):
+  conversion target.  One line per datapoint, no header row.
+
+.. _bin-format:
+
+Binary Flight-Time Log
+----------------------
+
+The binary formatter is the live writer used during a flight.  It
+bypasses the filesystem entirely and writes frame-aligned blocks
+straight to a fixed flash partition selected via the device-tree chosen
+entry ``auxspace,flight-log``:
+
+.. code-block:: dts
+
+   &flash0 {
+       partitions {
+           compatible = "fixed-partitions";
+           #address-cells = <1>;
+           #size-cells  = <1>;
+           flight_log: partition@300000 {
+               label = "flight_log";
+               reg   = <0x300000 DT_SIZE_M(1)>;
+           };
+       };
+   };
+   / { chosen { auxspace,flight-log = &flight_log; }; };
+
+The partition is laid out as a sequence of fixed-size *frames*
+(``CONFIG_DATA_LOGGER_BIN_FRAME_SIZE``, typically one flash erase block
+of 4096 bytes).  Each frame begins with a 32-byte
+:c:struct:`aurora_bin_frame_header` followed by densely packed 32-byte
+:c:struct:`aurora_bin_record` entries; unused bytes at the tail of a
+partial frame remain in the erased (``0xFF``) state.  Records preserve
+the :c:struct:`sensor_value` channels losslessly so post-flight tooling
+can replay filters and the state machine bit-exactly.
+
+Buffering and Threading
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The producer (the upstream logger thread, holding the data_logger
+mutex) memcpys each record into a DMA-aligned RAM staging buffer.  When
+a buffer fills, its index is handed to a dedicated writer thread via a
+small free/flush index ring; the producer immediately picks up a fresh
+buffer with a new frame header.  The writer issues one
+:c:func:`flash_area_erase` plus one :c:func:`flash_area_write` per
+frame, collapsing thousands of tiny writes per second into a handful of
+page-aligned raw-flash operations with no FATFS or littlefs overhead.
+
+Triple-buffering (``CONFIG_DATA_LOGGER_BIN_BUF_COUNT = 3``) is the
+default — it absorbs the per-sector erase latency (~25 ms on QSPI NOR)
+without backpressuring the sensor pipeline.  If the producer cannot get
+a free buffer within
+``CONFIG_DATA_LOGGER_BIN_PRODUCER_TIMEOUT_MS`` it drops records and
+sets a sticky error on the logger context.
+
+Only one binary logger instance can be live at a time;
+:c:func:`data_logger_init` rejects a second concurrent open of the bin
+formatter.
+
+Per-Flight Framing
+~~~~~~~~~~~~~~~~~~
+
+Every frame header carries a ``flight_id`` (the high-resolution uptime
+clock at the moment the logger was opened) and a monotonic ``seq``
+starting at 0.  The converter walks frames from offset 0 and stops at
+the first frame whose magic is invalid (== unwritten flash) **or**
+whose ``flight_id`` differs from the first frame's — that is how the
+boundary between the current flight and any leftover data from a
+previous flight is detected.  The partition is **not** erased between
+flights; old data is simply ignored.
+
+Post-Flight Conversion
+~~~~~~~~~~~~~~~~~~~~~~
+
+After landing, :c:func:`data_logger_convert` replays the binary log
+through any text formatter:
+
+.. code-block:: c
+
+   /* Convert the on-flash log to CSV on the filesystem. */
+   data_logger_convert(&data_logger_csv_formatter, "/data/flight.csv");
+
+The flash partition is left intact.  Conversion must not run
+concurrently with active logging.
 
 Example Usage
 -------------
