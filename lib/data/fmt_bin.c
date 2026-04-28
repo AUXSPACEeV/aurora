@@ -57,7 +57,7 @@
  * so post-flight conversion can replay filters and the state machine
  * bit-exactly.
  *
- * Only one bin logger instance can be live at a time; @ref bin_init
+ * Only one bin logger instance can be live at a time; @c bin_init
  * rejects a second concurrent open.
  *
  * Copyright (c) 2026 Auxspace e.V.

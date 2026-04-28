@@ -167,7 +167,7 @@ struct data_logger {
  *
  * @param logger    Caller-allocated logger instance.
  * @param filename  Base filename (without extension).
- * @param fmt       Formatter vtable (e.g. @ref data_logger_bin_formatter).
+ * @param fmt       Formatter vtable (e.g. @c data_logger_bin_formatter).
  * @retval 0 on success, negative errno on failure.
  */
 int data_logger_init(struct data_logger *logger, const char *filename,
@@ -322,7 +322,7 @@ extern const struct data_logger_formatter data_logger_mock_formatter;
  *
  * The flight-time log is written to a raw flash partition (no filesystem).
  * The partition is laid out as a sequence of fixed-size @b frames, each
- * sized to one flash erase block (@ref CONFIG_DATA_LOGGER_BIN_FRAME_SIZE,
+ * sized to one flash erase block (@c CONFIG_DATA_LOGGER_BIN_FRAME_SIZE,
  * typically 4096 B).  Each frame begins with an @ref aurora_bin_frame_header
  * followed by densely packed @ref aurora_bin_record entries; any unused
  * bytes at the tail of a partially-filled frame remain in the erased
@@ -357,7 +357,7 @@ struct aurora_bin_frame_header {
 /** Per-datapoint record (32 bytes). Channels are stored losslessly. */
 struct aurora_bin_record {
 	uint8_t  type;            /**< @ref aurora_data; 0xFF marks end-of-frame */
-	uint8_t  channel_count;   /**< Valid channels in @ref channels */
+	uint8_t  channel_count;   /**< Valid channels in @c channels */
 	uint16_t reserved;        /**< Zero */
 	uint32_t ts_delta_us;     /**< µs since this frame's base_ts_ns */
 	struct {
@@ -385,7 +385,7 @@ BUILD_ASSERT(sizeof(struct aurora_bin_record) == 32,
  * The flash partition is left intact.  The caller is responsible for not
  * running conversion concurrently with active logging.
  *
- * @param out_fmt   Target formatter (e.g. @ref data_logger_csv_formatter).
+ * @param out_fmt   Target formatter (e.g. @c data_logger_csv_formatter).
  * @param out_path  Destination path for the converted output.
  * @retval 0 on success, negative errno on failure.
  */

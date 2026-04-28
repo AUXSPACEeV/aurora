@@ -61,7 +61,7 @@ exclude_patterns = ['_build_sphinx', '_build_doxygen', 'Thumbs.db',
 
 # Suppress cross-reference warnings for Zephyr DT binding docs that only
 # exist in a full Zephyr documentation build.
-suppress_warnings = ['ref.dtcompatible']
+suppress_warnings = ['ref.dtcompatible', 'duplicate_declaration.cpp']
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
