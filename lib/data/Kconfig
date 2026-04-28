@@ -181,6 +181,20 @@ config DATA_LOGGER_CONVERT_CSV
 	  Build the CSV formatter so data_logger_convert() can emit a
 	  header-prefixed UTF-8 CSV file from the binary log.
 
+if DATA_LOGGER_CONVERT_CSV
+
+config DATA_LOGGER_CSV_WINDOW_NS
+	int "CSV row grouping window in nanoseconds"
+	default 1000000
+	help
+	  Datapoints whose timestamps fall within this window of the first
+	  sample in a row are merged into one CSV row, so a row holds one
+	  full sensor snapshot. The flight loop emits all sensor groups
+	  within a few hundred microseconds; the default 1 ms matches
+	  tools/influx_to_csv.py.
+
+endif # DATA_LOGGER_CONVERT_CSV
+
 config DATA_LOGGER_CONVERT_INFLUX
 	bool "Enable InfluxDB Line Protocol conversion target"
 	depends on FILE_SYSTEM
