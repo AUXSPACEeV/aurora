@@ -15,6 +15,7 @@
 
 	fstab {
 		compatible = "zephyr,fstab";
+
 		ffs0: ffs0 {
 			compatible = "zephyr,fstab,fatfs";
 			automount;
