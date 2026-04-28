@@ -9,6 +9,10 @@ cmake_minimum_required(VERSION 3.20.0)
 # TODO: Exclude zephyr from SCA since it produces false positives
 # set(ZEPHYR_SCA_VARIANT gcc)
 
+# Make application-local snippets (e.g. ./snippets/sim) discoverable by
+# `west build -S <name>` and twister's SNIPPET= extra_args.
+list(APPEND SNIPPET_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
+
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 # For some reason, when using west twister, the app target is not created
@@ -18,13 +22,6 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 # github-runner context, the target must be named "app":
 # > Cannot specify sources for target "app" which is not built by this project.
 project(app LANGUAGES C)
-
-# Build cdc-acm-console with snippet
-if(CONFIG_USB_SERIAL)
-	if(NOT cdc-acm-console IN_LIST SNIPPET)
-		set(SNIPPET cdc-acm-console ${SNIPPET} CACHE STRING "" FORCE)
-	endif()
-endif()
 
 target_sources(app PRIVATE
 	src/main.c

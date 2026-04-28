@@ -39,6 +39,14 @@ tests:
       - esp32s3_micrometer/esp32s3/procpu
     integration_platforms:
       - esp32s3_micrometer/esp32s3/procpu
+  app.sim:
+    extra_args: SNIPPET=sim
+    platform_allow:
+      - sensor_board_v2/rp2040
+      - sensor_board_v2/rp2350a/hazard3
+    integration_platforms:
+      - sensor_board_v2/rp2040
+      - sensor_board_v2/rp2350a/hazard3
   app.debug:
     extra_overlay_confs:
       - debug.conf
