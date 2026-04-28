@@ -184,7 +184,8 @@ static void converter_task(void *, void *, void *)
 		k_sem_take(&convert_request, K_FOREVER);
 		k_sem_take(&convert_idle, K_FOREVER);
 
-		char base[DATA_LOGGER_PATH_MAX];
+		/* DATA_LOGGER_PATH_MAX minus struct data_logger_formatter's member "file_ext" */
+		char base[DATA_LOGGER_PATH_MAX - 8];
 
 		pick_convert_out_base(base, sizeof(base));
 

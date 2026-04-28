@@ -77,3 +77,6 @@ __pycache__/
 
 # zephyr cmake cache
 .cache
+
+# Native sim flight log
+flash.bin
