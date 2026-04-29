@@ -21,11 +21,15 @@
  *     flight_log_disk: flight-log-disk {
  *         compatible = "auxspaceev,flight-log-disk";
  *         disk-name = "MMC";
- *         offset-sectors = <2097152>;
- *         size-sectors   = <1048576>;
+ *         offset-bytes = <0x40000000>;
+ *         size-bytes   = <0x20000000>;
  *     };
  * };
  * @endcode
+ *
+ * The byte values are converted to sector counts at init time using
+ * the disk's logical sector size queried via DISK_IOCTL_GET_SECTOR_SIZE
+ * (always 512 on SD/MMC).
  *
  * The application is responsible for ensuring the configured sector
  * range does not overlap any filesystem mounted on the same disk.
@@ -72,10 +76,10 @@ LOG_MODULE_DECLARE(data_logger, CONFIG_DATA_LOGGER_LOG_LEVEL);
 #error "DATA_LOGGER_BIN_BACKEND_DISK requires DT chosen 'auxspace,flight-log-disk'. See aurora/lib/data/fmt_bin_disk.c file header for an example overlay."
 #endif
 
-#define BIN_DISK_NODE        DT_CHOSEN(auxspace_flight_log_disk)
-#define BIN_DISK_NAME        DT_PROP(BIN_DISK_NODE, disk_name)
-#define BIN_DISK_OFFSET_SEC  DT_PROP(BIN_DISK_NODE, offset_sectors)
-#define BIN_DISK_SIZE_SEC    DT_PROP(BIN_DISK_NODE, size_sectors)
+#define BIN_DISK_NODE         DT_CHOSEN(auxspace_flight_log_disk)
+#define BIN_DISK_NAME         DT_PROP(BIN_DISK_NODE, disk_name)
+#define BIN_DISK_OFFSET_BYTES ((uint64_t)DT_PROP(BIN_DISK_NODE, offset_bytes))
+#define BIN_DISK_SIZE_BYTES   ((uint64_t)DT_PROP(BIN_DISK_NODE, size_bytes))
 
 /* -------------------------------------------------------------------------- */
 /*  Frame & ring geometry                                                     */
@@ -114,6 +118,8 @@ struct bin_disk_ctx {
 	uint32_t cur_sector_offset; /* writer side: sectors past disk offset */
 	uint32_t sector_size;       /* queried at init from DISK_IOCTL */
 	uint32_t sectors_per_frame; /* BIN_FRAME_SIZE / sector_size */
+	uint32_t offset_sec;        /* derived: BIN_DISK_OFFSET_BYTES / sector_size */
+	uint32_t size_sec;          /* derived: BIN_DISK_SIZE_BYTES / sector_size */
 	size_t   prod_used;         /* bytes filled in the slot at head */
 	atomic_t head;              /* next frame to commit (producer-owned slot) */
 	atomic_t tail;              /* next frame to write to disk */
@@ -159,7 +165,7 @@ static void bin_writer_fn(void *p1, void *p2, void *p3)
 			uint32_t sec      = g_bin_ctx.cur_sector_offset;
 			uint32_t n_sec    = batch * g_bin_ctx.sectors_per_frame;
 
-			if (sec + n_sec > (uint32_t)BIN_DISK_SIZE_SEC) {
+			if (sec + n_sec > g_bin_ctx.size_sec) {
 				/* Linear region exhausted. Drop the batch so
 				 * the producer doesn't hang; sticky_err will
 				 * propagate and the rest of the flight is
@@ -168,11 +174,11 @@ static void bin_writer_fn(void *p1, void *p2, void *p3)
 				(void)atomic_cas(&g_bin_ctx.sticky_err, 0,
 						 (atomic_val_t)-ENOSPC);
 				LOG_ERR("bin_disk: region full at sector %u",
-					BIN_DISK_OFFSET_SEC + sec);
+					g_bin_ctx.offset_sec + sec);
 			} else {
 				int rc = disk_access_write(BIN_DISK_NAME,
 					frame_ptr(tail),
-					BIN_DISK_OFFSET_SEC + sec,
+					g_bin_ctx.offset_sec + sec,
 					n_sec);
 
 				if (rc != 0) {
@@ -180,7 +186,7 @@ static void bin_writer_fn(void *p1, void *p2, void *p3)
 							 (atomic_val_t)rc);
 					LOG_ERR("bin_disk: write at sector %u "
 						"(n=%u) failed (%d)",
-						BIN_DISK_OFFSET_SEC + sec,
+						g_bin_ctx.offset_sec + sec,
 						n_sec, rc);
 				} else {
 					g_bin_ctx.cur_sector_offset = sec + n_sec;
@@ -346,13 +352,24 @@ static int bin_init(struct data_logger *logger, const char *path)
 		return -EINVAL;
 	}
 
+	if ((BIN_DISK_OFFSET_BYTES % sector_size) != 0 ||
+	    (BIN_DISK_SIZE_BYTES   % sector_size) != 0) {
+		LOG_ERR("bin_disk: offset/size bytes not aligned to sector "
+			"size %u (offset=%llu size=%llu)", sector_size,
+			(unsigned long long)BIN_DISK_OFFSET_BYTES,
+			(unsigned long long)BIN_DISK_SIZE_BYTES);
+		atomic_set(&g_bin_open, 0);
+		return -EINVAL;
+	}
+
 	ctx->sector_size       = sector_size;
 	ctx->sectors_per_frame = (uint32_t)(BIN_FRAME_SIZE / sector_size);
+	ctx->offset_sec        = (uint32_t)(BIN_DISK_OFFSET_BYTES / sector_size);
+	ctx->size_sec          = (uint32_t)(BIN_DISK_SIZE_BYTES   / sector_size);
 
-	if (((uint32_t)BIN_DISK_SIZE_SEC % ctx->sectors_per_frame) != 0) {
-		LOG_ERR("bin_disk: size-sectors %u not a multiple of frame "
-			"sectors %u", (uint32_t)BIN_DISK_SIZE_SEC,
-			ctx->sectors_per_frame);
+	if ((ctx->size_sec % ctx->sectors_per_frame) != 0) {
+		LOG_ERR("bin_disk: size sectors %u not a multiple of frame "
+			"sectors %u", ctx->size_sec, ctx->sectors_per_frame);
 		atomic_set(&g_bin_open, 0);
 		return -EINVAL;
 	}
@@ -494,6 +511,8 @@ const struct data_logger_formatter data_logger_bin_formatter = {
 /* -------------------------------------------------------------------------- */
 
 static uint32_t g_io_sector_size;
+static uint32_t g_io_offset_sec;
+static uint32_t g_io_size_sec;
 
 int bin_io_open(void)
 {
@@ -513,12 +532,25 @@ int bin_io_open(void)
 		return rc != 0 ? rc : -EIO;
 	}
 
+	if ((BIN_DISK_OFFSET_BYTES % g_io_sector_size) != 0 ||
+	    (BIN_DISK_SIZE_BYTES   % g_io_sector_size) != 0) {
+		LOG_ERR("bin_io_disk: offset/size bytes not aligned to sector "
+			"size %u", g_io_sector_size);
+		g_io_sector_size = 0;
+		return -EINVAL;
+	}
+
+	g_io_offset_sec = (uint32_t)(BIN_DISK_OFFSET_BYTES / g_io_sector_size);
+	g_io_size_sec   = (uint32_t)(BIN_DISK_SIZE_BYTES   / g_io_sector_size);
+
 	return 0;
 }
 
 int bin_io_close(void)
 {
 	g_io_sector_size = 0;
+	g_io_offset_sec  = 0;
+	g_io_size_sec    = 0;
 	return 0;
 }
 
@@ -533,7 +565,7 @@ int bin_io_read(off_t off, void *buf, size_t len)
 	}
 
 	uint32_t sector = (uint32_t)((size_t)off / g_io_sector_size) +
-			  BIN_DISK_OFFSET_SEC;
+			  g_io_offset_sec;
 	uint32_t count  = (uint32_t)(len / g_io_sector_size);
 
 	return disk_access_read(BIN_DISK_NAME, buf, sector, count);
@@ -541,8 +573,5 @@ int bin_io_read(off_t off, void *buf, size_t len)
 
 size_t bin_io_total_size(void)
 {
-	if (g_io_sector_size == 0) {
-		return 0;
-	}
-	return (size_t)BIN_DISK_SIZE_SEC * g_io_sector_size;
+	return (size_t)BIN_DISK_SIZE_BYTES;
 }

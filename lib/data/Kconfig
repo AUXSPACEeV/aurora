@@ -60,7 +60,7 @@ config DATA_LOGGER_BIN_BACKEND_DISK
 	  (typically an SD card via zephyr,sdmmc-disk).  The region is
 	  described by the DT chosen 'auxspace,flight-log-disk' node, an
 	  'auxspaceev,flight-log-disk' compatible providing disk-name,
-	  offset-sectors and size-sectors.  Capacity is large enough that
+	  offset-bytes and size-bytes.  Capacity is large enough that
 	  the writer is purely linear from the offset; circular wrap is
 	  not used and BOOST events are recorded but do not freeze the
 	  ring.
