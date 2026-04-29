@@ -15,8 +15,8 @@
 #       flight_log_disk: flight-log-disk {
 #           compatible = "auxspaceev,flight-log-disk";
 #           disk-name = "MMC";
-#           offset-sectors = <2097152>;  /* skip first 1 GiB of card */
-#           size-sectors   = <1048576>;  /* 512 MiB region */
+#           offset-bytes = <0x40000000>;  /* skip first 1 GiB of card */
+#           size-bytes   = <0x10000000>;  /* 256 MiB region */
 #       };
 #   };
 #
@@ -35,19 +35,23 @@ properties:
       Zephyr disk-access name of the underlying block device (e.g. "MMC"
       for an SD card slot exposed as zephyr,sdmmc-disk).
 
-  offset-sectors:
+  offset-bytes:
     type: int
     required: true
     description: |
-      First sector of the flight-log region (zero-based).  Allows the
-      flight log to coexist with a filesystem that uses the rest of the
-      card; the application is responsible for ensuring the filesystem
-      does not overlap this range.
+      Byte offset of the flight-log region from the start of the disk
+      (zero-based).  Allows the flight log to coexist with a filesystem
+      that uses the rest of the card; the application is responsible
+      for ensuring the filesystem does not overlap this range.  Must
+      be a whole multiple of the disk's logical sector size (queried
+      at runtime via DISK_IOCTL_GET_SECTOR_SIZE; 512 on every SD/MMC).
+      Capped at 4 GiB - 1 by the 32-bit DT cell width.
 
-  size-sectors:
+  size-bytes:
     type: int
     required: true
     description: |
-      Number of sectors reserved for the flight log.  The byte size
-      (size-sectors * sector-size) must be a whole multiple of
-      CONFIG_DATA_LOGGER_BIN_FRAME_SIZE.
+      Byte size of the region reserved for the flight log.  Must be a
+      whole multiple of the disk's logical sector size and of
+      CONFIG_DATA_LOGGER_BIN_FRAME_SIZE.  Capped at 4 GiB - 1 by the
+      32-bit DT cell width.

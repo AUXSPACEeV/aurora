@@ -18,7 +18,7 @@
 		compatible = "zephyr,ram-disk";
 		disk-name = "RAM";
 		sector-size = <512>;
-		sector-count = <2621440>;
+		sector-count = <2621440>;	/* 1 GiB + 256 MiB */
 	};
 
 	fstab {
@@ -32,24 +32,16 @@
 		};
 	};
 
-	flight_log_disk: flight-log-disk {
-		compatible = "auxspaceev,flight-log-disk";
-		disk-name = "RAM";
-		offset-sectors = <2097152>;
-		size-sectors   = <524288>;
-	};
-
 	chosen {
-		// auxspace,flight-log = &flight_log;
-		auxspace,flight-log-disk = &flight_log_disk;
+		auxspace,flight-log = &flight_log;
 	};
 };
 
-// &flash0 {
-// 	partitions {
-// 		flight_log: partition@100000 {
-// 			label = "flight_log";
-// 			reg = <0x00100000 DT_SIZE_M(1)>;
-// 		};
-// 	};
-// };
+&flash0 {
+	partitions {
+		flight_log: partition@100000 {
+			label = "flight_log";
+			reg = <0x00100000 DT_SIZE_M(1)>;
+		};
+	};
+};
