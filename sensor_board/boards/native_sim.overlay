@@ -41,7 +41,7 @@
 	partitions {
 		flight_log: partition@100000 {
 			label = "flight_log";
-			reg = <0x00100000 DT_SIZE_M(1)>;
+			reg = <0x0 DT_SIZE_M(1)>;
 		};
 	};
 };
