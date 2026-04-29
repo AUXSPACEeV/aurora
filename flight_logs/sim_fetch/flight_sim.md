@@ -8,8 +8,23 @@
 ## Compile command
 
 ```bash
-python3 ./tools/plot_flight_data.py --flight flight_logs/sim_fetch \
-  --r-meas 6.0
+# Building and running the simulator first:
+west build -p -b native_sim/native sensor_board/
+
+python3 ./tools/sim_fetch.py pexpect \
+  build/zephyr/zephyr.exe \
+  --await-ready "Attitude calibrated" \
+  --pre-command "sim launch" \
+  --wait-for "converted flight_log" \
+  --wait-timeout 600 \
+  --fetch /RAM:/data/flight_0.influx flights.influx \
+  --fetch /RAM:/state/audit.0 state_audit \
+  --fetch /RAM:/data/flight_0.csv flights.csv \
+  -v
+```
+
+```bash
+python3 ./tools/plot_flight_data.py --flight flight_logs/sim_fetch
 ```
 
 ## Flight Protocol
