@@ -295,7 +295,7 @@ static int cmd_sim_status(const struct shell *sh, size_t argc, char **argv)
 	if (t < 0.0) {
 		shell_print(sh, "sim: pad-stationary");
 	} else {
-		shell_print(sh, "sim: t=%.2fs  h=%.2fm  a_z=%.2fm/s^2",
+		shell_print(sh, "sim: t=%.2fs  h=%.2fm  a_vert=%.2fm/s^2",
 			    t, altitude, accel_vert);
 	}
 	return 0;
