@@ -39,6 +39,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import time
 from pathlib import Path
 
 HAS_PEXPECT: bool
@@ -141,6 +142,7 @@ def cmd_pexpect(args: argparse.Namespace) -> int:
         # Re-sync on the prompt so the next sendline lands cleanly.
         child.sendline("")
         child.expect_exact(prompt)
+        time.sleep(args.ready_padding)
 
     for pre in args.pre_command:
         child.sendline(pre)
@@ -203,6 +205,8 @@ def main() -> int:
     p_px.add_argument("--await-ready", default=None, metavar="PATTERN",
                       help="regex to wait for after boot before sending "
                            "--pre-command (e.g. 'Attitude calibrated')")
+    p_px.add_argument("--ready-padding", default=0.0, type=float,
+                      help="Time delay after 'ready' in seconds.")
     p_px.add_argument("--await-timeout", type=int, default=60,
                       help="timeout for --await-ready (seconds)")
     p_px.add_argument("--pre-command", action="append", default=[],
