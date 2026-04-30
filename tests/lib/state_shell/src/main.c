@@ -20,6 +20,11 @@
 #include <aurora/lib/state/state.h>
 #include <aurora/lib/state/audit.h>
 
+/* Build an orientation vector (yaw, pitch, roll) whose up-axis elevation
+ * equals @p elev degrees.
+ */
+#define ORIENT(elev) { 0.0, 90.0 - (double)(elev), 0.0 }
+
 /** @brief Test threshold configuration with fast timers for unit testing. */
 static const struct sm_thresholds test_cfg = {
 	.T_AB  = 30,
@@ -115,7 +120,7 @@ ZTEST(state_shell_tests, test_status_reflects_armed)
 {
 	struct sm_inputs in = {
 		.armed = 1,
-		.orientation = test_cfg.T_OA,
+		.orientation = ORIENT(test_cfg.T_OA),
 	};
 
 	sm_update(&in);
@@ -137,7 +142,7 @@ ZTEST(state_shell_tests, test_transition_to_idle)
 	int err;
 	struct sm_inputs in = {
 		.armed = 1,
-		.orientation = test_cfg.T_OA,
+		.orientation = ORIENT(test_cfg.T_OA),
 	};
 
 	/* Move to ARMED first */
@@ -202,7 +207,7 @@ ZTEST(state_shell_tests, test_audit_records_transition)
 {
 	struct sm_inputs in = {
 		.armed = 1,
-		.orientation = test_cfg.T_OA,
+		.orientation = ORIENT(test_cfg.T_OA),
 	};
 
 	/* Trigger IDLE -> ARMED transition */
@@ -232,7 +237,7 @@ ZTEST(state_shell_tests, test_audit_multiple_transitions)
 {
 	struct sm_inputs in = {
 		.armed = 1,
-		.orientation = test_cfg.T_OA,
+		.orientation = ORIENT(test_cfg.T_OA),
 	};
 
 	/* IDLE -> ARMED */
@@ -261,7 +266,7 @@ ZTEST(state_shell_tests, test_audit_clear)
 	int err;
 	struct sm_inputs in = {
 		.armed = 1,
-		.orientation = test_cfg.T_OA,
+		.orientation = ORIENT(test_cfg.T_OA),
 	};
 
 	/* Generate some audit entries */

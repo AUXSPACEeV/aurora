@@ -10,6 +10,7 @@
  */
 
 #include "aurora/lib/state/simple.h"
+#include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/devicetree.h>
@@ -293,10 +294,11 @@ void state_machine_task(void *, void *, void *)
 	double altitude = 0.0;
 	double acceleration = 0.0;
 	double accel_vert = 0.0;
-	double tilt = 0.0;
+	double orientation[] = {
+		0.0, 0.0, 0.0
+	};
 	bool baro_ready = false;
 	bool imu_ready = false;
-
 
 	struct sm_error_handling_args sm_error_handler = {
 		.cb = &state_machine_error_handler,
@@ -316,12 +318,12 @@ void state_machine_task(void *, void *, void *)
 	enum sm_state pyro_state = SM_IDLE;
 #endif /* CONFIG_PYRO */
 
-	struct sm_inputs inputs = (struct sm_inputs){
+	struct sm_inputs inputs = {
 		.armed = armed,
-		.orientation = tilt,
 		.acceleration = acceleration,
 		.accel_vert = accel_vert,
 	};
+	memcpy(inputs.orientation, orientation, sizeof(inputs.orientation));
 
 #if defined(CONFIG_PYRO)
 	while (!device_is_ready(pyro0)) {
@@ -350,7 +352,7 @@ void state_machine_task(void *, void *, void *)
 		 */
 		do {
 			if (data_chan == &imu_data_chan) {
-				if (imu_sensor_value_to_orientation(&msg_buf.imu, &tilt) == 0 &&
+				if (imu_sensor_value_to_orientation(&msg_buf.imu, orientation) == 0 &&
 				    imu_sensor_value_to_acceleration(&msg_buf.imu, &acceleration) == 0) {
 					imu_ready = true;
 				}
@@ -447,11 +449,11 @@ void state_machine_task(void *, void *, void *)
 
 		inputs = (struct sm_inputs){
 			.armed = armed,
-			.orientation = tilt,
 			.acceleration = acceleration,
 			.accel_vert = accel_vert,
 			.altitude = altitude,
 		};
+		memcpy(inputs.orientation, orientation, sizeof(inputs.orientation));
 
 		sm_update(&inputs);
 		state = sm_get_state();
@@ -466,11 +468,10 @@ void state_machine_task(void *, void *, void *)
 			struct datapoint kin_dp = {
 				.timestamp_ns = ts,
 				.type = AURORA_DATA_SM_KINEMATICS,
-				.channel_count = 3,
+				.channel_count = 2,
 			};
 			sensor_value_from_double(&kin_dp.channels[0], sm_in.acceleration);
 			sensor_value_from_double(&kin_dp.channels[1], sm_in.accel_vert);
-			sensor_value_from_double(&kin_dp.channels[2], sm_in.velocity);
 			log_enqueue(&kin_dp);
 
 			struct datapoint pose_dp = {
@@ -478,9 +479,19 @@ void state_machine_task(void *, void *, void *)
 				.type = AURORA_DATA_SM_POSE,
 				.channel_count = 2,
 			};
-			sensor_value_from_double(&pose_dp.channels[0], sm_in.orientation);
+			sensor_value_from_double(&pose_dp.channels[0], sm_in.velocity);
 			sensor_value_from_double(&pose_dp.channels[1], sm_in.altitude);
 			log_enqueue(&pose_dp);
+
+			struct datapoint or_dp = {
+				.timestamp_ns = ts,
+				.type = AURORA_DATA_ORIENTATION,
+				.channel_count = 3,
+			};
+			sensor_value_from_double(&or_dp.channels[0], sm_in.orientation[0]);
+			sensor_value_from_double(&or_dp.channels[1], sm_in.orientation[1]);
+			sensor_value_from_double(&or_dp.channels[2], sm_in.orientation[2]);
+			log_enqueue(&or_dp);
 		}
 #endif /* CONFIG_DATA_LOGGER */
 

@@ -81,6 +81,7 @@ static const char *const aurora_data_names[AURORA_DATA_COUNT] = {
 	[AURORA_DATA_IMU_MAG]       = "mag",
 	[AURORA_DATA_SM_KINEMATICS] = "sm_kinematics",
 	[AURORA_DATA_SM_POSE]       = "sm_pose",
+	[AURORA_DATA_ORIENTATION]   = "orientation",
 };
 
 /* data_logger_type_name – see data_logger.h */

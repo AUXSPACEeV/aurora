@@ -85,27 +85,33 @@ int imu_sensor_value_to_acceleration(const struct imu_data *data,
 				     double *acc_out);
 
 /**
- * @brief Calculate the elevation angle from horizontal using IMU sensor values.
+ * @brief Calculate the orientation (yaw, pitch, roll) from IMU sensor values.
  *
- * Uses @c CONFIG_IMU_UP_AXIS_* to pick the body axis pointing toward the
- * rocket's nose, so the result is independent of IMU mounting orientation.
- * Convention matches the flight state machine's arming thresholds:
- *   - 0   degrees  = long axis horizontal
- *   - +90 degrees  = long axis pointing up (nose toward sky)
- *   - -90 degrees  = long axis pointing down
+ * Uses @c CONFIG_IMU_UP_AXIS_* to remap the body frame so the configured
+ * up-axis aligns with world Z, making the result independent of IMU
+ * mounting orientation.  The two remaining body axes are taken in cyclic
+ * order as the local forward (X) and lateral (Y) axes.
+ *
+ * Output convention (degrees):
+ *   - orientation[0] = yaw   (rotation about up axis)
+ *   - orientation[1] = pitch (elevation of forward axis from horizontal)
+ *   - orientation[2] = roll  (rotation about forward axis)
  *
  * Only meaningful while gravity dominates (stationary / quasi-static);
  * during powered flight, derive orientation from the attitude tracker.
  *
- * @param data      Pointer to the IMU sensor data.
- * @param angle_out Output: elevation angle in degrees, [-90, 90]. Must be
- *                  a valid pointer to a double.
+ * @note Yaw is unobservable from a static accelerometer reading and is
+ *       always reported as 0.
+ *
+ * @param data        Pointer to the IMU sensor data.
+ * @param orientation Output: [yaw, pitch, roll] in degrees.  Must be a
+ *                    valid pointer to a 3-element double array.
  *
  * @retval 0 on success.
- * @retval -EINVAL if @p data or @p angle_out is NULL.
+ * @retval -EINVAL if @p data or @p orientation is NULL.
  */
 int imu_sensor_value_to_orientation(const struct imu_data *data,
-				    double *angle_out);
+				    double *orientation);
 
 /** @} */
 

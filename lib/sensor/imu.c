@@ -154,9 +154,9 @@ int imu_sensor_value_to_acceleration(const struct imu_data *data, double *acc_ou
 
 /* imu_sensor_value_to_orientation – see imu.h */
 int imu_sensor_value_to_orientation(const struct imu_data *data,
-				    double *angle_out)
+				    double *orientation)
 {
-	if (data == NULL || angle_out == NULL)
+	if (data == NULL || orientation == NULL)
 		return -EINVAL;
 
 	const int idx = CONFIG_IMU_UP_AXIS_INDEX;
@@ -168,16 +168,23 @@ int imu_sensor_value_to_orientation(const struct imu_data *data,
 		out_ev(&data->accel[2]),
 	};
 
-	/* Component of specific force along the configured up axis, and
-	 * magnitude of the components perpendicular to it.
+	/* Re-map body axes so the configured "up" axis becomes Z-up.  The two
+	 * remaining axes are taken in cyclic order as the local X (forward)
+	 * and Y (lateral) axes.
 	 */
-	double up = (double)sign * a[idx];
-	double perp2 = 0.0;
-	for (int i = 0; i < IMU_NUM_AXES; i++) {
-		if (i != idx)
-			perp2 += a[i] * a[i];
-	}
+	const int x_idx = (idx + 1) % 3;
+	const int y_idx = (idx + 2) % 3;
 
-	*angle_out = atan2(up, sqrt(perp2)) * (180.0 / M_PI);
+	const double gx = a[x_idx];
+	const double gy = a[y_idx];
+	const double gz = (double)sign * a[idx];
+
+	const double rad2deg = 180.0 / M_PI;
+
+	orientation[0] = atan2(gy, gz) * rad2deg;
+	orientation[1] = atan2(-gx, sqrt(gy * gy + gz * gz)) * rad2deg;
+	/* roll is unobservable from a static accelerometer reading. */
+	orientation[2] = 0.0;
+
 	return 0;
 }

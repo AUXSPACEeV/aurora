@@ -40,13 +40,14 @@
  * stays accurate and array-based tables remain valid.
  */
 enum aurora_data {
-	AURORA_DATA_BARO,          /**< Barometer: [0] temperature, [1] pressure */
-	AURORA_DATA_IMU_ACCEL,     /**< Accelerometer: [0] x, [1] y, [2] z       */
-	AURORA_DATA_IMU_GYRO,      /**< Gyroscope:     [0] x, [1] y, [2] z       */
-	AURORA_DATA_IMU_MAG,       /**< Magnetometer:  [0] x, [1] y, [2]  z      */
-	AURORA_DATA_SM_KINEMATICS, /**< SM inputs: [0] accel, [1] accel_vert, [2] velocity */
-	AURORA_DATA_SM_POSE,       /**< SM inputs: [0] orientation, [1] altitude */
-	AURORA_DATA_COUNT,         /**< Sentinel — do not use as a type          */
+	AURORA_DATA_BARO,          /**< Barometer: [0] temperature, [1] pressure  */
+	AURORA_DATA_IMU_ACCEL,     /**< Accelerometer: [0] x, [1] y, [2] z        */
+	AURORA_DATA_IMU_GYRO,      /**< Gyroscope:     [0] x, [1] y, [2] z        */
+	AURORA_DATA_IMU_MAG,       /**< Magnetometer:  [0] x, [1] y, [2]  z       */
+	AURORA_DATA_SM_KINEMATICS, /**< SM inputs: [0] accel, [1] accel_vert      */
+	AURORA_DATA_SM_POSE,       /**< SM Pose: [0] velocity, [1] altitude       */
+	AURORA_DATA_ORIENTATION,   /**< Orientation: [0] yaw, [1] pitch, [2] roll */
+	AURORA_DATA_COUNT,         /**< Sentinel — do not use as a type           */
 };
 
 /**

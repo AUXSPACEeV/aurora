@@ -20,6 +20,31 @@
 
 #include <aurora/lib/state/state.h>
 
+#ifndef M_PI
+#define M_PI ((double)3.1415926535)
+#endif
+
+/**
+ * @brief Elevation of the configured up axis from horizontal (degrees).
+ *
+ * The orientation vector produced by imu_sensor_value_to_orientation()
+ * already accounts for @c CONFIG_IMU_UP_AXIS_* by remapping the body
+ * "up" axis to local Z, so pitch and yaw alone are sufficient to
+ * recover the up-axis tilt:
+ *   gz/|g| = cos(pitch) * cos(yaw)
+ *
+ * @return Elevation in degrees, clamped to [-90, 90].  +90 = up axis
+ *         points to the sky, 0 = horizontal, -90 = inverted.
+ */
+static inline double sm_orientation_elevation_deg(const double orientation[3])
+{
+	const double deg2rad = M_PI / 180.0;
+	double s = cos(orientation[1] * deg2rad) * cos(orientation[0] * deg2rad);
+	if (s > 1.0)  s = 1.0;
+	if (s < -1.0) s = -1.0;
+	return asin(s) * (180.0 / M_PI);
+}
+
 #if defined(CONFIG_AURORA_STATE_MACHINE_AUDIT)
 #include <aurora/lib/state/audit.h>
 #endif /* CONFIG_AURORA_STATE_MACHINE_AUDIT */
@@ -253,7 +278,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 	* IDLE -> ARMED
 	*----------------------------------------------------------*/
 	case SM_IDLE:
-		if (in->armed && in->orientation >= th.T_OA) {
+		if (in->armed && sm_orientation_elevation_deg(in->orientation) >= th.T_OA) {
 			SM_TRANSITION(SM_ARMED);
 		}
 		break;
@@ -262,7 +287,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 	* ARMED -> BOOST
 	*----------------------------------------------------------*/
 	case SM_ARMED:
-		if (in->orientation < th.T_OI) {
+		if (sm_orientation_elevation_deg(in->orientation) < th.T_OI) {
 			/* Go back to IDLE if orientation is bad */
 			running_timers[TIMER_DT_AB] = 0;
 			k_timer_stop(&dt_ab);

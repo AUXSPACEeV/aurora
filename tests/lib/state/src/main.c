@@ -10,6 +10,20 @@
 #include <zephyr/ztest.h>
 #include <aurora/lib/state/state.h>
 
+/* Build an orientation vector (yaw, pitch, roll) whose up-axis elevation
+ * equals @p elev degrees.  Setting roll=0 and pitch=90-elev gives
+ * elevation = asin(cos(pitch)*cos(roll)) = elev (matches the helper used
+ * by the state machine).
+ */
+#define ORIENT(elev) { 0.0, 90.0 - (double)(elev), 0.0 }
+
+static inline void set_elevation(double orientation[3], double elev_deg)
+{
+	orientation[0] = 0.0;
+	orientation[1] = 90.0 - elev_deg;
+	orientation[2] = 0.0;
+}
+
 /** @brief Test threshold configuration with fast timers for unit testing. */
 static const struct sm_thresholds simple_state_cfg = {
 	/* Sensor Metrics */
@@ -60,7 +74,7 @@ static inline void put_state_armed(struct sm_inputs *in)
 	zassert_equal(sm_get_state(), SM_IDLE, "State should be disarmed to IDLE");
 
 	in->armed = 1;
-	in->orientation = simple_state_cfg.T_OA;
+	set_elevation(in->orientation, simple_state_cfg.T_OA);
 	sm_update(in);
 	zassert_equal(sm_get_state(), SM_ARMED, "State should be ARMED");
 }
@@ -152,7 +166,7 @@ ZTEST(simple_state_tests, test_state_idle)
 {
 	struct sm_inputs inputs = {
 		.armed = 0,
-		.orientation = 0.0,
+		.orientation = ORIENT(0),
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
@@ -172,7 +186,7 @@ ZTEST(simple_state_tests, test_state_idle)
 
 	/* test update orientation without arm */
 	inputs.armed = 0;
-	inputs.orientation = simple_state_cfg.T_OA;
+	set_elevation(inputs.orientation, simple_state_cfg.T_OA);
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_IDLE, "State should still be IDLE");
 
@@ -190,7 +204,7 @@ ZTEST(simple_state_tests, test_state_armed)
 {
 	struct sm_inputs inputs = {
 		.armed = 0,
-		.orientation = 0.0,
+		.orientation = ORIENT(0),
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
@@ -210,7 +224,7 @@ ZTEST(simple_state_tests, test_state_armed)
 	/* test update disarm via orientation */
 	put_state_armed(&inputs);
 
-	inputs.orientation = simple_state_cfg.T_OI - 1.0;
+	set_elevation(inputs.orientation, simple_state_cfg.T_OI - 1.0);
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_IDLE, "State should now be IDLE");
 
@@ -263,7 +277,7 @@ ZTEST(simple_state_tests, test_state_boost)
 {
 	struct sm_inputs inputs = {
 		.armed = 1,
-		.orientation = simple_state_cfg.T_OA,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
@@ -296,7 +310,7 @@ ZTEST(simple_state_tests, test_state_burnout)
 {
 	struct sm_inputs inputs = {
 		.armed = 1,
-		.orientation = simple_state_cfg.T_OA,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
@@ -333,7 +347,7 @@ ZTEST(simple_state_tests, test_state_apogee)
 {
 	struct sm_inputs inputs = {
 		.armed = 1,
-		.orientation = simple_state_cfg.T_OA,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
@@ -366,7 +380,7 @@ ZTEST(simple_state_tests, test_state_apogee_timeout)
 {
 	struct sm_inputs inputs = {
 		.armed = 1,
-		.orientation = simple_state_cfg.T_OA,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
@@ -404,7 +418,7 @@ ZTEST(simple_state_tests, test_state_main_redundant)
 
 	struct sm_inputs inputs = {
 		.armed = 1,
-		.orientation = simple_state_cfg.T_OA,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
@@ -441,7 +455,7 @@ ZTEST(simple_state_tests, test_state_redundand_landed)
 
 	struct sm_inputs inputs = {
 		.armed = 1,
-		.orientation = simple_state_cfg.T_OA,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
@@ -479,7 +493,7 @@ ZTEST(simple_state_tests, test_state_redundand_timeout)
 
 	struct sm_inputs inputs = {
 		.armed = 1,
-		.orientation = simple_state_cfg.T_OA,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
@@ -505,7 +519,7 @@ ZTEST(simple_state_tests, test_disarm_from_boost)
 {
 	struct sm_inputs inputs = {
 		.armed = 1,
-		.orientation = simple_state_cfg.T_OA,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
@@ -527,7 +541,7 @@ ZTEST(simple_state_tests, test_disarm_from_burnout)
 {
 	struct sm_inputs inputs = {
 		.armed = 1,
-		.orientation = simple_state_cfg.T_OA,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
@@ -549,7 +563,7 @@ ZTEST(simple_state_tests, test_disarm_from_apogee)
 {
 	struct sm_inputs inputs = {
 		.armed = 1,
-		.orientation = simple_state_cfg.T_OA,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
@@ -581,7 +595,7 @@ ZTEST(simple_state_tests, test_state_error)
 
 	struct sm_inputs inputs = {
 		.armed = 1,
-		.orientation = simple_state_cfg.T_OA,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
@@ -623,7 +637,7 @@ ZTEST(simple_state_tests, test_state_error_recovery)
 
 	struct sm_inputs inputs = {
 		.armed = 1,
-		.orientation = simple_state_cfg.T_OA,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
@@ -661,7 +675,7 @@ ZTEST(simple_state_tests, test_armed_boost_timer_reset)
 {
 	struct sm_inputs inputs = {
 		.armed = 1,
-		.orientation = simple_state_cfg.T_OA,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
