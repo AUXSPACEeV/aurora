@@ -67,6 +67,42 @@ config DATA_LOGGER_BIN_BACKEND_DISK
 
 endchoice
 
+config DATA_LOGGER_DISK_AUTO_MKFS
+	bool "Auto-format the companion FAT volume on mismatch (DISK backend)"
+	depends on DATA_LOGGER_BIN_BACKEND_DISK
+	depends on FILE_SYSTEM
+	select FILE_SYSTEM_MKFS
+	select FS_FATFS_MKFS
+	select FS_FATFS_MULTI_PARTITION
+	default n
+	help
+	  At boot, after Zephyr's fstab has tried to automount the FAT
+	  volume on the same disk, run a single guarded check:
+
+	    1. Read the first sector of the flight-log raw region.  If it
+	       carries the AURORA flight-frame magic, refuse to format —
+	       existing flight data is preserved at all costs.
+	    2. Otherwise, write a fresh MBR carving the disk into a FAT
+	       partition that ends at offset-bytes (from the flight-log-disk
+	       binding), unmount the FAT volume if fstab automounted it,
+	       call fs_mkfs() on partition 1 and remount.
+
+	  The disk is treated as MBR-partitioned with FAT confined to
+	  partition 1 [start, offset-bytes); the raw flight-log region
+	  occupies [offset-bytes, offset-bytes + size-bytes) on the same
+	  physical disk and is structurally outside the FAT partition, so
+	  fs_mkfs() can never touch it.  Selects FS_FATFS_MULTI_PARTITION
+	  so f_mount/f_mkfs honour the MBR partition geometry; the module
+	  defines the required VolToPart[] table for a single-disk setup.
+
+	  Flight-log magic is the sole gate: a healthy filesystem with no
+	  flight log will be reformatted.  This guarantees a clean FAT
+	  volume on every boot that is not carrying recoverable flight
+	  data, which is what a fresh SD card or a sim run with a blank
+	  RAM disk needs.  Requires DT chosen 'auxspace,ffs' to point at
+	  the zephyr,fstab,fatfs entry whose disk-name matches the
+	  flight-log-disk node.
+
 config DATA_LOGGER_BIN_FRAME_SIZE
 	int "Binary log frame size (bytes)"
 	default 4096

@@ -104,15 +104,40 @@ card via ``zephyr,sdmmc-disk``).  The region is described by an
        flight_log_disk: flight-log-disk {
            compatible = "auxspaceev,flight-log-disk";
            disk-name = "MMC";
-           offset-sectors = <2097152>;  /* skip first 1 GiB of card */
-           size-sectors   = <1048576>;  /* 512 MiB region */
+           offset-bytes = <0x40000000>;  /* skip first 1 GiB of card */
+           size-bytes   = <0x20000000>;  /* 512 MiB region */
        };
    };
 
-The byte size (``size-sectors * sector-size``) must be a whole multiple
-of ``CONFIG_DATA_LOGGER_BIN_FRAME_SIZE``.  The application is
-responsible for ensuring any filesystem on the same card does not
-overlap this range.
+Both ``offset-bytes`` and ``size-bytes`` must be whole multiples of the
+disk's logical sector size (queried at runtime via
+``DISK_IOCTL_GET_SECTOR_SIZE`` — always 512 on SD/MMC), and
+``size-bytes`` must additionally be a whole multiple of
+``CONFIG_DATA_LOGGER_BIN_FRAME_SIZE``.  The DT cell width caps either
+value at 4 GiB - 1.  The application is responsible for ensuring any
+filesystem on the same card does not overlap this range.
+
+Auto-formatting the companion FAT volume
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``CONFIG_DATA_LOGGER_DISK_AUTO_MKFS`` enables a guarded boot-time
+``fs_mkfs()`` of the FAT volume that shares the SD card with the raw
+flight-log region.  After Zephyr's fstab has tried to automount the
+volume, the first sector of the flight-log raw region is read and
+tested for the ``AURORA_BIN_FRAME_MAGIC``:
+
+- If a flight frame is present, the card is left untouched —
+  recovery of an existing flight log takes priority.
+- Otherwise the FAT volume is unmounted (if fstab automounted it),
+  reformatted, and remounted, even if it was previously healthy.
+
+Flight-log magic is the sole gate, so a card carrying a valid FAT but
+no flight log is reformatted on the next boot.  This is what makes a
+fresh SD card and a sim run with a blank RAM disk both come up with a
+usable filesystem without manual intervention, while still guaranteeing
+that an existing flight log is never overwritten.  Requires the DT
+chosen ``auxspace,ffs`` to point at the ``zephyr,fstab,fatfs`` entry
+whose disk-name matches the flight-log-disk node.
 
 The disk writer is purely **linear** from the configured offset — the
 region is sized for many minutes of flight, so circular wrap is not

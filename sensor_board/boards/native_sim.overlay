@@ -32,16 +32,15 @@
 		};
 	};
 
-	chosen {
-		auxspace,flight-log = &flight_log;
+	flight_log_disk: flight-log-disk {
+		compatible = "auxspaceev,flight-log-disk";
+		disk-name = "RAM";
+		offset-bytes = <0x40000000>;	/* 1 GiB */
+		size-bytes   = <0x10000000>;	/* 256 MiB */
 	};
-};
 
-&flash0 {
-	partitions {
-		flight_log: partition@100000 {
-			label = "flight_log";
-			reg = <0x0 DT_SIZE_M(1)>;
-		};
+	chosen {
+		auxspace,flight-log-disk = &flight_log_disk;
+		auxspace,ffs = &ram_fatfs;
 	};
 };
