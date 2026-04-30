@@ -1,0 +1,48 @@
+/*
+ * Copyright (c) 2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Minimal disk layout for the auto-mkfs test:
+ *
+ *   - 8 MiB RAM disk named "RAM"
+ *   - FatFS volume mounted at /RAM: via fstab automount
+ *   - flight-log raw region at offset 4 MiB, size 2 MiB
+ *
+ * Sized just large enough that part_start lands on the 1 MiB-aligned
+ * sector (PART1_ALIGNED_LBA = 2048) inside the auto-format module, so
+ * the FAT partition occupies sectors [2048, 8192) and the raw region
+ * begins immediately after at sector 8192 (= 4 MiB).  The trailing
+ * 2 MiB of the disk is unused and gives the raw region headroom.
+ */
+
+/ {
+	ramdisk0 {
+		compatible = "zephyr,ram-disk";
+		disk-name = "RAM";
+		sector-size = <512>;
+		sector-count = <16384>;	/* 8 MiB */
+	};
+
+	fstab {
+		compatible = "zephyr,fstab";
+
+		ram_fatfs: ram_fatfs {
+			compatible = "zephyr,fstab,fatfs";
+			mount-point = "/RAM:";
+			automount;
+			disk-access;
+		};
+	};
+
+	flight_log_disk: flight-log-disk {
+		compatible = "auxspaceev,flight-log-disk";
+		disk-name = "RAM";
+		offset-bytes = <0x00400000>;	/* 4 MiB */
+		size-bytes   = <0x00200000>;	/* 2 MiB */
+	};
+
+	chosen {
+		auxspace,flight-log-disk = &flight_log_disk;
+		auxspace,ffs = &ram_fatfs;
+	};
+};

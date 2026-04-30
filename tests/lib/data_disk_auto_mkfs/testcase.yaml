@@ -1,0 +1,11 @@
+common:
+  modules:
+    - fatfs
+  tags: test_data_logger
+  integration_platforms:
+    - native_sim
+  platform_allow:
+    - native_sim
+
+tests:
+  aurora.lib.data.disk_auto_mkfs: {}
