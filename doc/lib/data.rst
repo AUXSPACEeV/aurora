@@ -139,6 +139,19 @@ that an existing flight log is never overwritten.  Requires the DT
 chosen ``auxspace,ffs`` to point at the ``zephyr,fstab,fatfs`` entry
 whose disk-name matches the flight-log-disk node.
 
+Both arms of the guard are exercised by the
+``aurora.lib.data.disk_auto_mkfs`` ztest suite under
+``aurora/tests/lib/data_disk_auto_mkfs``.  The suite runs on
+``native_sim`` against a RAM disk:
+
+- ``disk_auto_mkfs_blank`` boots from a blank RAM disk, lets the
+  ``SYS_INIT`` hook reformat and remount the FAT volume, and asserts
+  that ordinary file I/O round-trips correctly.
+- ``disk_auto_mkfs_preserve`` seeds the configured raw-region offset
+  with ``AURORA_BIN_FRAME_MAGIC``, re-invokes the auto-format entry
+  point to mimic a reboot from a populated card, and asserts that the
+  magic survives the call and the FAT volume remains mounted.
+
 The disk writer is purely **linear** from the configured offset — the
 region is sized for many minutes of flight, so circular wrap is not
 used.  :c:enumerator:`DLE_BOOST` is recorded but does not freeze a

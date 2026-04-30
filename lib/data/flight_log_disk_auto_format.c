@@ -152,7 +152,11 @@ static int write_mbr_partition_1(uint32_t sector_size, uint32_t start_lba,
 	return disk_access_write(DISK_NAME, probe_buf, 0, 1);
 }
 
-static int flight_log_disk_auto_format(void)
+/* Non-static so unit tests can re-invoke the entry point to simulate a
+ * reboot without going through Zephyr's init system.  Production callers
+ * should rely on the SYS_INIT registration below.
+ */
+int flight_log_disk_auto_format(void)
 {
 	struct fs_mount_t *mp = &FS_FSTAB_ENTRY(FS_NODE);
 	uint32_t sector_size = 0;
