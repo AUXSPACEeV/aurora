@@ -1170,3 +1170,189 @@ ZTEST(data_logger_convert, test_convert_empty_partition)
 }
 
 #endif /* CONFIG_DATA_LOGGER_BIN && CONFIG_DATA_LOGGER_CONVERT_CSV */
+
+/* ================================================================== */
+/*  Suite 5: flash backend on-flash layout & single-instance semantics */
+/* ================================================================== */
+
+#if defined(CONFIG_DATA_LOGGER_BIN) && defined(CONFIG_DATA_LOGGER_BIN_BACKEND_FLASH)
+
+#include <zephyr/storage/flash_map.h>
+#include <zephyr/devicetree.h>
+
+#define FLASH_LOG_ID DT_FIXED_PARTITION_ID(DT_CHOSEN(auxspace_flight_log))
+#define BIN_FRAME_BYTES ((size_t)CONFIG_DATA_LOGGER_BIN_FRAME_SIZE)
+
+static struct data_logger flash_logger;
+
+static void flash_before(void *fixture)
+{
+	(void)fixture;
+	memset(&flash_logger, 0, sizeof(flash_logger));
+
+	const struct flash_area *fa;
+
+	if (flash_area_open(FLASH_LOG_ID, &fa) == 0) {
+		(void)flash_area_erase(fa, 0, fa->fa_size);
+		flash_area_close(fa);
+	}
+}
+
+ZTEST_SUITE(data_logger_flash, NULL, NULL, flash_before, NULL, NULL);
+
+static int flash_read_frame(off_t off, void *buf, size_t len)
+{
+	const struct flash_area *fa;
+	int rc = flash_area_open(FLASH_LOG_ID, &fa);
+
+	if (rc != 0) {
+		return rc;
+	}
+	rc = flash_area_read(fa, off, buf, len);
+	flash_area_close(fa);
+	return rc;
+}
+
+/**
+ * @brief A single datapoint produces a valid frame at offset 0 with the
+ *        record placed immediately after the 32-byte header.
+ */
+ZTEST(data_logger_flash, test_flash_frame_layout)
+{
+	uint8_t frame[BIN_FRAME_BYTES];
+
+	struct datapoint dp = {
+		.timestamp_ns  = 1000ULL,
+		.type          = AURORA_DATA_BARO,
+		.channel_count = 2,
+		.channels = {
+			{.val1 = 23, .val2 = 500000},
+			{.val1 = 101325, .val2 = 0},
+		},
+	};
+
+	zassert_ok(data_logger_init(&flash_logger, "flash",
+				    &data_logger_bin_formatter), NULL);
+	zassert_ok(data_logger_start(&flash_logger), NULL);
+	zassert_ok(data_logger_write(&flash_logger, &dp), NULL);
+	zassert_ok(data_logger_close(&flash_logger), NULL);
+
+	zassert_ok(flash_read_frame(0, frame, sizeof(frame)),
+		   "Reading frame 0 from the flight_log partition must succeed");
+
+	const struct aurora_bin_frame_header *h =
+		(const struct aurora_bin_frame_header *)frame;
+
+	zassert_mem_equal(h->magic, AURORA_BIN_FRAME_MAGIC, 4,
+			  "Frame magic must be \"AURF\"");
+	zassert_equal(h->version, AURORA_BIN_VERSION,
+		      "Frame version must match AURORA_BIN_VERSION");
+	zassert_equal(h->seq, 0U, "First frame seq must be 0");
+	zassert_not_equal(h->flight_id, 0ULL,
+			  "flight_id must be initialised to a non-zero uptime");
+
+	const struct aurora_bin_record *rec =
+		(const struct aurora_bin_record *)(frame +
+			sizeof(struct aurora_bin_frame_header));
+
+	zassert_equal(rec->type, (uint8_t)AURORA_DATA_BARO, NULL);
+	zassert_equal(rec->channel_count, 2, NULL);
+	zassert_equal(rec->channels[0].val1, 23, NULL);
+	zassert_equal(rec->channels[0].val2, 500000, NULL);
+	zassert_equal(rec->channels[1].val1, 101325, NULL);
+	zassert_equal(rec->channels[1].val2, 0, NULL);
+}
+
+/**
+ * @brief Filling one frame and writing one extra record produces a second
+ *        frame with seq=1 sharing the same flight_id.
+ */
+ZTEST(data_logger_flash, test_flash_seq_across_frames)
+{
+	const size_t records_per_frame =
+		(BIN_FRAME_BYTES - sizeof(struct aurora_bin_frame_header)) /
+		sizeof(struct aurora_bin_record);
+
+	zassert_ok(data_logger_init(&flash_logger, "seq",
+				    &data_logger_bin_formatter), NULL);
+	zassert_ok(data_logger_start(&flash_logger), NULL);
+
+	for (size_t i = 0; i < records_per_frame + 1; i++) {
+		struct datapoint dp = {
+			.timestamp_ns  = (uint64_t)(i + 1) * 100,
+			.type          = AURORA_DATA_BARO,
+			.channel_count = 2,
+			.channels = {
+				{.val1 = (int32_t)i, .val2 = 0},
+				{.val1 = 100000, .val2 = 0},
+			},
+		};
+		zassert_ok(data_logger_write(&flash_logger, &dp), NULL);
+	}
+
+	zassert_ok(data_logger_close(&flash_logger), NULL);
+
+	uint8_t frame0[BIN_FRAME_BYTES];
+	uint8_t frame1[BIN_FRAME_BYTES];
+
+	zassert_ok(flash_read_frame(0, frame0, sizeof(frame0)), NULL);
+	zassert_ok(flash_read_frame((off_t)BIN_FRAME_BYTES,
+				    frame1, sizeof(frame1)), NULL);
+
+	const struct aurora_bin_frame_header *h0 =
+		(const struct aurora_bin_frame_header *)frame0;
+	const struct aurora_bin_frame_header *h1 =
+		(const struct aurora_bin_frame_header *)frame1;
+
+	zassert_mem_equal(h0->magic, AURORA_BIN_FRAME_MAGIC, 4, NULL);
+	zassert_mem_equal(h1->magic, AURORA_BIN_FRAME_MAGIC, 4, NULL);
+	zassert_equal(h0->seq, 0U, "Frame 0 seq must be 0");
+	zassert_equal(h1->seq, 1U, "Frame 1 seq must be 1");
+	zassert_equal(h0->flight_id, h1->flight_id,
+		      "Both frames must carry the same flight_id");
+}
+
+/**
+ * @brief A second concurrent open of the flash backend is rejected with
+ *        -EBUSY; reopening after close succeeds.
+ */
+ZTEST(data_logger_flash, test_flash_single_instance)
+{
+	static struct data_logger second;
+
+	memset(&second, 0, sizeof(second));
+
+	zassert_ok(data_logger_init(&flash_logger, "first",
+				    &data_logger_bin_formatter), NULL);
+
+	int rc = data_logger_init(&second, "second",
+				  &data_logger_bin_formatter);
+
+	zassert_equal(rc, -EBUSY,
+		      "Second concurrent flash logger must fail with -EBUSY");
+
+	zassert_ok(data_logger_close(&flash_logger), NULL);
+
+	memset(&second, 0, sizeof(second));
+	zassert_ok(data_logger_init(&second, "second",
+				    &data_logger_bin_formatter),
+		   "Reopen after close must succeed");
+	zassert_ok(data_logger_close(&second), NULL);
+}
+
+/**
+ * @brief BOOST and LANDED events are accepted by the flash backend.
+ */
+ZTEST(data_logger_flash, test_flash_event_hooks)
+{
+	zassert_ok(data_logger_init(&flash_logger, "ev",
+				    &data_logger_bin_formatter), NULL);
+	zassert_ok(data_logger_start(&flash_logger), NULL);
+
+	zassert_ok(data_logger_event(&flash_logger, DLE_BOOST), NULL);
+	zassert_ok(data_logger_event(&flash_logger, DLE_LANDED), NULL);
+
+	zassert_ok(data_logger_close(&flash_logger), NULL);
+}
+
+#endif /* CONFIG_DATA_LOGGER_BIN && CONFIG_DATA_LOGGER_BIN_BACKEND_FLASH */
