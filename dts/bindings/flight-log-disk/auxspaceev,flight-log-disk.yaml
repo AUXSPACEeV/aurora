@@ -5,6 +5,9 @@
 # bypassing the filesystem.  Selected via the chosen entry
 # `auxspace,flight-log-disk`.
 #
+# The byte values are 64-bit, encoded as two 32-bit cells <HI LO>, so
+# offsets and sizes greater than 4 GiB - 1 are representable.
+#
 # Example:
 #
 #   / {
@@ -15,10 +18,13 @@
 #       flight_log_disk: flight-log-disk {
 #           compatible = "auxspaceev,flight-log-disk";
 #           disk-name = "MMC";
-#           offset-bytes = <0x40000000>;  /* skip first 1 GiB of card */
-#           size-bytes   = <0x10000000>;  /* 256 MiB region */
+#           offset-bytes = <0x0 0x40000000>;  /* skip first 1 GiB */
+#           size-bytes   = <0x0 0x10000000>;  /* 256 MiB region */
 #       };
 #   };
+#
+# When `size-bytes` is omitted, the region extends from `offset-bytes`
+# to the end of the disk (queried at runtime).
 #
 # Copyright (c) 2026 Auxspace e.V.
 # SPDX-License-Identifier: Apache-2.0
@@ -36,22 +42,24 @@ properties:
       for an SD card slot exposed as zephyr,sdmmc-disk).
 
   offset-bytes:
-    type: int
+    type: array
     required: true
     description: |
-      Byte offset of the flight-log region from the start of the disk
-      (zero-based).  Allows the flight log to coexist with a filesystem
-      that uses the rest of the card; the application is responsible
-      for ensuring the filesystem does not overlap this range.  Must
-      be a whole multiple of the disk's logical sector size (queried
-      at runtime via DISK_IOCTL_GET_SECTOR_SIZE; 512 on every SD/MMC).
-      Capped at 4 GiB - 1 by the 32-bit DT cell width.
+      64-bit byte offset of the flight-log region from the start of the
+      disk (zero-based), encoded as two 32-bit cells <HI LO>.  Allows
+      the flight log to coexist with a filesystem that uses the rest of
+      the card; the application is responsible for ensuring the
+      filesystem does not overlap this range.  Must be a whole multiple
+      of the disk's logical sector size (queried at runtime via
+      DISK_IOCTL_GET_SECTOR_SIZE; 512 on every SD/MMC).
 
   size-bytes:
-    type: int
-    required: true
+    type: array
+    required: false
     description: |
-      Byte size of the region reserved for the flight log.  Must be a
-      whole multiple of the disk's logical sector size and of
-      CONFIG_DATA_LOGGER_BIN_FRAME_SIZE.  Capped at 4 GiB - 1 by the
-      32-bit DT cell width.
+      64-bit byte size of the region reserved for the flight log,
+      encoded as two 32-bit cells <HI LO>.  Must be a whole multiple of
+      the disk's logical sector size and of
+      CONFIG_DATA_LOGGER_BIN_FRAME_SIZE.  When omitted, the region
+      extends from `offset-bytes` to the end of the disk (sector count
+      queried at runtime via DISK_IOCTL_GET_SECTOR_COUNT).

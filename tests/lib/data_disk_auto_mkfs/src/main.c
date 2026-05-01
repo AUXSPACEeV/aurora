@@ -44,7 +44,9 @@
 
 #define DISK_NODE         DT_CHOSEN(auxspace_flight_log_disk)
 #define DISK_NAME         DT_PROP(DISK_NODE, disk_name)
-#define DISK_OFFSET_BYTES ((uint64_t)DT_PROP(DISK_NODE, offset_bytes))
+#define DISK_OFFSET_BYTES                                                   \
+	(((uint64_t)DT_PROP_BY_IDX(DISK_NODE, offset_bytes, 0) << 32) |     \
+	 (uint64_t)DT_PROP_BY_IDX(DISK_NODE, offset_bytes, 1))
 
 #define FS_MOUNT_POINT    "/RAM:"
 #define SENTINEL_PATH     FS_MOUNT_POINT "/sentinel.txt"

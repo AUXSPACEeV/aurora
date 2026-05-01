@@ -21,15 +21,18 @@
  *     flight_log_disk: flight-log-disk {
  *         compatible = "auxspaceev,flight-log-disk";
  *         disk-name = "MMC";
- *         offset-bytes = <0x40000000>;
- *         size-bytes   = <0x20000000>;
+ *         offset-bytes = <0x0 0x40000000>;
+ *         size-bytes   = <0x0 0x20000000>;
  *     };
  * };
  * @endcode
  *
- * The byte values are converted to sector counts at init time using
- * the disk's logical sector size queried via DISK_IOCTL_GET_SECTOR_SIZE
- * (always 512 on SD/MMC).
+ * The byte values are 64-bit (two 32-bit DT cells, \<HI LO\>) and are
+ * converted to sector counts at init time using the disk's logical
+ * sector size queried via DISK_IOCTL_GET_SECTOR_SIZE (always 512 on
+ * SD/MMC).  When `size-bytes` is omitted, the region extends from
+ * `offset-bytes` to the end of the disk (sector count queried via
+ * DISK_IOCTL_GET_SECTOR_COUNT at init time).
  *
  * The application is responsible for ensuring the configured sector
  * range does not overlap any filesystem mounted on the same disk.
@@ -78,8 +81,16 @@ LOG_MODULE_DECLARE(data_logger, CONFIG_DATA_LOGGER_LOG_LEVEL);
 
 #define BIN_DISK_NODE         DT_CHOSEN(auxspace_flight_log_disk)
 #define BIN_DISK_NAME         DT_PROP(BIN_DISK_NODE, disk_name)
-#define BIN_DISK_OFFSET_BYTES ((uint64_t)DT_PROP(BIN_DISK_NODE, offset_bytes))
-#define BIN_DISK_SIZE_BYTES   ((uint64_t)DT_PROP(BIN_DISK_NODE, size_bytes))
+
+/* 64-bit DT byte values are encoded as two 32-bit cells <HI LO>. */
+#define BIN_DISK_U64(prop)                                                  \
+	(((uint64_t)DT_PROP_BY_IDX(BIN_DISK_NODE, prop, 0) << 32) |         \
+	 (uint64_t)DT_PROP_BY_IDX(BIN_DISK_NODE, prop, 1))
+
+#define BIN_DISK_OFFSET_BYTES BIN_DISK_U64(offset_bytes)
+#define BIN_DISK_HAS_SIZE     DT_NODE_HAS_PROP(BIN_DISK_NODE, size_bytes)
+#define BIN_DISK_SIZE_BYTES                                                 \
+	COND_CODE_1(BIN_DISK_HAS_SIZE, (BIN_DISK_U64(size_bytes)), (0ULL))
 
 /* -------------------------------------------------------------------------- */
 /*  Frame & ring geometry                                                     */
@@ -362,10 +373,44 @@ static int bin_init(struct data_logger *logger, const char *path)
 		return -EINVAL;
 	}
 
+	uint32_t total_sec = 0;
+
+	rc = disk_access_ioctl(BIN_DISK_NAME, DISK_IOCTL_GET_SECTOR_COUNT,
+			       &total_sec);
+	if (rc != 0 || total_sec == 0) {
+		LOG_ERR("bin_disk: GET_SECTOR_COUNT failed (%d, n=%u)",
+			rc, total_sec);
+		atomic_set(&g_bin_open, 0);
+		return rc != 0 ? rc : -EIO;
+	}
+
+	uint64_t offset_sec64 = BIN_DISK_OFFSET_BYTES / sector_size;
+
+	if (offset_sec64 >= total_sec) {
+		LOG_ERR("bin_disk: offset %llu past end of disk (%u sectors of "
+			"%u bytes)", (unsigned long long)BIN_DISK_OFFSET_BYTES,
+			total_sec, sector_size);
+		atomic_set(&g_bin_open, 0);
+		return -EINVAL;
+	}
+
+	uint64_t size_sec64 = BIN_DISK_HAS_SIZE
+		? (BIN_DISK_SIZE_BYTES / sector_size)
+		: ((uint64_t)total_sec - offset_sec64);
+
+	if (size_sec64 == 0 || offset_sec64 + size_sec64 > total_sec) {
+		LOG_ERR("bin_disk: region [%llu..%llu) exceeds disk (%u "
+			"sectors)", (unsigned long long)offset_sec64,
+			(unsigned long long)(offset_sec64 + size_sec64),
+			total_sec);
+		atomic_set(&g_bin_open, 0);
+		return -EINVAL;
+	}
+
 	ctx->sector_size       = sector_size;
 	ctx->sectors_per_frame = (uint32_t)(BIN_FRAME_SIZE / sector_size);
-	ctx->offset_sec        = (uint32_t)(BIN_DISK_OFFSET_BYTES / sector_size);
-	ctx->size_sec          = (uint32_t)(BIN_DISK_SIZE_BYTES   / sector_size);
+	ctx->offset_sec        = (uint32_t)offset_sec64;
+	ctx->size_sec          = (uint32_t)size_sec64;
 
 	if ((ctx->size_sec % ctx->sectors_per_frame) != 0) {
 		LOG_ERR("bin_disk: size sectors %u not a multiple of frame "
@@ -540,8 +585,41 @@ int bin_io_open(void)
 		return -EINVAL;
 	}
 
-	g_io_offset_sec = (uint32_t)(BIN_DISK_OFFSET_BYTES / g_io_sector_size);
-	g_io_size_sec   = (uint32_t)(BIN_DISK_SIZE_BYTES   / g_io_sector_size);
+	uint32_t total_sec = 0;
+
+	rc = disk_access_ioctl(BIN_DISK_NAME, DISK_IOCTL_GET_SECTOR_COUNT,
+			       &total_sec);
+	if (rc != 0 || total_sec == 0) {
+		LOG_ERR("bin_io_disk: GET_SECTOR_COUNT failed (%d, n=%u)",
+			rc, total_sec);
+		g_io_sector_size = 0;
+		return rc != 0 ? rc : -EIO;
+	}
+
+	uint64_t offset_sec64 = BIN_DISK_OFFSET_BYTES / g_io_sector_size;
+
+	if (offset_sec64 >= total_sec) {
+		LOG_ERR("bin_io_disk: offset %llu past end of disk (%u sectors)",
+			(unsigned long long)BIN_DISK_OFFSET_BYTES, total_sec);
+		g_io_sector_size = 0;
+		return -EINVAL;
+	}
+
+	uint64_t size_sec64 = BIN_DISK_HAS_SIZE
+		? (BIN_DISK_SIZE_BYTES / g_io_sector_size)
+		: ((uint64_t)total_sec - offset_sec64);
+
+	if (size_sec64 == 0 || offset_sec64 + size_sec64 > total_sec) {
+		LOG_ERR("bin_io_disk: region [%llu..%llu) exceeds disk (%u)",
+			(unsigned long long)offset_sec64,
+			(unsigned long long)(offset_sec64 + size_sec64),
+			total_sec);
+		g_io_sector_size = 0;
+		return -EINVAL;
+	}
+
+	g_io_offset_sec = (uint32_t)offset_sec64;
+	g_io_size_sec   = (uint32_t)size_sec64;
 
 	return 0;
 }
@@ -573,5 +651,5 @@ int bin_io_read(off_t off, void *buf, size_t len)
 
 size_t bin_io_total_size(void)
 {
-	return (size_t)BIN_DISK_SIZE_BYTES;
+	return (size_t)g_io_size_sec * (size_t)g_io_sector_size;
 }

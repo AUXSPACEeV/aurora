@@ -37,8 +37,8 @@
 	flight_log_disk: flight-log-disk {
 		compatible = "auxspaceev,flight-log-disk";
 		disk-name = "RAM";
-		offset-bytes = <0x00400000>;	/* 4 MiB */
-		size-bytes   = <0x00200000>;	/* 2 MiB */
+		offset-bytes = <0x0 0x00400000>;	/* 4 MiB */
+		size-bytes   = <0x0 0x00200000>;	/* 2 MiB */
 	};
 
 	chosen {
