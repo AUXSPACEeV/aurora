@@ -229,6 +229,18 @@ config DATA_LOGGER_CSV_WINDOW_NS
 	  within a few hundred microseconds; the default 1 ms matches
 	  tools/influx_to_csv.py.
 
+config DATA_LOGGER_CSV_BUF_SIZE
+	int "CSV RAM write buffer size in bytes"
+	default 4096
+	help
+	  Formatted CSV bytes are accumulated in this RAM buffer and only
+	  written to the filesystem when the buffer fills, on flush, or on
+	  close.  A larger buffer reduces the number of fs_write calls,
+	  which is critical when the FAT volume and the raw flight-log
+	  region share a single SD card: each fs_write turns into a small
+	  disk_access_write that has to interleave with the converter's
+	  raw-region reads, and SD cards stall hard under that pattern.
+
 endif # DATA_LOGGER_CONVERT_CSV
 
 config DATA_LOGGER_CONVERT_INFLUX

@@ -195,8 +195,11 @@ int data_logger_convert(const struct data_logger_formatter *out_fmt,
 		goto out_close;
 	}
 
-	rc = find_window_start(total_size, &start_offset, &expect_seq,
-			       &flight_id);
+	rc = bin_io_window_start_hint(&start_offset, &expect_seq, &flight_id);
+	if (rc == -ENOTSUP) {
+		rc = find_window_start(total_size, &start_offset, &expect_seq,
+				       &flight_id);
+	}
 	if (rc == -ENOENT) {
 		/* No valid frames; emit an empty (header-only) file
 		 * successfully so callers can distinguish "no flight" from

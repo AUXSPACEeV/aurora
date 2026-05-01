@@ -653,3 +653,44 @@ size_t bin_io_total_size(void)
 {
 	return (size_t)g_io_size_sec * (size_t)g_io_sector_size;
 }
+
+/* Single-sector scratch for the window-start hint.  Sized to the largest
+ * sector size we expect on SD/MMC (512); init verifies the actual sector
+ * size fits.
+ */
+static uint8_t hint_buf[512] __aligned(BIN_BUF_ALIGN);
+
+int bin_io_window_start_hint(off_t *out_offset,
+			     uint32_t *out_seq,
+			     uint64_t *out_flight_id)
+{
+	if (g_io_sector_size == 0) {
+		return -ENODEV;
+	}
+	if (g_io_sector_size > sizeof(hint_buf)) {
+		return -ENOTSUP;
+	}
+
+	int rc = disk_access_read(BIN_DISK_NAME, hint_buf,
+				  g_io_offset_sec, 1);
+
+	if (rc != 0) {
+		LOG_ERR("bin_io_disk: hint read at sector %u failed (%d)",
+			g_io_offset_sec, rc);
+		return rc;
+	}
+
+	const struct aurora_bin_frame_header *h =
+		(const struct aurora_bin_frame_header *)hint_buf;
+
+	if (memcmp(h->magic, AURORA_BIN_FRAME_MAGIC,
+		   sizeof(h->magic)) != 0 ||
+	    h->version != AURORA_BIN_VERSION) {
+		return -ENOENT;
+	}
+
+	*out_offset    = 0;
+	*out_seq       = h->seq;
+	*out_flight_id = h->flight_id;
+	return 0;
+}

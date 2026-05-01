@@ -590,3 +590,15 @@ size_t bin_io_total_size(void)
 {
 	return (size_t)BIN_FLASH_AREA_SIZE;
 }
+
+int bin_io_window_start_hint(off_t *out_offset,
+			     uint32_t *out_seq,
+			     uint64_t *out_flight_id)
+{
+	ARG_UNUSED(out_offset);
+	ARG_UNUSED(out_seq);
+	ARG_UNUSED(out_flight_id);
+
+	/* Circular ring: window start can be anywhere in the partition. */
+	return -ENOTSUP;
+}
