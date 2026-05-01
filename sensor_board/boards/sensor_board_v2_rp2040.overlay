@@ -26,7 +26,7 @@
 	flight_log_disk: flight-log-disk {
 		compatible = "auxspaceev,flight-log-disk";
 		disk-name = "MMC";
-		offset-bytes = <0x0 0xC0000000>;	/* 3 GiB */
-		size-bytes   = <0x0 0x40000000>;	/* 1 GiB */
+		offset-bytes = <0x2 0x00000000>;	/* 8 GiB */
+		size-bytes   = <0x1 0xF0000000>;	/* 7 GiB and 512 MiB */
 	};
 };

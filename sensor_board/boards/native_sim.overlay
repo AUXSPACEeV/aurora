@@ -18,7 +18,7 @@
 		compatible = "zephyr,ram-disk";
 		disk-name = "RAM";
 		sector-size = <512>;
-		sector-count = <2621440>;	/* 1 GiB + 256 MiB */
+		sector-count = <3145728>;	/* 1 GiB + 512 MiB */
 	};
 
 	fstab {
@@ -36,7 +36,7 @@
 		compatible = "auxspaceev,flight-log-disk";
 		disk-name = "RAM";
 		offset-bytes = <0x0 0x40000000>;	/* 1 GiB */
-		size-bytes   = <0x0 0x10000000>;	/* 256 MiB */
+		size-bytes   = <0x0 0x20000000>;	/* 512 MiB */
 	};
 
 	chosen {
