@@ -102,17 +102,56 @@ struct csv_ctx {
 	uint64_t group_start_ns;
 	bool present[CSV_COLUMN_COUNT];
 	struct sensor_value values[CSV_COLUMN_COUNT];
+
+	/* RAM staging buffer for fs_write coalescing.  Pointer to the
+	 * shared static buffer; @c used tracks how many bytes are pending.
+	 */
+	char *buf;
+	size_t used;
 };
 
 /* -------------------------------------------------------------------------- */
 /*  Helpers                                                                   */
 /* -------------------------------------------------------------------------- */
 
-static int write_all(struct fs_file_t *f, const char *buf, size_t len)
-{
-	ssize_t wr = fs_write(f, buf, len);
+static char csv_write_buf[CONFIG_DATA_LOGGER_CSV_BUF_SIZE];
 
-	return wr < 0 ? (int)wr : 0;
+static int buf_drain(struct csv_ctx *ctx)
+{
+	if (ctx->used == 0) {
+		return 0;
+	}
+	ssize_t wr = fs_write(&ctx->file, ctx->buf, ctx->used);
+
+	if (wr < 0) {
+		return (int)wr;
+	}
+	ctx->used = 0;
+	return 0;
+}
+
+static int write_all(struct csv_ctx *ctx, const char *src, size_t len)
+{
+	if (len >= CONFIG_DATA_LOGGER_CSV_BUF_SIZE) {
+		int rc = buf_drain(ctx);
+
+		if (rc != 0) {
+			return rc;
+		}
+		ssize_t wr = fs_write(&ctx->file, src, len);
+
+		return wr < 0 ? (int)wr : 0;
+	}
+	if (ctx->used + len > CONFIG_DATA_LOGGER_CSV_BUF_SIZE) {
+		int rc = buf_drain(ctx);
+
+		if (rc != 0) {
+			return rc;
+		}
+	}
+	memcpy(ctx->buf + ctx->used, src, len);
+	ctx->used += len;
+	return 0;
 }
 
 static int format_sensor_value(char *buf, size_t bufsz,
@@ -140,13 +179,13 @@ static int flush_row(struct csv_ctx *ctx)
 	if (len < 0 || len >= (int)sizeof(buf)) {
 		return -ENOMEM;
 	}
-	rc = write_all(&ctx->file, buf, len);
+	rc = write_all(ctx, buf, len);
 	if (rc != 0) {
 		return rc;
 	}
 
 	for (size_t i = 0; i < CSV_COLUMN_COUNT; i++) {
-		rc = write_all(&ctx->file, ",", 1);
+		rc = write_all(ctx, ",", 1);
 		if (rc != 0) {
 			return rc;
 		}
@@ -156,14 +195,14 @@ static int flush_row(struct csv_ctx *ctx)
 			if (len < 0 || len >= (int)sizeof(buf)) {
 				return -ENOMEM;
 			}
-			rc = write_all(&ctx->file, buf, len);
+			rc = write_all(ctx, buf, len);
 			if (rc != 0) {
 				return rc;
 			}
 		}
 	}
 
-	rc = write_all(&ctx->file, "\n", 1);
+	rc = write_all(ctx, "\n", 1);
 	if (rc != 0) {
 		return rc;
 	}
@@ -196,6 +235,8 @@ static int csv_init(struct data_logger *logger, const char *path)
 		return rc;
 	}
 
+	ctx->buf = csv_write_buf;
+	ctx->used = 0;
 	logger->ctx = ctx;
 	return 0;
 }
@@ -203,25 +244,25 @@ static int csv_init(struct data_logger *logger, const char *path)
 static int csv_write_header(struct data_logger *logger)
 {
 	struct csv_ctx *ctx = logger->ctx;
-	int rc = write_all(&ctx->file, "timestamp_ns", strlen("timestamp_ns"));
+	int rc = write_all(ctx, "timestamp_ns", strlen("timestamp_ns"));
 
 	if (rc != 0) {
 		return rc;
 	}
 
 	for (size_t i = 0; i < CSV_COLUMN_COUNT; i++) {
-		rc = write_all(&ctx->file, ",", 1);
+		rc = write_all(ctx, ",", 1);
 		if (rc != 0) {
 			return rc;
 		}
-		rc = write_all(&ctx->file, csv_columns[i].name,
+		rc = write_all(ctx, csv_columns[i].name,
 			       strlen(csv_columns[i].name));
 		if (rc != 0) {
 			return rc;
 		}
 	}
 
-	return write_all(&ctx->file, "\n", 1);
+	return write_all(ctx, "\n", 1);
 }
 
 static int csv_write_datapoint(struct data_logger *logger,
@@ -271,6 +312,10 @@ static int csv_flush(struct data_logger *logger)
 	if (rc != 0) {
 		return rc;
 	}
+	rc = buf_drain(ctx);
+	if (rc != 0) {
+		return rc;
+	}
 	return fs_sync(&ctx->file);
 }
 
@@ -279,6 +324,7 @@ static int csv_close(struct data_logger *logger)
 	struct csv_ctx *ctx = logger->ctx;
 
 	(void)flush_row(ctx);
+	(void)buf_drain(ctx);
 
 	int rc = fs_close(&ctx->file);
 
