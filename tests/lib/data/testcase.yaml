@@ -46,3 +46,14 @@ tests:
       - CONFIG_DATA_LOGGER_CONVERT_CSV=y
       - CONFIG_DATA_LOGGER_CONVERT_INFLUX=y
       - CONFIG_DATA_LOGGER_BASE_PATH="/RAM:/test"
+
+  aurora.lib.data.flash:
+    integration_platforms:
+      - qemu_x86
+    platform_allow:
+      - qemu_x86
+    tags: test_data_logger
+    extra_configs:
+      - CONFIG_DATA_LOGGER_BIN=y
+      - CONFIG_DATA_LOGGER_BIN_BACKEND_FLASH=y
+      - CONFIG_DATA_LOGGER_BASE_PATH="/RAM:/test"
