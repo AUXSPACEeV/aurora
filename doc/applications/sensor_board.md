@@ -110,3 +110,7 @@ is tested with the application.
 
 - {doc}`Sensor Board v2 <../boards/auxspace/sensor_board_v2/doc/sensor_board_v2>` - RP2040 / RP2350 flight computer
 - {doc}`ESP32-S3 Micrometer <../boards/auxspace/esp32s3_micrometer/doc/esp32s3_micrometer>` - ESP32-S3 based board
+
+```{important}
+Flight computers often don't have on-board storage, so a µSD-Card (at least 16 GiB) is needed additionaly.
+```
