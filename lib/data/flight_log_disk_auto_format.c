@@ -46,7 +46,11 @@ LOG_MODULE_DECLARE(data_logger, CONFIG_DATA_LOGGER_LOG_LEVEL);
 
 #define DISK_NODE         DT_CHOSEN(auxspace_flight_log_disk)
 #define DISK_NAME         DT_PROP(DISK_NODE, disk_name)
-#define DISK_OFFSET_BYTES ((uint64_t)DT_PROP(DISK_NODE, offset_bytes))
+
+/* 64-bit DT byte values are encoded as two 32-bit cells <HI LO>. */
+#define DISK_OFFSET_BYTES                                                   \
+	(((uint64_t)DT_PROP_BY_IDX(DISK_NODE, offset_bytes, 0) << 32) |     \
+	 (uint64_t)DT_PROP_BY_IDX(DISK_NODE, offset_bytes, 1))
 
 #define FS_NODE           DT_CHOSEN(auxspace_ffs)
 #define FS_MOUNT_POINT    DT_PROP(FS_NODE, mount_point)
