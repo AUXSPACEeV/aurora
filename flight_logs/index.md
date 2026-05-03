@@ -17,8 +17,6 @@ pointer blobs.
 ```{toctree}
 :maxdepth: 1
 
-2026-04-18/flight_log
-2026-04-26/flight_log
-2026-05-03/flight_log
+multimeter/flight_logs
 sim_fetch/flight_sim
 ```
