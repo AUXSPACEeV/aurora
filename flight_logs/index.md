@@ -19,5 +19,6 @@ pointer blobs.
 
 2026-04-18/flight_log
 2026-04-26/flight_log
+2026-05-03/flight_log
 sim_fetch/flight_sim
 ```

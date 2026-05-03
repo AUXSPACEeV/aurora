@@ -1,0 +1,26 @@
+[00:00:00.066,000] <inf> [  0 main] LSM6DSO: Initialize device lsm6dso32@6b
+[00:00:00.066,000] <inf> [  0 main] LSM6DSO: chip id 0x6c
+*** Booting AURORA dd105923a4cf ***
+[00:00:00.145,000] <inf> [  0 main] main: Auxspace AURORA 0.3.1
+[00:00:00.188,000] <inf> [  0 main] powerfail: powerfail mitigation ready on gpio@60004000 pin 0
+[00:00:00.212,000] <inf> [  6 state_machine] state_audit: State machine audit file created: /MMC:/state/audit.15
+[00:00:00.217,000] <inf> [  6 state_machine] state_audit: 188200000    event        IDLE         state machine initialized
+[00:00:00.233,000] <inf> [  7 imu_polling] main: IMU ready
+[00:00:00.233,000] <inf> [  7 baro_polling] main: Baro ready
+[00:01:13.217,000] <inf> [  6 state_machine] state_audit: 73215200000  transition   IDLE         ARMED
+[00:01:13.224,000] <inf> [  6 state_machine] main: Armed pyro0 channel 0
+[00:01:13.224,000] <inf> [  6 state_machine] main: Armed pyro0 channel 1
+[00:01:14.290,000] <inf> [  6 state_machine] state_audit: 74289000000  event        ARMED        orientation below threshold
+[00:01:14.295,000] <inf> [  6 state_machine] state_audit: 74294600000  transition   ARMED        IDLE
+[00:01:14.299,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 0
+[00:01:14.299,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 1
+[00:08:09.372,000] <inf> [  6 state_machine] state_audit: 489369600000 transition   IDLE         ARMED
+[00:08:09.382,000] <inf> [  6 state_machine] main: Armed pyro0 channel 0
+[00:08:09.382,000] <inf> [  6 state_machine] main: Armed pyro0 channel 1
+[00:08:11.122,000] <inf> [  6 state_machine] state_audit: 491119400000 event        ARMED        orientation below threshold
+[00:08:11.126,000] <inf> [  6 state_machine] state_audit: 491125700000 transition   ARMED        IDLE
+[00:08:11.130,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 0
+[00:08:11.130,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 1
+[00:09:02.364,000] <inf> [  6 state_machine] state_audit: 542356300000 transition   IDLE         ARMED
+[00:09:02.369,000] <inf> [  6 state_machine] main: Armed pyro0 channel 0
+[00:09:02.369,000] <inf> [  6 state_machine] main: Armed pyro0 channel 1
