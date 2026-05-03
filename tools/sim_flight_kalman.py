@@ -465,9 +465,137 @@ def segment_flights(events):
     return flights
 
 
+def _first_sustained_run(t_ns, mask, sustain):
+    """Return ``t_ns`` at the first index where ``mask`` is True for
+    ``sustain`` consecutive samples, or ``None`` if no such run exists."""
+    run = 0
+    for i, hit in enumerate(mask):
+        if hit:
+            run += 1
+            if run >= sustain:
+                return int(t_ns[i - sustain + 1])
+        else:
+            run = 0
+    return None
+
+
+def recover_boost_from_measurements(streams, accel_threshold=15.0,
+                                    baro_climb_threshold=5.0, sustain=5):
+    """Heuristically locate boost ignition from raw measurements.
+
+    Used as a fallback when the state_audit log contains no ARMED→BOOST
+    transition (e.g. the flight computer never armed past ARMED, or the
+    audit file was truncated). Returns the nanosecond timestamp of the
+    recovered boost together with a short label describing the source,
+    or ``(None, None)`` if no source yielded a usable signal.
+
+    Sources tried, in order:
+      1. raw ``accel`` body stream — first run of ``sustain`` samples
+         with ``|a_body|`` above ``accel_threshold`` m/s² (well above the
+         ~9.81 m/s² stationary baseline);
+      2. ``sm_kinematics.accel`` — same threshold against the onboard
+         ``|a|`` magnitude column when the raw stream is empty;
+      3. ``baro`` — climb rate derived from a 2 s sliding altitude
+         difference, first run above ``baro_climb_threshold`` m/s.
+         The rate test fires on plausible flight motion and on the
+         fastest-changing thermal-drift segments of long sit-on-pad
+         logs alike — recovery is best-effort when the IMU streams
+         carry no boost signature.
+    """
+    t_ns, vals = streams["accel"]
+    if t_ns.size:
+        mag = np.linalg.norm(vals, axis=1)
+        boost = _first_sustained_run(t_ns, mag > accel_threshold, sustain)
+        if boost is not None:
+            return boost, "|a_body|"
+
+    t_ns, vals = streams["sm_kinematics"]
+    if t_ns.size:
+        boost = _first_sustained_run(t_ns, vals[:, 0] > accel_threshold,
+                                     sustain)
+        if boost is not None:
+            return boost, "sm_kinematics.accel"
+
+    t_ns, vals = streams["baro"]
+    if t_ns.size > 1:
+        p_pa = vals[:, 0] * 1000.0
+        alt = pressure_to_altitude(p_pa, p_pa[0])
+        win = _samples_for_seconds(t_ns, 2.0)
+        if alt.size > win:
+            dt_s = (t_ns[win:] - t_ns[:-win]) / 1e9
+            rate = np.divide(alt[win:] - alt[:-win], dt_s,
+                             out=np.zeros_like(dt_s), where=dt_s > 0)
+            boost = _first_sustained_run(t_ns[win:],
+                                         rate > baro_climb_threshold,
+                                         sustain)
+            if boost is not None:
+                return boost, "baro climb rate"
+
+    return None, None
+
+
+def _samples_for_seconds(t_ns, seconds):
+    """Convert a duration in seconds to a sample count using the median
+    inter-sample interval of ``t_ns``. Falls back to 1 if the timeline
+    is too short to estimate."""
+    if t_ns.size < 2:
+        return 1
+    dt_ns = float(np.median(np.diff(t_ns)))
+    if dt_ns <= 0:
+        return 1
+    return max(1, int(seconds * 1e9 / dt_ns))
+
+
+def recover_landed_from_measurements(streams, boost_ns,
+                                     baro_alt_threshold=10.0,
+                                     accel_band=2.0, quiet_seconds=5.0):
+    """Heuristically locate touchdown after a recovered boost.
+
+    Searches strictly after ``boost_ns`` for the first run of
+    ``quiet_seconds`` worth of samples that look stationary, in source
+    priority order:
+
+      1. ``baro`` — altitude (referenced to the very first baro sample,
+         assumed pre-boost) below ``baro_alt_threshold`` metres;
+      2. raw ``accel`` body — ``|a_body|`` within ``accel_band`` m/s² of
+         standard gravity (no boost, no descent thump).
+
+    Returns ``(landed_ns, source_label)`` or ``(None, None)`` if no
+    quiescent run is found in either source.
+    """
+    t_ns, vals = streams["baro"]
+    if t_ns.size:
+        p_pa = vals[:, 0] * 1000.0
+        alt = pressure_to_altitude(p_pa, p_pa[0])
+        post = t_ns >= boost_ns
+        if np.any(post):
+            t_post = t_ns[post]
+            sustain = _samples_for_seconds(t_post, quiet_seconds)
+            ts = _first_sustained_run(t_post,
+                                      alt[post] < baro_alt_threshold,
+                                      sustain)
+            if ts is not None:
+                return ts, "baro altitude"
+
+    t_ns, vals = streams["accel"]
+    if t_ns.size:
+        post = t_ns >= boost_ns
+        if np.any(post):
+            t_post = t_ns[post]
+            mag = np.linalg.norm(vals[post], axis=1)
+            sustain = _samples_for_seconds(t_post, quiet_seconds)
+            ts = _first_sustained_run(t_post,
+                                      np.abs(mag - g) < accel_band,
+                                      sustain)
+            if ts is not None:
+                return ts, "|a_body| quiescence"
+
+    return None, None
+
+
 def slice_real_flight(streams, events, boost_ns, end_ns,
                       pre_boost_s=10.0, post_end_s=2.0,
-                      default_duration_s=120.0):
+                      default_duration_s=120.0, relax_empty=False):
     """Slice the raw telemetry streams to a single flight window.
 
     The window starts ``pre_boost_s`` seconds before the BOOST transition
@@ -475,6 +603,13 @@ def slice_real_flight(streams, events, boost_ns, end_ns,
     ``default_duration_s`` if the audit log never closes the flight). All
     timestamps are returned in seconds, with t=0 at the window start so
     the BOOST transition lands at t = ``pre_boost_s``.
+
+    When ``relax_empty`` is set, every stream falls back to its full
+    timeline rather than being masked to the window. This keeps all
+    panels populated and on a consistent x-range when the recovered
+    boost/landed window doesn't span every stream — the boost and
+    landed transitions still appear at their correct t_s as vertical
+    lines on every panel.
 
     Returns ``(sliced_streams, transitions)`` where ``sliced_streams``
     maps each stream name to ``(t_s, values)`` with t_s in seconds, and
@@ -487,9 +622,13 @@ def slice_real_flight(streams, events, boost_ns, end_ns,
 
     sliced = {}
     for name, (t_ns_raw, vals_raw) in streams.items():
-        mask = (t_ns_raw >= window_start_ns) & (t_ns_raw <= window_end_ns)
-        t_s = (t_ns_raw[mask] - window_start_ns) / 1000000000.0
-        sliced[name] = (t_s, vals_raw[mask])
+        if relax_empty:
+            t_s = (t_ns_raw - window_start_ns) / 1000000000.0
+            sliced[name] = (t_s, vals_raw)
+        else:
+            mask = (t_ns_raw >= window_start_ns) & (t_ns_raw <= window_end_ns)
+            t_s = (t_ns_raw[mask] - window_start_ns) / 1000000000.0
+            sliced[name] = (t_s, vals_raw[mask])
 
     transitions = []
     for ev in events:
@@ -1164,8 +1303,28 @@ def run_real_flight(args):
 
     events = parse_state_audit(audit_path)
     flights = segment_flights(events)
+    recovered = False
     if not flights:
-        raise SystemExit("error: no ARMED->BOOST transitions found")
+        print("warning: no ARMED->BOOST transition found in state_audit; "
+              "attempting to recover flight from raw |a_body|")
+        boost_ns, boost_src = recover_boost_from_measurements(streams)
+        if boost_ns is None:
+            raise SystemExit("error: no ARMED->BOOST transitions found "
+                             "and no boost-like signal in accel or baro")
+        print(f"  recovered boost  @ {boost_ns} ns (from {boost_src})")
+        landed_ns, landed_src = recover_landed_from_measurements(
+            streams, boost_ns)
+        if landed_ns is not None:
+            print(f"  recovered landed @ {landed_ns} ns (from {landed_src})")
+        else:
+            print("  recovered landed: not found, falling back to default "
+                  "post-boost duration")
+        events.append((boost_ns, "transition", "ARMED", "BOOST"))
+        if landed_ns is not None:
+            events.append((landed_ns, "transition", "FLIGHT", "LANDED"))
+        events.sort(key=lambda e: e[0])
+        flights = [(boost_ns, landed_ns)]
+        recovered = True
     print(f"Detected {len(flights)} flight(s):")
     for n, (b, e) in enumerate(flights, start=1):
         end_str = f"{e} ns" if e is not None else "end-of-log"
@@ -1192,7 +1351,8 @@ def run_real_flight(args):
         print(f"\n--- Plotting flight {n} ---")
         sliced, transitions = slice_real_flight(
             streams, events, boost_ns, end_ns,
-            pre_boost_s=args.pre_boost, post_end_s=args.post_end)
+            pre_boost_s=args.pre_boost, post_end_s=args.post_end,
+            relax_empty=recovered)
 
         for name, (t_s, vals) in sliced.items():
             print(f"  {name}: {len(t_s)} samples in window")
@@ -1204,6 +1364,8 @@ def run_real_flight(args):
             title = f"AURORA - {os.path.basename(flight_dir.rstrip('/'))}"
         else:
             title = f"AURORA Flight {n} - {os.path.basename(flight_dir.rstrip('/'))}"
+        if recovered:
+            title += "  (boost recovered from accel — no BOOST transition)"
         for theme in themes:
             suffix = f"_{theme}" if args.theme == "both" else ""
             out_path = f"flight{n}{suffix}.png"
