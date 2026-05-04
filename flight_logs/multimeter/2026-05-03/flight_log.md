@@ -2,18 +2,18 @@
 
 ## Info
 
-- AURORA Version: `0.3.0`
+- AURORA Version: `0.3.1`
 - Board: `esp32s3-micrometer/esp32s3/procpu`
 
 ## Compile command
 
 ```bash
 # Flight 1
-python3 tools/sim_flight_kalman.py --flight flight_logs/2026-05-03/flight1 \
+python3 tools/sim_flight_kalman.py --flight flight_logs/multimeter/2026-05-03/flight1 \
   --title "M.E.T.A. Flight 1 - 2026-05-03"
 
 # Flight 2
-python3 tools/sim_flight_kalman.py --flight flight_logs/2026-05-03/flight2 \
+python3 tools/sim_flight_kalman.py --flight flight_logs/multimeter/2026-05-03/flight2 \
   --title "M.E.T.A. Flight 2 - 2026-05-03"
 ```
 
