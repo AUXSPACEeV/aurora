@@ -34,6 +34,7 @@ static const struct sm_thresholds test_cfg = {
 	.T_L   = 2,
 	.T_OA  = 85,
 	.T_OI  = 70,
+	.N_OI  = 1,
 	.DT_AB = 100,
 	.DT_L  = 50,
 	.TO_A  = 200,

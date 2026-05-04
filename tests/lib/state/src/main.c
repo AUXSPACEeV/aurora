@@ -34,6 +34,7 @@ static const struct sm_thresholds simple_state_cfg = {
 	.T_L = 2,	// 2 m/s
 	.T_OA = 85,	// 85 degrees
 	.T_OI = 70,	// 70 degrees
+	.N_OI = 1,	// 1 sample
 
 	/* Timers */
 	.DT_AB = 100,	// 100 ms

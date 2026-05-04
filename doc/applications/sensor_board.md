@@ -58,6 +58,7 @@ These options are defined in `sensor_board/Kconfig` under the
 | `CONFIG_LANDING_VELOCITY` | m/s | 2 | Velocity threshold for landing detection. |
 | `CONFIG_ARM_ANGLE` | deg | 85 | Orientation threshold for arming (IDLE -> ARMED). 0 = horizontal, 90 = vertical. |
 | `CONFIG_DISARM_ANGLE` | deg | 70 | Orientation threshold for disarming (ARMED -> IDLE). |
+| `DISARM_ANGLE_SAMPLES` | n | 10 | Number of consecutive samples for disarming (ARMED -> IDLE). |
 
 #### Timers and Timeouts
 
