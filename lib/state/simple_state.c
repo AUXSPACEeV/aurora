@@ -265,6 +265,8 @@ static inline bool arm_to_boost_conditions_met(const struct sm_inputs *in)
 static inline void _sm_update(const struct sm_inputs *in,
 			      double previous_altitude)
 {
+	static int n_oi;
+
 	/* go to IDLE if disarmed */
 	if (!in->armed && current_state != SM_IDLE) {
 		stop_timers();
@@ -278,6 +280,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 	* IDLE -> ARMED
 	*----------------------------------------------------------*/
 	case SM_IDLE:
+		n_oi = 0;
 		if (in->armed && sm_orientation_elevation_deg(in->orientation) >= th.T_OA) {
 			SM_TRANSITION(SM_ARMED);
 		}
@@ -288,6 +291,9 @@ static inline void _sm_update(const struct sm_inputs *in,
 	*----------------------------------------------------------*/
 	case SM_ARMED:
 		if (sm_orientation_elevation_deg(in->orientation) < th.T_OI) {
+			if (++n_oi < th.N_OI)
+				break;
+
 			/* Go back to IDLE if orientation is bad */
 			running_timers[TIMER_DT_AB] = 0;
 			k_timer_stop(&dt_ab);
@@ -295,6 +301,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 			SM_TRANSITION(SM_IDLE);
 			break;
 		}
+		n_oi = 0;
 
 		/* Timer is running_timers running. Check conditions */
 		if (running_timers[TIMER_DT_AB] == 1) {
@@ -308,6 +315,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 
 			/* At this point, conditions are met. Is the timer done as well? */
 			if (TIMER_EXPIRED(&dt_ab)) {
+				n_oi = 0;
 				SM_EVENT("orientation, altitude and timing threshold reached");
 				/* Congrats! BOOST detected! */
 				SM_TRANSITION(SM_BOOST);

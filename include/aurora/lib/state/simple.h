@@ -52,6 +52,7 @@ enum sm_state {
 	int T_L;	/**< Velocity threshold for landing detection. */
 	int T_OA;	/**< Orientation threshold for IDLE -> ARMED transition. */
 	int T_OI;	/**< Orientation threshold for ARMED -> IDLE transition. */
+	int N_OI;	/**< Consecutive below-T_OI samples required to disarm (>=1). */
 
 	/* Timers */
 	int DT_AB;	/**< Time for T_AB and T_H assertion (ms). */

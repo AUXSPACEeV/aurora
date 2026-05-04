@@ -97,6 +97,14 @@ config DISARM_ANGLE
 		Angle threshold in degrees for disarming the system.
 		0 degrees is horizontal, 90 degrees is vertical.
 
+config DISARM_ANGLE_SAMPLES
+	int "Number of disarm angle samples"
+	default 10
+	range 1 1000
+	help
+		Number of consecutive samples with angle < DISARM_ANGLE to
+		disarm.
+
 config BOOST_TIMER_MS
 	int "Boost timer duration"
 	default 900

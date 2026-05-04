@@ -60,6 +60,7 @@ static const struct sm_thresholds state_cfg = {
 	.T_L = CONFIG_LANDING_VELOCITY,
 	.T_OA = CONFIG_ARM_ANGLE,
 	.T_OI = CONFIG_DISARM_ANGLE,
+	.N_OI = CONFIG_DISARM_ANGLE_SAMPLES,
 	/* Timers */
 	.DT_AB = CONFIG_BOOST_TIMER_MS,
 	.DT_L = CONFIG_LANDING_TIMER_MS,
