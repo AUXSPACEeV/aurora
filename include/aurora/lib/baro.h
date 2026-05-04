@@ -62,6 +62,31 @@ int baro_measure(const struct device *dev);
  */
 int baro_init(const struct device *dev);
 
+#if defined(CONFIG_BARO_WATCHDOG)
+/**
+ * @brief Run the baro stall watchdog. Never returns.
+ *
+ * Intended as the post-init body of the baro thread when the baro is driven
+ * by a hardware data-ready trigger (no polling loop).
+ */
+void baro_watchdog_run(void);
+
+/**
+ * @brief Attempt to recover a stalled barometer.
+ *
+ * Re-applies @c CONFIG_BARO_WATCHDOG_RECOVERY_HZ to the sensor and re-arms
+ * the data-ready trigger. Intended to recover from a soft-reset caused by a
+ * power-rail transient.
+ *
+ * @param dev Pointer to the baro device.
+ *
+ * @retval 0 on success.
+ * @retval -EINVAL if @p dev is NULL.
+ * @retval -errno from the underlying sensor API on failure.
+ */
+int baro_recover(const struct device *dev);
+#endif /* CONFIG_BARO_WATCHDOG */
+
 /**
  * @brief Set the ground-level reference pressure.
  *
