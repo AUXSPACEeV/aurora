@@ -73,5 +73,6 @@ real flight.
 
 - Python 3.10+
 - `numpy`
-- Must be runnable from the `aurora/tools` directory so the import of
-  `sim_flight_kalman` resolves.
+- Must be runnable from the `aurora/tools` directory so the imports of
+  `sim_flight_kalman` (filter mirrors) and `plot_flight_data`
+  (`parse_influx`, `parse_state_audit`, `segment_flights`) resolve.

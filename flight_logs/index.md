@@ -4,7 +4,7 @@ Recorded and simulated flight data lives in
 [`aurora/flight_logs`](https://github.com/AUXSPACEeV/aurora/tree/main/flight_logs).
 Each directory contains the raw [InfluxDB](https://www.influxdata.com/) line
 protocol export (`flights.influx`), a `state_audit` dump and rendered plots
-produced by `tools/sim_flight_kalman.py` (see {doc}`/tools/sim_flight_kalman`).
+produced by `tools/plot_flight_data.py` (see {doc}`/tools/plot_flight_data`).
 
 ```{note}
 Log payloads (`*.influx`, `*.png`, `state_audit`) are tracked via

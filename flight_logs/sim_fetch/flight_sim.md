@@ -8,10 +8,8 @@
 ## Compile command
 
 ```bash
-python3 ./tools/sim_flight_kalman.py --flight flight_logs/sim_fetch \
-  --q-vel 3.0 \
-  --r-meas 6.0 \
-  --debounce 3
+python3 ./tools/plot_flight_data.py --flight flight_logs/sim_fetch \
+  --r-meas 6.0
 ```
 
 ## Flight Protocol

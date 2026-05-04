@@ -54,6 +54,9 @@ A Python simulation tool
 reproduces the same algorithm with a realistic flight profile and MS5607
 sensor-noise model, allowing the filter to be tuned and validated offline before
 flight. See :doc:`/tools/sim_flight_kalman` for usage and example output.
+For plotting recorded telemetry from real flights — including a replay of
+the NIS gate and the three-vote apogee detector against the logged streams
+— see :doc:`/tools/plot_flight_data`.
 
 The filter and its hypsometric pipeline are covered by a ztest suite under
 `aurora/tests/lib/filter/ <https://github.com/AUXSPACEeV/aurora/tree/main/tests/lib/filter>`_.
