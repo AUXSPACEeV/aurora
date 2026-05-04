@@ -24,7 +24,9 @@ python3 ./tools/sim_fetch.py pexpect \
 ```
 
 ```bash
-python3 ./tools/plot_flight_data.py --flight flight_logs/sim_fetch
+python3 ./tools/plot_flight_data.py \
+  --flight flight_logs/sim_fetch \
+  --title "Simulated Flight (v0.4.1)"
 ```
 
 ## Flight Protocol
