@@ -9,8 +9,9 @@ import os
 import numpy as np
 import pathlib
 
-from sim_flight_kalman import (parse_influx, parse_state_audit,
-                               segment_flights, process_real_flight)
+from plot_flight_data import (parse_influx, parse_state_audit,
+                              segment_flights)
+from sim_flight_kalman import process_real_flight
 
 AURORA_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__))).parent
 FLIGHT_DIR = AURORA_DIR / "flight_logs/2026-04-18"

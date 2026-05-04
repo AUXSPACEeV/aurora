@@ -9,11 +9,11 @@
 
 ```bash
 # Flight 1
-python3 tools/sim_flight_kalman.py --flight flight_logs/multimeter/2026-05-03/flight1 \
+python3 tools/plot_flight_data.py --flight flight_logs/multimeter/2026-05-03/flight1 \
   --title "M.E.T.A. Flight 1 - 2026-05-03"
 
 # Flight 2
-python3 tools/sim_flight_kalman.py --flight flight_logs/multimeter/2026-05-03/flight2 \
+python3 tools/plot_flight_data.py --flight flight_logs/multimeter/2026-05-03/flight2 \
   --title "M.E.T.A. Flight 2 - 2026-05-03"
 ```
 

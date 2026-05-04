@@ -9,12 +9,12 @@
 
 ```bash
 # Flight 1
-python3 tools/sim_flight_kalman.py --flight flight_logs/2026-04-26/flight1 \
+python3 tools/plot_flight_data.py --flight flight_logs/2026-04-26/flight1 \
   --pre-boost 4 \
   --title "AURORA Flight 1 - 2026-04-26"
 
 # Flight 2
-python3 tools/sim_flight_kalman.py --flight flight_logs/2026-04-26/flight2 \
+python3 tools/plot_flight_data.py --flight flight_logs/2026-04-26/flight2 \
   --pre-boost 4 \
   --title "AURORA Flight 2 - 2026-04-26"
 ```
