@@ -154,6 +154,8 @@ int imu_sensor_value_to_acceleration(const struct imu_data *data, double *acc_ou
 
 /* imu_sensor_value_to_orientation – see imu.h */
 int imu_sensor_value_to_orientation(const struct imu_data *data,
+				    double dt_s,
+				    const double gyro_bias[IMU_NUM_AXES],
 				    double *orientation)
 {
 	if (data == NULL || orientation == NULL)
@@ -183,8 +185,25 @@ int imu_sensor_value_to_orientation(const struct imu_data *data,
 
 	orientation[0] = atan2(gy, gz) * rad2deg;
 	orientation[1] = atan2(-gx, sqrt(gy * gy + gz * gz)) * rad2deg;
-	/* roll is unobservable from a static accelerometer reading. */
-	orientation[2] = 0.0;
+
+	/* Roll is rotation about the up (long) axis, unobservable from a
+	 * static accelerometer reading.  Integrate the gyro component along
+	 * the up axis (with mounting sign) into orientation[2].
+	 */
+	if (dt_s > 0.0) {
+		double w_up = out_ev(&data->gyro[idx]);
+		if (gyro_bias != NULL) {
+			w_up -= gyro_bias[idx];
+		}
+		w_up *= (double)sign;
+		double roll = orientation[2] + w_up * dt_s * rad2deg;
+		/* Wrap to [-180, 180]. */
+		roll = fmod(roll + 180.0, 360.0);
+		if (roll < 0.0) {
+			roll += 360.0;
+		}
+		orientation[2] = roll - 180.0;
+	}
 
 	return 0;
 }

@@ -30,6 +30,10 @@
 #include <aurora/lib/imu.h>
 #include <aurora/lib/baro.h>
 
+#ifndef M_PI
+#define M_PI ((double)3.14159265358979323846)
+#endif
+
 LOG_MODULE_REGISTER(fake_sensors, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 
 /* baro_active / imu_active are owned by main.c; the state machine waits on
@@ -46,6 +50,12 @@ extern bool imu_active;
 #define BOOST_DURATION_S         1.5
 /* Parachute descent rate applied after apogee. */
 #define PARACHUTE_RATE_MS         7.0
+/* Roll rate (rotation about the rocket's long axis) injected into the
+ * gyro after launch.  Must be non-zero so the autotest can verify roll
+ * is being integrated.  Held at zero pre-launch so attitude calibration
+ * sees a stationary IMU and captures a zero gyro bias.
+ */
+#define ROLL_RATE_DPS            30.0
 
 /* ISA troposphere, matching the constants in lib/sensor/baro.c */
 #define SEA_LEVEL_PRESSURE_KPA   101.325
@@ -180,13 +190,26 @@ static void fake_imu_task(void *, void *, void *)
 		double altitude, accel_vert;
 		profile_sample(flight_time_seconds(), &altitude, &accel_vert);
 
+		/* Inject a constant roll rate about the configured up axis once
+		 * the flight is in progress (t_s >= 0).  Pre-launch the gyro
+		 * stays at zero so the attitude calibration window captures a
+		 * zero bias.
+		 */
+		const double t_s = flight_time_seconds();
+		double gyro_axes[3] = {0.0, 0.0, 0.0};
+		if (t_s >= 0.0) {
+			gyro_axes[CONFIG_IMU_UP_AXIS_INDEX] =
+				ROLL_RATE_DPS * (M_PI / 180.0) *
+				(double)CONFIG_IMU_UP_AXIS_SIGN;
+		}
+
 		struct imu_data msg = {0};
 		set_sensor_value_double(&msg.accel[0], 0.0);
 		set_sensor_value_double(&msg.accel[1], accel_vert);
 		set_sensor_value_double(&msg.accel[2], 0.0);
-		set_sensor_value_double(&msg.gyro[0], 0.0);
-		set_sensor_value_double(&msg.gyro[1], 0.0);
-		set_sensor_value_double(&msg.gyro[2], 0.0);
+		set_sensor_value_double(&msg.gyro[0], gyro_axes[0]);
+		set_sensor_value_double(&msg.gyro[1], gyro_axes[1]);
+		set_sensor_value_double(&msg.gyro[2], gyro_axes[2]);
 
 		(void)zbus_chan_pub(&imu_data_chan, &msg, K_NO_WAIT);
 
@@ -308,6 +331,27 @@ static void autolaunch_task(void *, void *, void *)
 		enum sm_state s = sm_get_state();
 
 		if (s == SM_LANDED) {
+			/* Sanity-check that yaw, pitch and roll were tracked
+			 * end-to-end.  With the fake profile the rocket stays
+			 * vertical (yaw ~ 0, pitch ~ 0) and spins about the up
+			 * axis at ROLL_RATE_DPS, so roll must have moved away
+			 * from zero by the time we land.
+			 */
+			struct sm_inputs sm_in;
+			sm_get_inputs(&sm_in);
+			LOG_INF("autolaunch: orientation yaw=%.2f pitch=%.2f roll=%.2f",
+				sm_in.orientation[0], sm_in.orientation[1],
+				sm_in.orientation[2]);
+			__ASSERT(fabs(sm_in.orientation[0]) < 5.0,
+				 "autolaunch: yaw drift %.2f deg exceeds 5 deg",
+				 sm_in.orientation[0]);
+			__ASSERT(fabs(sm_in.orientation[1]) < 5.0,
+				 "autolaunch: pitch drift %.2f deg exceeds 5 deg",
+				 sm_in.orientation[1]);
+			__ASSERT(fabs(sm_in.orientation[2]) > 1.0,
+				 "autolaunch: roll did not integrate (%.2f deg)",
+				 sm_in.orientation[2]);
+
 			LOG_INF("autolaunch: LANDED - simulation complete");
 			log_flush();
 			exit(0);

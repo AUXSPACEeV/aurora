@@ -93,24 +93,39 @@ int imu_sensor_value_to_acceleration(const struct imu_data *data,
  * order as the local forward (X) and lateral (Y) axes.
  *
  * Output convention (degrees):
- *   - orientation[0] = yaw   (rotation about up axis)
- *   - orientation[1] = pitch (elevation of forward axis from horizontal)
- *   - orientation[2] = roll  (rotation about forward axis)
+ *   - orientation[0] = yaw   (tilt of the forward axis from horizontal)
+ *   - orientation[1] = pitch (tilt of the lateral axis from horizontal)
+ *   - orientation[2] = roll  (rotation about the up axis — the rocket's
+ *                             long axis / flight path)
  *
- * Only meaningful while gravity dominates (stationary / quasi-static);
- * during powered flight, derive orientation from the attitude tracker.
+ * Yaw and pitch are derived from the accelerometer (gravity-dominated,
+ * meaningful only during quasi-static phases).  Roll is unobservable
+ * from a static accelerometer reading because it is the rotation about
+ * the gravity vector itself; it is integrated from the gyroscope.
  *
- * @note Yaw is unobservable from a static accelerometer reading and is
- *       always reported as 0.
+ * The caller owns the roll state: @p orientation[2] is read on input as
+ * the previous roll angle, advanced by @c gyro_up * dt_s, and written
+ * back wrapped to [-180, 180] degrees.  Pass @p dt_s <= 0 to leave the
+ * roll value untouched (e.g. on the very first sample, before a dt is
+ * known).
  *
  * @param data        Pointer to the IMU sensor data.
- * @param orientation Output: [yaw, pitch, roll] in degrees.  Must be a
- *                    valid pointer to a 3-element double array.
+ * @param dt_s        Elapsed time in seconds since the previous call,
+ *                    used to integrate roll.  Pass 0 to skip
+ *                    integration (yaw and pitch are still updated).
+ * @param gyro_bias   Optional bias to subtract from the gyro reading
+ *                    before integration, in rad/s.  Pass NULL to skip
+ *                    bias correction.
+ * @param orientation In/out: [yaw, pitch, roll] in degrees.  Yaw and
+ *                    pitch are overwritten; roll is read and updated.
+ *                    Must be a valid pointer to a 3-element double array.
  *
  * @retval 0 on success.
  * @retval -EINVAL if @p data or @p orientation is NULL.
  */
 int imu_sensor_value_to_orientation(const struct imu_data *data,
+				    double dt_s,
+				    const double gyro_bias[IMU_NUM_AXES],
 				    double *orientation);
 
 /** @} */

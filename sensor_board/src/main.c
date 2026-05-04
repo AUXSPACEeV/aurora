@@ -352,7 +352,26 @@ void state_machine_task(void *, void *, void *)
 		 */
 		do {
 			if (data_chan == &imu_data_chan) {
-				if (imu_sensor_value_to_orientation(&msg_buf.imu, orientation) == 0 &&
+#if defined(CONFIG_IMU)
+				int64_t now_ns = (k_uptime_ticks() * NSEC_PER_SEC)
+						 / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
+				double dt_orient_s = (last_imu_ns != 0)
+					? (double)(now_ns - last_imu_ns) / 1e9
+					: 0.0;
+				if (dt_orient_s < 0.0 || dt_orient_s > 1.0) {
+					dt_orient_s = 0.0;
+				}
+				const double *bias_for_orient =
+					attitude_is_calibrated(&attitude_state)
+						? attitude_state.gyro_bias
+						: NULL;
+#else
+				const double dt_orient_s = 0.0;
+				const double *bias_for_orient = NULL;
+#endif /* CONFIG_IMU */
+				if (imu_sensor_value_to_orientation(&msg_buf.imu, dt_orient_s,
+								    bias_for_orient,
+								    orientation) == 0 &&
 				    imu_sensor_value_to_acceleration(&msg_buf.imu, &acceleration) == 0) {
 					imu_ready = true;
 				}
@@ -369,8 +388,6 @@ void state_machine_task(void *, void *, void *)
 						sensor_value_to_double(&msg_buf.imu.gyro[1]),
 						sensor_value_to_double(&msg_buf.imu.gyro[2]),
 					};
-					int64_t now_ns = (k_uptime_ticks() * NSEC_PER_SEC)
-							 / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
 
 					if (!attitude_is_calibrated(&attitude_state)) {
 						if (sm_get_state() == SM_ARMED) {
@@ -512,6 +529,7 @@ void state_machine_task(void *, void *, void *)
 				attitude_init(&attitude_state);
 				last_imu_ns = 0;
 				calibration_notified = false;
+				orientation[2] = 0.0;
 			}
 #endif /* CONFIG_IMU */
 			prev_state = state;
