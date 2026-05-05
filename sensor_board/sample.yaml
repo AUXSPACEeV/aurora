@@ -19,7 +19,7 @@ tests:
     integration_platforms:
       - sensor_board_v2/rp2040
       - sensor_board_v2/rp2350a/hazard3
-  app.native_sim:
+  app.native_sim.synth:
     build_only: false
     timeout: 180
     harness: console
@@ -29,6 +29,21 @@ tests:
         - "simulation complete"
     extra_configs:
       - CONFIG_AURORA_SIM_AUTOTEST=y
+    platform_allow:
+      - native_sim
+    integration_platforms:
+      - native_sim
+  app.native_sim.replay:
+    build_only: false
+    timeout: 180
+    harness: console
+    harness_config:
+      type: one_line
+      regex:
+        - "simulation complete"
+    extra_configs:
+      - CONFIG_AURORA_SIM_AUTOTEST=y
+      - CONFIG_AURORA_FAKE_SENSORS_REPLAY=y
     platform_allow:
       - native_sim
     integration_platforms:

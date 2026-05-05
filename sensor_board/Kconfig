@@ -30,6 +30,42 @@ config AURORA_FAKE_SENSORS
 	  of any board. A shell command "sim launch" kicks off the canned
 	  ascent/descent profile.
 
+choice AURORA_FAKE_SENSORS_BACKEND
+	prompt "Fake sensor backend"
+	depends on AURORA_FAKE_SENSORS
+	default AURORA_FAKE_SENSORS_SYNTH
+	help
+	  Selects how the fake_sensors threads source their data: from the
+	  built-in algorithmic flight profile, or by replaying samples
+	  embedded from a recorded flight CSV.
+
+config AURORA_FAKE_SENSORS_SYNTH
+	bool "Algorithmic flight profile"
+	help
+	  Use the analytic ascent/descent profile in fake_sensors.c.
+
+config AURORA_FAKE_SENSORS_REPLAY
+	bool "Replay recorded flight log"
+	help
+	  Use samples generated at build time by
+	  aurora/scripts/gen_flight_replay.py from a flights.csv flight
+	  log. The replay backend streams accel/gyro/baro samples on the
+	  same zbus channels at their original cadence; no shell launch
+	  trigger is needed because the recording carries its own
+	  pre-launch window.
+
+endchoice
+
+config AURORA_FAKE_SENSORS_REPLAY_INPUT
+	string "Path to flights.csv used by the replay backend"
+	depends on AURORA_FAKE_SENSORS_REPLAY
+	default "flight_logs/multimeter/2026-05-03/flight1/flights.csv"
+	help
+	  Path (relative to the aurora module root, i.e. the directory that
+	  contains zephyr/module.yml) to the flights.csv file embedded by
+	  the replay generator. May be overridden in prj.conf or via
+	  -DCONFIG_AURORA_FAKE_SENSORS_REPLAY_INPUT=... to swap recordings.
+
 config AURORA_SIM_AUTOTEST
 	bool "Automated simulation test (CI mode)"
 	depends on IMU && BARO

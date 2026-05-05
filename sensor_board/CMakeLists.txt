@@ -27,6 +27,37 @@ target_sources(app PRIVATE
 	src/main.c
 	)
 
-target_sources_ifdef(CONFIG_AURORA_FAKE_SENSORS app PRIVATE
+target_sources_ifdef(CONFIG_AURORA_FAKE_SENSORS_SYNTH app PRIVATE
 	src/fake_sensors.c
 	)
+
+if(CONFIG_AURORA_FAKE_SENSORS_REPLAY)
+	# Strip surrounding quotes Kconfig keeps on string symbols.
+	string(REGEX REPLACE "^\"(.*)\"$" "\\1"
+		REPLAY_INPUT_REL "${CONFIG_AURORA_FAKE_SENSORS_REPLAY_INPUT}")
+	set(REPLAY_INPUT "${CMAKE_CURRENT_SOURCE_DIR}/../${REPLAY_INPUT_REL}")
+	set(REPLAY_GEN  "${CMAKE_CURRENT_SOURCE_DIR}/../tools/gen_flight_replay.py")
+	set(REPLAY_OUT  "${CMAKE_CURRENT_BINARY_DIR}/replay_data.c")
+
+	if(NOT EXISTS "${REPLAY_INPUT}")
+		message(FATAL_ERROR
+			"AURORA_FAKE_SENSORS_REPLAY: input CSV not found: "
+			"${REPLAY_INPUT}")
+	endif()
+
+	add_custom_command(
+		OUTPUT  "${REPLAY_OUT}"
+		COMMAND ${PYTHON_EXECUTABLE} "${REPLAY_GEN}"
+			--input "${REPLAY_INPUT}"
+			--output "${REPLAY_OUT}"
+		DEPENDS "${REPLAY_INPUT}" "${REPLAY_GEN}"
+		COMMENT "Generating replay_data.c from ${REPLAY_INPUT_REL}"
+		VERBATIM
+	)
+
+	target_sources(app PRIVATE
+		src/fake_sensors_replay.c
+		"${REPLAY_OUT}"
+	)
+	target_include_directories(app PRIVATE src)
+endif()
