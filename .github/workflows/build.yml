@@ -26,6 +26,7 @@ jobs:
         with:
           path: aurora
           persist-credentials: false
+          lfs: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
