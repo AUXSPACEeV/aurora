@@ -74,13 +74,22 @@ These options are defined in `sensor_board/Kconfig` under the
 
 When built with `CONFIG_AURORA_FAKE_SENSORS=y` (typically together with the
 `native_sim` board target), `sensor_board` replaces the real IMU and baro
-polling threads with a synthetic flight-profile generator. The synthetic
-threads publish on the same zbus channels (`imu_data_chan`, `baro_data_chan`)
-at the same cadence as the real drivers, so the state machine, filter, data
-logger and pyro logic run unchanged.
+polling threads with a synthetic data source. The fake threads publish on
+the same zbus channels (`imu_data_chan`, `baro_data_chan`) at the same
+cadence as the real drivers, so the state machine, filter, data logger and
+pyro logic run unchanged.
 
-The profile follows an ISA-troposphere altitude/pressure curve with a
-constant-thrust boost phase, a ballistic coast to apogee and a
+Two backends sit behind the same shell interface:
+
+| Backend | Kconfig | Source of samples |
+|---|---|---|
+| Synthetic profile | `AURORA_FAKE_SENSORS_SYNTH` (default) | Analytic ISA-troposphere flight profile generated on the fly. |
+| Replay | `AURORA_FAKE_SENSORS_REPLAY` | Samples from a recorded `flights.csv`, embedded in the firmware at build time. |
+
+### Synthetic profile
+
+The default profile follows an ISA-troposphere altitude/pressure curve with
+a constant-thrust boost phase, a ballistic coast to apogee and a
 constant-rate parachute descent. It is controlled from the Zephyr shell via
 the `sim` command group:
 
@@ -103,6 +112,33 @@ simulations and create graphs from the data_logger output:
 :alt: flight1_dark.png
 :class: only-dark
 ```
+
+### Replay backend
+
+Setting `CONFIG_AURORA_FAKE_SENSORS_REPLAY=y` swaps the analytic profile
+for a playback engine that streams a previously recorded flight back into
+the system at the original cadence. The samples are baked into the
+firmware image at build time, so no filesystem or network access is needed
+at runtime — useful for CI runs and for regression-testing the Kalman
+filter / state machine against known-good data.
+
+The recording is selected via:
+
+```kconfig
+CONFIG_AURORA_FAKE_SENSORS_REPLAY_INPUT="flight_logs/<campaign>/<flight>/flights.csv"
+```
+
+(Paths are relative to the aurora module root.) During the build, the
+[`gen_flight_replay.py`](/tools/gen_flight_replay.md) tool turns the CSV —
+and, if a sibling `state_audit` file is present, the trimmed
+`[BOOST - 4 s, LANDED + 4 s]` window — into a generated `replay_data.c`
+that is linked into the firmware.
+
+Before launch, the replay threads keep the rocket "pad-stationary" by
+republishing the very first recorded sample, so attitude calibration
+converges as it would on the real hardware. Issuing `sim launch` from the
+shell (or letting `CONFIG_AURORA_SIM_AUTOTEST=y` do it automatically) then
+starts the playback.
 
 ## Supported Boards and Shields
 
