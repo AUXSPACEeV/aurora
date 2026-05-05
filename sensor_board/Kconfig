@@ -30,31 +30,26 @@ config AURORA_FAKE_SENSORS
 	  of any board. A shell command "sim launch" kicks off the canned
 	  ascent/descent profile.
 
-choice AURORA_FAKE_SENSORS_BACKEND
-	prompt "Fake sensor backend"
-	depends on AURORA_FAKE_SENSORS
-	default AURORA_FAKE_SENSORS_SYNTH
+config AURORA_FAKE_SENSORS_REPLAY
+	bool "Replay recorded flight log instead of the algorithmic profile"
+	depends on IMU && BARO
+	select AURORA_FAKE_SENSORS
 	help
-	  Selects how the fake_sensors threads source their data: from the
-	  built-in algorithmic flight profile, or by replaying samples
-	  embedded from a recorded flight CSV.
+	  Swap the analytic flight-profile generator (fake_sensors.c) for
+	  a playback engine (fake_sensors_replay.c) that streams samples
+	  embedded at build time from a recorded flights.csv. Pre-launch
+	  the threads hold the rocket stationary by republishing the first
+	  recorded sample, so attitude calibration converges as usual; the
+	  `sim launch` shell command (or the AURORA_SIM_AUTOTEST autolaunch
+	  task) then starts replaying the recording at its original
+	  cadence. Implies AURORA_FAKE_SENSORS.
 
 config AURORA_FAKE_SENSORS_SYNTH
-	bool "Algorithmic flight profile"
+	def_bool AURORA_FAKE_SENSORS && !AURORA_FAKE_SENSORS_REPLAY
 	help
-	  Use the analytic ascent/descent profile in fake_sensors.c.
-
-config AURORA_FAKE_SENSORS_REPLAY
-	bool "Replay recorded flight log"
-	help
-	  Use samples generated at build time by
-	  aurora/scripts/gen_flight_replay.py from a flights.csv flight
-	  log. The replay backend streams accel/gyro/baro samples on the
-	  same zbus channels at their original cadence; no shell launch
-	  trigger is needed because the recording carries its own
-	  pre-launch window.
-
-endchoice
+	  Internal switch: true when AURORA_FAKE_SENSORS is enabled but
+	  the replay backend is not, i.e. the algorithmic profile in
+	  fake_sensors.c should be compiled in.
 
 config AURORA_FAKE_SENSORS_REPLAY_INPUT
 	string "Path to flights.csv used by the replay backend"
