@@ -45,12 +45,26 @@ if(CONFIG_AURORA_FAKE_SENSORS_REPLAY)
 			"${REPLAY_INPUT}")
 	endif()
 
+	# If a state_audit sits next to flights.csv (default data_logger
+	# layout), pass it through so the generator trims to the
+	# [BOOST - 4 s, LANDED + 4 s] window.
+	get_filename_component(REPLAY_INPUT_DIR "${REPLAY_INPUT}" DIRECTORY)
+	set(REPLAY_AUDIT "${REPLAY_INPUT_DIR}/state_audit")
+	set(REPLAY_AUDIT_ARGS)
+	set(REPLAY_AUDIT_DEPS)
+	if(EXISTS "${REPLAY_AUDIT}")
+		list(APPEND REPLAY_AUDIT_ARGS --state-audit "${REPLAY_AUDIT}")
+		list(APPEND REPLAY_AUDIT_DEPS "${REPLAY_AUDIT}")
+    message("-- Found replay audit in flight dir: ${REPLAY_AUDIT}")
+	endif()
+
 	add_custom_command(
 		OUTPUT  "${REPLAY_OUT}"
 		COMMAND ${PYTHON_EXECUTABLE} "${REPLAY_GEN}"
 			--input "${REPLAY_INPUT}"
 			--output "${REPLAY_OUT}"
-		DEPENDS "${REPLAY_INPUT}" "${REPLAY_GEN}"
+			${REPLAY_AUDIT_ARGS}
+		DEPENDS "${REPLAY_INPUT}" "${REPLAY_GEN}" ${REPLAY_AUDIT_DEPS}
 		COMMENT "Generating replay_data.c from ${REPLAY_INPUT_REL}"
 		VERBATIM
 	)
