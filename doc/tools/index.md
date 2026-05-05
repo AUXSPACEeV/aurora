@@ -15,6 +15,7 @@ Pip requirements are installed via `pip install -r tools/requirements.txt`
 ```{toctree}
 :maxdepth: 1
 
+gen_flight_replay
 plot_flight_data
 sim_fetch
 sim_flight_kalman
@@ -26,6 +27,7 @@ sync_defconfig
 
 | Script | Purpose |
 |---|---|
+| [`gen_flight_replay.py`](gen_flight_replay.md) | Convert a recorded `flights.csv` into a generated C source file consumed by the `fake_sensors` replay backend. |
 | [`plot_flight_data.py`](plot_flight_data.md) | Plot recorded or simulated flight data — standalone CLI for telemetry logs, importable plotting module for `sim_flight_kalman`. |
 | [`sim_fetch.py`](sim_fetch.md) | Pull files out of a running `native_sim` Zephyr instance via the shell console. |
 | [`sim_flight_kalman.py`](sim_flight_kalman.md) | Run a synthetic flight through a Python mirror of the AURORA Kalman filter and attitude tracker. |
