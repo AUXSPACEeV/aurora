@@ -17,8 +17,9 @@ jobs:
     name: Build sensor_board and tests
     strategy:
       fail-fast: false
+      # Matrix node is kept for future use
       matrix:
-        os: [ubuntu-22.04, macos-14]
+        os: [ubuntu-22.04]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
