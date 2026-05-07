@@ -50,6 +50,8 @@ to every event.
    * - ``on_powerfail``
      - A power failure was detected, or the system recovered from one.
 
+.. _led-patterns:
+
 LED Patterns
 ~~~~~~~~~~~~
 
@@ -99,6 +101,8 @@ node in lockstep (same pattern on all LEDs). Brightness is 100%
    When a powerfail has been signalled and not yet recovered, the LED
    backend ignores state changes and error events. It will re-enable
    itself on the next event after ``on_powerfail(recover=1)``.
+
+.. _buzzer-patterns:
 
 Buzzer Patterns
 ~~~~~~~~~~~~~~~

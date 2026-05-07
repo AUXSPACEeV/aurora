@@ -14,6 +14,8 @@ Simple State Machine
 The simple state machine
 implementation defines a 9-state flight sequence driven by sensor thresholds.
 
+.. _simple-state-machine-diagram:
+
 .. image:: /img/aurora_simple_state_machine.drawio.svg
    :alt: states
 
