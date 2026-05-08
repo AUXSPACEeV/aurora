@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build:
@@ -91,16 +92,105 @@ jobs:
           name: firmware-${{ matrix.artifact }}
           path: aurora/dist/${{ matrix.artifact }}.tar.xz
 
-  release:
-    name: Publish release
-    needs: build
+  docs-pdf:
+    # Reuses the PDF artifact produced by the docs workflow on the same
+    # commit. Falls back to building from scratch only if no successful
+    # docs run exists for this commit (e.g. a tag pushed from a branch
+    # that never landed on main).
+    name: Collect documentation PDF
     runs-on: ubuntu-22.04
     steps:
-      - name: Download artifacts
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: aurora
+          persist-credentials: false
+          lfs: true
+
+      - name: Download PDF from docs workflow
+        id: download
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          run_id=$(gh run list \
+            --repo "${{ github.repository }}" \
+            --workflow docs.yml \
+            --commit "${{ github.sha }}" \
+            --status success \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+          if [ -z "${run_id}" ] || [ "${run_id}" = "null" ]; then
+            echo "No successful docs.yml run found for ${{ github.sha }}"
+            exit 1
+          fi
+          echo "Reusing PDF from docs.yml run ${run_id}"
+          gh run download "${run_id}" \
+            --repo "${{ github.repository }}" \
+            --name aurora-pdf \
+            --dir pdf
+          cp pdf/aurora.pdf "aurora-${{ github.ref_name }}.pdf"
+
+      - name: Set up Python
+        if: steps.download.outcome == 'failure'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Zephyr project
+        if: steps.download.outcome == 'failure'
+        uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: aurora
+          toolchains: arm-zephyr-eabi:riscv64-zephyr-elf:xtensa-espressif_esp32s3_zephyr-elf
+          ccache-cache-key: ubuntu-22.04-docs
+
+      - name: Install dependencies
+        if: steps.download.outcome == 'failure'
+        run: |
+          wget --no-verbose "https://github.com/doxygen/doxygen/releases/download/Release_1_14_0/doxygen-1.14.0.linux.bin.tar.gz"
+          tar xf doxygen-1.14.0.linux.bin.tar.gz
+          echo "${PWD}/doxygen-1.14.0/bin" >> $GITHUB_PATH
+          pip install -r aurora/doc/requirements.txt \
+            -r zephyr/scripts/requirements-base.txt \
+            -r zephyr/scripts/requirements-compliance.txt \
+            -r zephyr/scripts/requirements-build-test.txt
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
+            libgdk-pixbuf-2.0-0 shared-mime-info fonts-dejavu
+
+      - name: Build PDF
+        if: steps.download.outcome == 'failure'
+        working-directory: aurora/doc
+        run: |
+          doxygen
+          make simplepdf
+          cp _build_sphinx/simplepdf/aurora.pdf "${GITHUB_WORKSPACE}/aurora-${{ github.ref_name }}.pdf"
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-pdf-release
+          path: aurora-${{ github.ref_name }}.pdf
+
+  release:
+    name: Publish release
+    needs: [build, docs-pdf]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download firmware artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: firmware-*
           merge-multiple: true
+          path: dist
+
+      - name: Download PDF artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: aurora-pdf-release
           path: dist
 
       - name: Create release
