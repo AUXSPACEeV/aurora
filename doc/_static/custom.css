@@ -126,6 +126,20 @@ article .sidebar.board-overview {
     color: var(--color-admonition-title--tip);
 }
 
+/* sphinx-simplepdf renders through WeasyPrint, which doesn't load Furo's CSS,
+ * so the .only-light/.only-dark image swap (used in flight log pages) shows
+ * both variants by default.
+ * Hide the dark image and force-show the light one under @media print, which
+ * WeasyPrint applies and the live HTML site does not. */
+@media print {
+    .only-dark {
+        display: none !important;
+    }
+    .only-light {
+        display: block !important;
+    }
+}
+
 /* Bridge Zephyr board.css CSS variable names to Furo's equivalents so that
  * zephyr:board-supported-hw and zephyr:board-supported-runners render
  * correctly under the Furo theme. */
