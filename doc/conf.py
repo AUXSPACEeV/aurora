@@ -32,7 +32,7 @@ sys.path.insert(0, str(_ZEPHYR_BASE / "scripts" / "dts" / "python-devicetree" / 
 project = 'AURORA'
 copyright = '2025-2026, Auxspace e.V.'
 author = 'Auxspace e.V.'
-release = '1.4.4'  # documentation version, NOT project version!
+release = '1.5.0'  # documentation version, NOT project version!
 
 try:
     git_tag = subprocess.check_output(
