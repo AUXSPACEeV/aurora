@@ -47,16 +47,27 @@ jobs:
             -r zephyr/scripts/requirements-compliance.txt \
             -r zephyr/scripts/requirements-build-test.txt
 
+      - name: Install PDF runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
+            libgdk-pixbuf-2.0-0 shared-mime-info fonts-dejavu
+
       - name: Build
         working-directory: aurora/doc
         run: |
           doxygen
 
           SPHINXOPTS="-W" make html
+          # simplepdf reuses the doctree from the html build; -W is not used
+          # because breathe-generated cross-references emit non-fatal warnings.
+          make simplepdf
 
           mkdir deploy
           mv _build_doxygen/html deploy/doxygen
           mv _build_sphinx/html/* deploy
+          cp _build_sphinx/simplepdf/aurora.pdf deploy/aurora.pdf
 
       - name: Setup pages
         if: github.event_name != 'pull_request'
@@ -74,6 +85,12 @@ jobs:
         with:
           name: docs
           path: aurora/doc/deploy
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-pdf
+          path: aurora/doc/_build_sphinx/simplepdf/aurora.pdf
 
   deploy:
     name: Deploy
