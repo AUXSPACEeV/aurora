@@ -3,6 +3,7 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -31,7 +32,21 @@ sys.path.insert(0, str(_ZEPHYR_BASE / "scripts" / "dts" / "python-devicetree" / 
 project = 'AURORA'
 copyright = '2025-2026, Auxspace e.V.'
 author = 'Auxspace e.V.'
-release = '1.4.4'
+release = '1.4.4'  # documentation version, NOT project version!
+
+try:
+    git_tag = subprocess.check_output(
+        ['git', 'describe', '--tags', '--always'],
+        cwd=os.path.dirname(__file__),
+        stderr=subprocess.DEVNULL,
+    ).decode().strip()
+except Exception as e:
+    print("Could not determine git tag: ", e, file=sys.stderr)
+    git_tag = release
+
+version = git_tag  # version that gets displayed in the "version" field of docs
+rst_epilog = f'.. |git_tag| replace:: {git_tag}\n'
+
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -43,6 +58,7 @@ extensions = [
     'zephyr.domain',
     'zephyr.link-roles',  # registers the zephyr_file role used by board-supported-hw
     'aurora_compat',  # must come after zephyr.domain; fixes missing config values and restores breathe's doxygengroup
+    'sphinx_simplepdf',  # WeasyPrint-based PDF builder (`make simplepdf`)
 ]
 
 source_suffix = {
@@ -62,6 +78,23 @@ exclude_patterns = ['_build_sphinx', '_build_doxygen', 'Thumbs.db',
 # Suppress cross-reference warnings for Zephyr DT binding docs that only
 # exist in a full Zephyr documentation build.
 suppress_warnings = ['ref.dtcompatible', 'duplicate_declaration.cpp']
+
+# -- Options for PDF output (sphinx-simplepdf, WeasyPrint) -------------------
+# https://sphinx-simplepdf.readthedocs.io/
+
+simplepdf_vars = {
+    # Brand palette mirrors the Furo light theme (color-brand-primary).
+    'primary':        '#1a5fb4',
+    'primary-opaque': 'rgba(26, 95, 180, 0.5)',
+    'secondary':      '#6ea8fe',
+    'links':          '#1a5fb4',
+    'cover-bg':       'linear-gradient(135deg, #1a5fb4 0%, #0d3a72 100%)',
+    'cover-overlay':  'rgba(0, 0, 0, 0)',
+    'top-right-content':  'string(heading)',
+    'bottom-right-content': 'counter(page)',
+    'top-left-content': 'AURORA',
+}
+simplepdf_file_name = 'aurora.pdf'
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
