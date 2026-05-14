@@ -8,6 +8,7 @@
 /dts-v1/;
 
 #include <raspberrypi/rpi_pico/rp2040.dtsi>
+#include <raspberrypi/partitions_2M_sysbuild.dtsi>
 #include "sensor_board_v2_rp2040-pinctrl.dtsi"
 #include <zephyr/dt-bindings/i2c/i2c.h>
 #include <zephyr/dt-bindings/sensor/lsm6dso.h>
@@ -23,7 +24,7 @@
 		zephyr,flash-controller = &ssi;
 		zephyr,console = &cdc_acm_uart;
 		zephyr,shell-uart = &cdc_acm_uart;
-		zephyr,code-partition = &code_partition;
+		zephyr,code-partition = &slot0_partition;
 	};
 
 	aliases {
@@ -33,24 +34,6 @@
 
 &flash0 {
 	reg = <0x10000000 DT_SIZE_M(2)>;
-
-	partitions {
-		compatible = "fixed-partitions";
-		#address-cells = <1>;
-		#size-cells = <1>;
-
-		second_stage_bootloader: partition@0 {
-			label = "second_stage_bootloader";
-			reg = <0x00000000 0x100>;
-			read-only;
-		};
-
-		code_partition: partition@100 {
-			label = "code-partition";
-			reg = <0x100 (DT_SIZE_M(2) - 0x100)>;
-			read-only;
-		};
-	};
 };
 
 zephyr_udc0: &usbd {
