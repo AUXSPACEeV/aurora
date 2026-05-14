@@ -23,7 +23,7 @@ jobs:
           - board: sensor_board_v2/rp2040
             artifact: sensor_board_v2_rp2040
             toolchain: arm-zephyr-eabi
-            extra_args: ""
+            extra_args: "--sysbuild"
           - board: sensor_board_v2/rp2350a/hazard3
             artifact: sensor_board_v2_rp2350a_hazard3
             toolchain: riscv64-zephyr-elf
