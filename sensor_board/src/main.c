@@ -335,6 +335,7 @@ void imu_task(void *, void *, void *)
 		return;
 	}
 	imu_active = true;
+	LOG_INF("IMU ready");
 
 #if !defined(CONFIG_IMU_TRIGGER)
 	const int imu_hz = CONFIG_IMU_FREQUENCY;
@@ -346,9 +347,9 @@ void imu_task(void *, void *, void *)
 		}
 		k_sleep(K_MSEC(1000 / imu_hz));
 	}
-#endif /* !CONFIG_IMU_TRIGGER */
-
-	LOG_INF("IMU ready");
+#elif defined(CONFIG_IMU_WATCHDOG)
+	imu_watchdog_run();
+#endif
 }
 
 /* Create the IMU task (inactive unless CONFIG_IMU=y) */
@@ -375,6 +376,7 @@ void baro_task(void *, void *, void *)
 		return;
 	}
 	baro_active = true;
+	LOG_INF("Baro ready");
 
 #if !defined(CONFIG_BARO_TRIGGER)
 	const int baro_hz = CONFIG_BARO_FREQUENCY;
@@ -386,9 +388,9 @@ void baro_task(void *, void *, void *)
 
 		k_sleep(K_MSEC(1000 / baro_hz));
 	}
-#endif /* !CONFIG_BARO_TRIGGER */
-
-	LOG_INF("Baro ready");
+#elif defined(CONFIG_BARO_WATCHDOG)
+	baro_watchdog_run();
+#endif
 }
 
 /* Create the BARO task */
