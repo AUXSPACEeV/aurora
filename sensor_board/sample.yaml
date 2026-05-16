@@ -14,10 +14,8 @@ common:
 tests:
   app.default:
     platform_allow:
-      - sensor_board_v2/rp2040
       - sensor_board_v2/rp2350a/hazard3
     integration_platforms:
-      - sensor_board_v2/rp2040
       - sensor_board_v2/rp2350a/hazard3
   app.native_sim.replay:
     build_only: false
@@ -37,8 +35,10 @@ tests:
   app.default.sysbuild:
     sysbuild: true
     platform_allow:
+      - sensor_board_v2/rp2040
       - esp32s3_micrometer/esp32s3/procpu
     integration_platforms:
+      - sensor_board_v2/rp2040
       - esp32s3_micrometer/esp32s3/procpu
   app.sim:
     extra_args: SNIPPET=sim
@@ -52,16 +52,16 @@ tests:
     extra_overlay_confs:
       - debug.conf
     platform_allow:
-      - sensor_board_v2/rp2040
       - sensor_board_v2/rp2350a/hazard3
     integration_platforms:
-      - sensor_board_v2/rp2040
       - sensor_board_v2/rp2350a/hazard3
   app.debug.sysbuild:
     sysbuild: true
     extra_overlay_confs:
       - debug.conf
     platform_allow:
+      - sensor_board_v2/rp2040
       - esp32s3_micrometer/esp32s3/procpu
     integration_platforms:
+      - sensor_board_v2/rp2040
       - esp32s3_micrometer/esp32s3/procpu
