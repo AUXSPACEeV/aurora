@@ -1,9 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
-if(NOT SYSBUILD)
-  message(WARNING
-    "rp2040 requires sysbuild (MCUboot). "
-    "Use: west build --sysbuild")
+
+if("${BOARD_QUALIFIERS}" STREQUAL "rp2040")
+  if(NOT SYSBUILD)
+    message(WARNING
+      "rp2040 requires sysbuild (MCUboot). "
+      "Use: west build --sysbuild")
+  endif()
 endif()
 
 if("${RPI_PICO_DEBUG_ADAPTER}" STREQUAL "")

@@ -2,6 +2,8 @@
 # Copyright (c) 2026 Auxspace e.V.
 # SPDX-License-Identifier: Apache-2.0
 
+if SOC_RP2040
+
 choice BOOTLOADER
 	default BOOTLOADER_MCUBOOT
 endchoice
@@ -9,3 +11,5 @@ endchoice
 choice BOOT_SIGNATURE_TYPE
 	default BOOT_SIGNATURE_TYPE_NONE
 endchoice
+
+endif # SOC_RP2040
