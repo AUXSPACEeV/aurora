@@ -1,6 +1,7 @@
 #include "logger.h"
 #include <aurora/lib/baro.h>
 #include <stdint.h>
+#include <stdio.h>
 #include "aurora/lib/data_logger.h"
 #include "aurora/lib/notify.h"
 #include "aurora/lib/state/state.h"
