@@ -25,6 +25,7 @@ project(app LANGUAGES C)
 
 target_sources(app PRIVATE
 	src/main.c
+	src/logger.c
 	)
 
 target_sources_ifdef(CONFIG_AURORA_FAKE_SENSORS_SYNTH app PRIVATE

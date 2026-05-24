@@ -9,17 +9,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/devicetree.h>
-#include <zephyr/device.h>
 #include <zephyr/zbus/zbus.h>
 
 #include <app_version.h>
 
 #if defined(CONFIG_IMU)
-#include <aurora/lib/imu.h>
 #include <aurora/lib/attitude.h>
+#include <aurora/lib/imu.h>
 #endif /* CONFIG_IMU */
 
 #if defined(CONFIG_BARO)
@@ -31,9 +31,10 @@
 #endif /* CONFIG_PYRO */
 
 #if defined(CONFIG_DATA_LOGGER_BIN)
-#include <stdio.h>
-#include <zephyr/fs/fs.h>
 #include <aurora/lib/data_logger.h>
+#include <zephyr/fs/fs.h>
+LOG_MODULE_REGISTER(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
+#include "logger.h"
 #endif /* CONFIG_DATA_LOGGER_BIN */
 
 #if defined(CONFIG_AURORA_NOTIFY)
@@ -78,229 +79,9 @@ static const struct sm_thresholds state_cfg = {
 };
 #endif /* CONFIG_AURORA_STATE_MACHINE */
 
-LOG_MODULE_REGISTER(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
-
 ZBUS_MSG_SUBSCRIBER_DEFINE(sm_sub);
 ZBUS_CHAN_ADD_OBS(imu_data_chan, sm_sub, 1);
 ZBUS_CHAN_ADD_OBS(baro_data_chan, sm_sub, 1);
-
-#if defined(CONFIG_DATA_LOGGER_BIN)
-static struct data_logger sm_logger;
-static atomic_t sm_logger_live = ATOMIC_INIT(0);
-
-/* Decouple logging from the SM hot path: SM pushes datapoints into this
- * queue with K_NO_WAIT; a dedicated logger thread drains it and owns all
- * FS-touching operations (write + periodic flush). Sized to absorb the
- * worst-case flush stall at full IMU+baro rate.
- */
-#define LOG_MSGQ_DEPTH     256
-#define LOG_FLUSH_PERIOD_MS 1000
-
-/* How long SM→ARMED will wait for a pending conversion to finish. */
-#define LOG_ARM_CONVERT_TIMEOUT_MS 1500
-
-K_MSGQ_DEFINE(log_msgq, sizeof(struct datapoint), LOG_MSGQ_DEPTH, 4);
-
-/* convert_idle has one token whenever no conversion is in flight. The
- * converter thread holds it while running; SM→ARMED tries to acquire it
- * (with a short timeout) to verify the last flight has been fully
- * translated before opening a new binary file.
- */
-K_SEM_DEFINE(convert_idle, 1, 1);
-
-/* Woken by SM→(IDLE|LANDED|ERROR) to kick off conversion of the just-
- * closed binary file.
- */
-K_SEM_DEFINE(convert_request, 0, 1);
-
-static inline void log_enqueue(const struct datapoint *dp)
-{
-	/* Drop on overflow rather than stall the SM thread. */
-	(void)k_msgq_put(&log_msgq, dp, K_NO_WAIT);
-}
-
-static void logger_task(void *, void *, void *)
-{
-	struct datapoint dp;
-	int64_t last_flush = k_uptime_get();
-
-	while (1) {
-		int64_t now = k_uptime_get();
-		int64_t wait_ms = LOG_FLUSH_PERIOD_MS - (now - last_flush);
-		if (wait_ms < 0) {
-			wait_ms = 0;
-		}
-
-		if (k_msgq_get(&log_msgq, &dp, K_MSEC(wait_ms)) == 0) {
-			if (atomic_get(&sm_logger_live)) {
-				data_logger_log(&dp);
-			}
-		}
-
-		if (k_uptime_get() - last_flush >= LOG_FLUSH_PERIOD_MS) {
-			if (atomic_get(&sm_logger_live)) {
-				data_logger_flush(&sm_logger);
-			}
-			last_flush = k_uptime_get();
-		}
-	}
-}
-
-K_THREAD_DEFINE(logger_thread, 2048, logger_task, NULL, NULL, NULL,
-		8, 0, 0);
-
-/* Pick the next free /<base>/flight_<N>.<probe_ext> on the filesystem,
- * writing "/<base>/flight_<N>" (without extension) into @p out. The
- * converter then appends each formatter's file_ext. Falls back to
- * index 0 (overwrites) if every slot is taken.
- */
-static void pick_convert_out_base(char *out, size_t out_sz)
-{
-#if defined(CONFIG_DATA_LOGGER_CONVERT_CSV)
-	const char *probe_ext = data_logger_csv_formatter.file_ext;
-#elif defined(CONFIG_DATA_LOGGER_CONVERT_INFLUX)
-	const char *probe_ext = data_logger_influx_formatter.file_ext;
-#else
-	const char *probe_ext = "out";
-#endif
-
-	for (int i = 0; i <= CONFIG_DATA_LOGGER_MAX_FILES; i++) {
-		char probe[DATA_LOGGER_PATH_MAX];
-		struct fs_dirent entry;
-
-		int n = snprintf(probe, sizeof(probe), "%s/flight_%d.%s",
-				 CONFIG_DATA_LOGGER_BASE_PATH, i, probe_ext);
-		if (n < 0 || n >= (int)sizeof(probe)) {
-			break;
-		}
-		if (fs_stat(probe, &entry) == -ENOENT) {
-			(void)snprintf(out, out_sz, "%s/flight_%d",
-				       CONFIG_DATA_LOGGER_BASE_PATH, i);
-			return;
-		}
-	}
-
-	LOG_WRN("convert: out of /flight_N slots — overwriting flight_0");
-	(void)snprintf(out, out_sz, "%s/flight_0",
-		       CONFIG_DATA_LOGGER_BASE_PATH);
-}
-
-static void converter_task(void *, void *, void *)
-{
-	while (1) {
-		k_sem_take(&convert_request, K_FOREVER);
-		k_sem_take(&convert_idle, K_FOREVER);
-
-		/* DATA_LOGGER_PATH_MAX minus struct data_logger_formatter's member "file_ext" */
-		char base[DATA_LOGGER_PATH_MAX - 8];
-
-		pick_convert_out_base(base, sizeof(base));
-
-#if defined(CONFIG_DATA_LOGGER_CONVERT_CSV)
-		{
-			char out_path[DATA_LOGGER_PATH_MAX];
-
-			(void)snprintf(out_path, sizeof(out_path), "%s.%s",
-				       base, data_logger_csv_formatter.file_ext);
-			int rc = data_logger_convert(&data_logger_csv_formatter,
-						     out_path);
-
-			if (rc != 0) {
-				LOG_ERR("CSV conversion → %s failed (%d)",
-					out_path, rc);
-			} else {
-				LOG_INF("converted flight_log → %s", out_path);
-			}
-		}
-#endif /* CONFIG_DATA_LOGGER_CONVERT_CSV */
-
-#if defined(CONFIG_DATA_LOGGER_CONVERT_INFLUX)
-		{
-			char out_path[DATA_LOGGER_PATH_MAX];
-
-			(void)snprintf(out_path, sizeof(out_path), "%s.%s",
-				       base,
-				       data_logger_influx_formatter.file_ext);
-			int rc = data_logger_convert(&data_logger_influx_formatter,
-						     out_path);
-
-			if (rc != 0) {
-				LOG_ERR("Influx conversion → %s failed (%d)",
-					out_path, rc);
-			} else {
-				LOG_INF("converted flight_log → %s", out_path);
-			}
-		}
-#endif /* CONFIG_DATA_LOGGER_CONVERT_INFLUX */
-
-		k_sem_give(&convert_idle);
-	}
-}
-
-K_THREAD_DEFINE(converter_thread, 2048, converter_task, NULL, NULL, NULL,
-		9, 0, 0);
-
-static void log_begin_flight(void)
-{
-	if (k_sem_take(&convert_idle, K_MSEC(LOG_ARM_CONVERT_TIMEOUT_MS)) != 0) {
-		LOG_ERR("ARMED: prior conversion still running after %d ms — "
-			"flight will not be logged",
-			LOG_ARM_CONVERT_TIMEOUT_MS);
-#if defined(CONFIG_AURORA_NOTIFY)
-		notify_error();
-#endif
-		return;
-	}
-	k_sem_give(&convert_idle);
-
-	memset(&sm_logger, 0, sizeof(sm_logger));
-	if (data_logger_init(&sm_logger, "flight",
-			     &data_logger_bin_formatter) != 0) {
-		LOG_ERR("data_logger_init failed");
-#if defined(CONFIG_AURORA_NOTIFY)
-		notify_error();
-#endif
-		return;
-	}
-	data_logger_set_default(&sm_logger);
-	if (data_logger_start(&sm_logger) != 0) {
-		LOG_ERR("data_logger_start failed");
-		(void)data_logger_close(&sm_logger);
-		data_logger_set_default(NULL);
-#if defined(CONFIG_AURORA_NOTIFY)
-		notify_error();
-#endif
-		return;
-	}
-
-	atomic_set(&sm_logger_live, 1);
-}
-
-static void log_end_flight(void)
-{
-	if (!atomic_get(&sm_logger_live)) {
-		return;
-	}
-	atomic_set(&sm_logger_live, 0);
-
-	(void)data_logger_stop(&sm_logger);
-	(void)data_logger_close(&sm_logger);
-	data_logger_set_default(NULL);
-
-	k_sem_give(&convert_request);
-}
-
-/* Delayable close: scheduled by the state-machine task on entry to
- * LANDED so the post-landed pad window gets logged before the logger is
- * closed and conversion kicks in.
- */
-static void log_end_work_handler(struct k_work *work)
-{
-	ARG_UNUSED(work);
-	log_end_flight();
-}
-static K_WORK_DELAYABLE_DEFINE(log_end_work, log_end_work_handler);
-#endif /* CONFIG_DATA_LOGGER_BIN */
 
 #if defined(CONFIG_AURORA_POWERFAIL)
 static void powerfail_assert()
@@ -320,7 +101,7 @@ static void powerfail_deassert()
 
 bool baro_active = false; /**< True once the barometer thread has initialized. */
 bool imu_active = false;  /**< True once the IMU thread has initialized. */
-static bool sm_active = false;   /**< True once the state machine thread has initialized. */
+static bool sm_active = false;	 /**< True once the state machine thread has initialized. */
 
 /* ============================================================
  *                     IMU TASK
@@ -358,8 +139,7 @@ void imu_task(void *, void *, void *)
 }
 
 /* Create the IMU task (inactive unless CONFIG_IMU=y) */
-K_THREAD_DEFINE(imu_polling, 2048, imu_task, NULL, NULL, NULL,
-				7, 0, 0);
+K_THREAD_DEFINE(imu_polling, 2048, imu_task, NULL, NULL, NULL, 7, 0, 0);
 #endif /* CONFIG_IMU && !CONFIG_AURORA_FAKE_SENSORS */
 
 /* ============================================================
@@ -398,8 +178,7 @@ void baro_task(void *, void *, void *)
 }
 
 /* Create the BARO task */
-K_THREAD_DEFINE(baro_polling, 2048, baro_task, NULL, NULL, NULL,
-				7, 0, 0);
+K_THREAD_DEFINE(baro_polling, 2048, baro_task, NULL, NULL, NULL, 7, 0, 0);
 #endif /* CONFIG_BARO && !CONFIG_AURORA_FAKE_SENSORS */
 
 /* ============================================================
@@ -429,16 +208,16 @@ static bool is_valid_transition(enum sm_state from, enum sm_state to)
 	}
 
 	switch (from) {
-	case SM_IDLE:      return (to == SM_ARMED);
-	case SM_ARMED:     return (to == SM_BOOST);
-	case SM_BOOST:     return (to == SM_BURNOUT);
-	case SM_BURNOUT:   return (to == SM_APOGEE);
-	case SM_APOGEE:    return (to == SM_MAIN || to == SM_ERROR);
-	case SM_MAIN:      return (to == SM_REDUNDANT);
+	case SM_IDLE: return (to == SM_ARMED);
+	case SM_ARMED: return (to == SM_BOOST);
+	case SM_BOOST: return (to == SM_BURNOUT);
+	case SM_BURNOUT: return (to == SM_APOGEE);
+	case SM_APOGEE: return (to == SM_MAIN || to == SM_ERROR);
+	case SM_MAIN: return (to == SM_REDUNDANT);
 	case SM_REDUNDANT: return (to == SM_LANDED || to == SM_ERROR);
-	case SM_ERROR:     return (to == SM_IDLE);
-	case SM_LANDED:    return false;
-	default:           return false;
+	case SM_ERROR: return (to == SM_IDLE);
+	case SM_LANDED: return false;
+	default: return false;
 	}
 }
 #endif /* CONFIG_AURORA_SIM_AUTOTEST */
@@ -477,9 +256,7 @@ void state_machine_task(void *, void *, void *)
 	double altitude = 0.0;
 	double acceleration = 0.0;
 	double accel_vert = 0.0;
-	double orientation[] = {
-		0.0, 0.0, 0.0
-	};
+	double orientation[] = {0.0, 0.0, 0.0};
 	bool baro_ready = false;
 	bool imu_ready = false;
 
@@ -510,8 +287,7 @@ void state_machine_task(void *, void *, void *)
 
 #if defined(CONFIG_PYRO)
 	while (!device_is_ready(pyro0)) {
-		LOG_ERR("Pyro device %s is not ready, trying again ...",
-				pyro0->name);
+		LOG_ERR("Pyro device %s is not ready, trying again ...", pyro0->name);
 		k_sleep(K_SECONDS(1));
 	}
 #endif /*.CONFIG_PYRO */
@@ -536,26 +312,19 @@ void state_machine_task(void *, void *, void *)
 		do {
 			if (data_chan == &imu_data_chan) {
 #if defined(CONFIG_IMU)
-				int64_t now_ns = (k_uptime_ticks() * NSEC_PER_SEC)
-						 / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
-				double dt_orient_s = (last_imu_ns != 0)
-					? (double)(now_ns - last_imu_ns) / 1e9
-					: 0.0;
+				int64_t now_ns = (k_uptime_ticks() * NSEC_PER_SEC) / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
+				double dt_orient_s = (last_imu_ns != 0) ? (double)(now_ns - last_imu_ns) / 1e9 : 0.0;
 				if (dt_orient_s < 0.0 || dt_orient_s > 1.0) {
 					dt_orient_s = 0.0;
 				}
-				const double *bias_for_orient =
-					attitude_is_calibrated(&attitude_state)
-						? attitude_state.gyro_bias
-						: NULL;
+				const double *bias_for_orient
+					= attitude_is_calibrated(&attitude_state) ? attitude_state.gyro_bias : NULL;
 #else
 				const double dt_orient_s = 0.0;
 				const double *bias_for_orient = NULL;
 #endif /* CONFIG_IMU */
-				if (imu_sensor_value_to_orientation(&msg_buf.imu, dt_orient_s,
-								    bias_for_orient,
-								    orientation) == 0 &&
-				    imu_sensor_value_to_acceleration(&msg_buf.imu, &acceleration) == 0) {
+				if (imu_sensor_value_to_orientation(&msg_buf.imu, dt_orient_s, bias_for_orient, orientation) == 0
+					&& imu_sensor_value_to_acceleration(&msg_buf.imu, &acceleration) == 0) {
 					imu_ready = true;
 				}
 
@@ -574,10 +343,8 @@ void state_machine_task(void *, void *, void *)
 
 					if (!attitude_is_calibrated(&attitude_state)) {
 						if (sm_get_state() == SM_ARMED) {
-							attitude_calibrate_sample(&attitude_state,
-										  accel_b, gyro_b);
-							if (attitude_state.cal_samples >=
-							    CONFIG_IMU_CALIBRATION_SAMPLES) {
+							attitude_calibrate_sample(&attitude_state, accel_b, gyro_b);
+							if (attitude_state.cal_samples >= CONFIG_IMU_CALIBRATION_SAMPLES) {
 								if (attitude_calibrate_finish(&attitude_state) == 0) {
 #if defined(CONFIG_AURORA_NOTIFY)
 									if (!calibration_notified) {
@@ -596,8 +363,7 @@ void state_machine_task(void *, void *, void *)
 						double dt_s = (double)(now_ns - last_imu_ns) / 1e9;
 						if (dt_s > 0.0 && dt_s <= 1.0) {
 							double a_v;
-							if (attitude_update(&attitude_state, accel_b,
-									    gyro_b, dt_s, &a_v) == 0) {
+							if (attitude_update(&attitude_state, accel_b, gyro_b, dt_s, &a_v) == 0) {
 								accel_vert = a_v;
 							}
 						}
@@ -605,43 +371,15 @@ void state_machine_task(void *, void *, void *)
 					last_imu_ns = now_ns;
 				}
 #endif /* CONFIG_IMU */
-#if defined(CONFIG_DATA_LOGGER_BIN)
-				uint64_t ts = k_ticks_to_ns_floor64(k_uptime_ticks());
-				struct datapoint dp = {
-					.timestamp_ns = ts,
-					.type = AURORA_DATA_IMU_ACCEL,
-					.channel_count = 3,
-					.channels = {
-						msg_buf.imu.accel[0],
-						msg_buf.imu.accel[1],
-						msg_buf.imu.accel[2]
-					},
-				};
-				log_enqueue(&dp);
-
-				dp.type = AURORA_DATA_IMU_GYRO;
-				dp.channels[0] = msg_buf.imu.gyro[0];
-				dp.channels[1] = msg_buf.imu.gyro[1];
-				dp.channels[2] = msg_buf.imu.gyro[2];
-				log_enqueue(&dp);
-#endif /* CONFIG_DATA_LOGGER_BIN */
+				log_imu_data(&msg_buf.imu);
 			} else if (data_chan == &baro_data_chan) {
-#if defined(CONFIG_DATA_LOGGER_BIN)
-				uint64_t ts = k_ticks_to_ns_floor64(k_uptime_ticks());
-				struct datapoint dp = {
-					.timestamp_ns = ts,
-					.type = AURORA_DATA_BARO,
-					.channel_count = 2,
-					.channels = {msg_buf.baro.temperature, msg_buf.baro.pressure},
-				};
-				log_enqueue(&dp);
-#endif /* CONFIG_DATA_LOGGER_BIN */
+				log_baro_data(&msg_buf.baro);
+
 				if (baro_sensor_value_to_altitude(&msg_buf.baro.pressure, &altitude) == 0) {
 					baro_ready = true;
 				}
 			}
 		} while (zbus_sub_wait_msg(&sm_sub, &data_chan, &msg_buf, K_NO_WAIT) == 0);
-
 
 		/* This check is necessary to avoid updating the state machine
 		 * with uninitialized sensor data durring startup. This ensures
@@ -670,64 +408,14 @@ void state_machine_task(void *, void *, void *)
 		state = sm_get_state();
 		LOG_DBG("STATE = %d", state);
 
-#if defined(CONFIG_AURORA_TELEMETRY)
-		{
-			struct sm_inputs sm_in;
-			sm_get_inputs(&sm_in);
-			(void)telemetry_send_sm_update(state, sm_get_type(),
-						       &sm_in);
-		}
-#endif /* CONFIG_AURORA_TELEMETRY */
-
-#if defined(CONFIG_AURORA_PAD_LINK)
-		{
-			struct sm_inputs sm_in;
-			sm_get_inputs(&sm_in);
-			pad_link_publish_sm(state, sm_get_type(), &sm_in);
-		}
-#endif /* CONFIG_AURORA_PAD_LINK */
-
-#if defined(CONFIG_DATA_LOGGER_BIN)
-		{
-			struct sm_inputs sm_in;
-			sm_get_inputs(&sm_in);
-
-			uint64_t ts = k_ticks_to_ns_floor64(k_uptime_ticks());
-			struct datapoint kin_dp = {
-				.timestamp_ns = ts,
-				.type = AURORA_DATA_SM_KINEMATICS,
-				.channel_count = 2,
-			};
-			sensor_value_from_double(&kin_dp.channels[0], sm_in.acceleration);
-			sensor_value_from_double(&kin_dp.channels[1], sm_in.accel_vert);
-			log_enqueue(&kin_dp);
-
-			struct datapoint pose_dp = {
-				.timestamp_ns = ts,
-				.type = AURORA_DATA_SM_POSE,
-				.channel_count = 2,
-			};
-			sensor_value_from_double(&pose_dp.channels[0], sm_in.velocity);
-			sensor_value_from_double(&pose_dp.channels[1], sm_in.altitude);
-			log_enqueue(&pose_dp);
-
-			struct datapoint or_dp = {
-				.timestamp_ns = ts,
-				.type = AURORA_DATA_ORIENTATION,
-				.channel_count = 3,
-			};
-			sensor_value_from_double(&or_dp.channels[0], sm_in.orientation[0]);
-			sensor_value_from_double(&or_dp.channels[1], sm_in.orientation[1]);
-			sensor_value_from_double(&or_dp.channels[2], sm_in.orientation[2]);
-			log_enqueue(&or_dp);
-		}
-#endif /* CONFIG_DATA_LOGGER_BIN */
+		log_flight_telemetry();
 
 		if (state != prev_state) {
 #if defined(CONFIG_AURORA_FAKE_SENSORS)
 			__ASSERT(is_valid_transition(prev_state, state),
-				 "Invalid SM transition: %s -> %s",
-				 sm_state_str(prev_state), sm_state_str(state));
+				"Invalid SM transition: %s -> %s",
+				sm_state_str(prev_state),
+				sm_state_str(state));
 #endif /* CONFIG_AURORA_FAKE_SENSORS */
 #if defined(CONFIG_AURORA_NOTIFY)
 			notify_state_change(prev_state, state);
@@ -743,34 +431,7 @@ void state_machine_task(void *, void *, void *)
 				orientation[2] = 0.0;
 			}
 #endif /* CONFIG_IMU */
-#if defined(CONFIG_DATA_LOGGER_BIN)
-			/* Flight-time logging lifecycle:
-			 *  - IDLE→ARMED:  open a fresh binary log (cancel any
-			 *                 still-pending deferred close from a
-			 *                 previous flight first).
-			 *  - ARMED→BOOST: hand the formatter a BOOST event so
-			 *                 the circular ring freezes forward.
-			 *  - →LANDED:     hand a LANDED event and schedule the
-			 *                 close POST_LANDED_PAD_MS later so the
-			 *                 tail of the flight gets captured.
-			 *  - →IDLE/ERROR: close immediately (no pad); cancel
-			 *                 any pending deferred close.
-			 */
-			if (prev_state == SM_IDLE && state == SM_ARMED) {
-				(void)k_work_cancel_delayable(&log_end_work);
-				log_begin_flight();
-			} else if (prev_state == SM_ARMED &&
-				   state == SM_BOOST) {
-				(void)data_logger_event(&sm_logger, DLE_BOOST);
-			} else if (state == SM_LANDED) {
-				(void)data_logger_event(&sm_logger, DLE_LANDED);
-				(void)k_work_schedule(&log_end_work,
-					K_MSEC(CONFIG_DATA_LOGGER_BIN_POST_LANDED_PAD_MS));
-			} else if (state == SM_IDLE || state == SM_ERROR) {
-				(void)k_work_cancel_delayable(&log_end_work);
-				log_end_flight();
-			}
-#endif /* CONFIG_DATA_LOGGER_BIN */
+			log_handle_flight_lifecycle(prev_state, state);
 			prev_state = state;
 		}
 
@@ -778,14 +439,13 @@ void state_machine_task(void *, void *, void *)
 		if (state == pyro_state)
 			continue;
 
-#define PYRO_ACT(fn, ch, past, action)					\
-		do {							\
-			if (fn(pyro0, ch))				\
-				LOG_ERR("Failed to " action		\
-					" pyro0 channel " #ch);	\
-			else						\
-				LOG_INF(past " pyro0 channel " #ch);\
-		} while (0)
+#define PYRO_ACT(fn, ch, past, action)                                                                                 \
+	do {                                                                                                               \
+		if (fn(pyro0, ch))                                                                                             \
+			LOG_ERR("Failed to " action " pyro0 channel " #ch);                                                        \
+		else                                                                                                           \
+			LOG_INF(past " pyro0 channel " #ch);                                                                       \
+	} while (0)
 
 		switch (state) {
 		case SM_IDLE:
@@ -806,24 +466,18 @@ void state_machine_task(void *, void *, void *)
 			/* Capacitors are empty after trigger. Recharge! */
 			PYRO_ACT(pyro_charge_channel, 1, "Recharging", "recharge");
 			break;
-		case SM_REDUNDANT:
-			PYRO_ACT(pyro_trigger_channel, 1, "Re-triggered", "re-trigger");
-			break;
-		default:
-			break;
+		case SM_REDUNDANT: PYRO_ACT(pyro_trigger_channel, 1, "Re-triggered", "re-trigger"); break;
+		default: break;
 		}
 #undef PYRO_ACT
 		pyro_state = state;
 #endif /* CONFIG_PYRO */
-
 	}
 }
 
 /* Create the State machine task */
-K_THREAD_DEFINE(state_machine, 4096, state_machine_task, NULL, NULL,
-				NULL, 6, 0, 0);
+K_THREAD_DEFINE(state_machine, 4096, state_machine_task, NULL, NULL, NULL, 6, 0, 0);
 #endif /* CONFIG_AURORA_STATE_MACHINE */
-
 
 /* ============================================================
  *                     MAIN INITIALIZATION
