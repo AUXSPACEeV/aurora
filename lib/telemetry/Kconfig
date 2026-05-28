@@ -16,12 +16,14 @@ source "subsys/logging/Kconfig.template.log_config"
 config AURORA_TELEMETRY_HC12
 	bool "HC-12 433 MHz transparent UART backend"
 	depends on SERIAL
+	select GPIO
 	default y
 	help
-	  Frame outgoing messages and push them over the UART selected
-	  by chosen 'auxspace,telemetry-uart'. The HC-12 itself is
+	  Frame outgoing messages and push them over the UART of an
+	  enabled auxspaceev,hc12 devicetree node. The HC-12 is
 	  provisioned out of band on the bench (channel, air baud,
-	  TX power); firmware just opens the UART.
+	  TX power) or, when SET is wired and the shell is enabled,
+	  via the "telemetry hc12" shell command tree.
 
 if AURORA_TELEMETRY_HC12
 
@@ -31,7 +33,7 @@ config AURORA_TELEMETRY_HC12_QUEUE_DEPTH
 	range 1 128
 	help
 	  Number of frames buffered between the producer and the UART
-	  worker thread. Full queue → -ENOMEM (frame dropped); never
+	  worker thread. Full queue -> -ENOMEM (frame dropped); never
 	  blocks the producer.
 
 config AURORA_TELEMETRY_HC12_MIN_INTERVAL_MS
@@ -41,8 +43,7 @@ config AURORA_TELEMETRY_HC12_MIN_INTERVAL_MS
 	help
 	  Lower bound between consecutive SM updates transmitted via
 	  HC-12. Calls arriving sooner return -EAGAIN and are dropped.
-	  Set to 0 for no rate limit. Useful when the SM tick rate is
-	  higher than the 9600-baud air link can carry comfortably.
+	  Set to 0 for no rate limit.
 
 config AURORA_TELEMETRY_HC12_STACK_SIZE
 	int "HC-12 TX worker stack size (bytes)"
@@ -55,6 +56,26 @@ config AURORA_TELEMETRY_HC12_THREAD_PRIORITY
 	  Keep numerically above flight-critical threads (sensors and
 	  state machine run at priority 5-6) so telemetry can never
 	  preempt them.
+
+config AURORA_TELEMETRY_HC12_AT
+	bool "AT-mode helper (runtime configuration)"
+	default y if AURORA_TELEMETRY_HC12_SHELL
+	help
+	  Compile in the synchronous AT-command helper that drives the
+	  HC-12 SET pin and exchanges AT commands at 9600 baud. Required
+	  by the shell; can be enabled standalone for application use.
+	  Inert at runtime if the DT node has no set-gpios property.
+
+config AURORA_TELEMETRY_HC12_SHELL
+	bool "HC-12 provisioning shell"
+	depends on SHELL
+	depends on AURORA_STATE_MACHINE
+	select AURORA_TELEMETRY_HC12_AT
+	help
+	  Register the "telemetry hc12" command tree: info, channel,
+	  baud, power, mode, reset, and a raw AT escape hatch. All
+	  commands refuse to run unless the flight state machine is
+	  in IDLE.
 
 endif # AURORA_TELEMETRY_HC12
 

@@ -27,6 +27,13 @@
 		zephyr,code-partition = &code_partition;
 	};
 
+	hc12: hc12 {
+		compatible = "auxspaceev,hc12";
+		uart = <&uart1>;
+		set-gpios = <&gpio0 6 GPIO_ACTIVE_LOW>;
+		status = "disabled";
+	};
+
 	aliases {
 		watchdog0 = &wdt0;
 	};
@@ -62,7 +69,6 @@ zephyr_udc0: &usbd {
 	pinctrl-names = "default";
 };
 
-/* HC-12 telemetry transceiver: transparent UART <-> 433 MHz RF bridge. */
 &uart1 {
 	current-speed = <9600>;
 	pinctrl-0 = <&uart1_default>;

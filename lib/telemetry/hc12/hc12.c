@@ -3,10 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define DT_DRV_COMPAT auxspaceev_hc12
+
 #include <string.h>
 
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -15,15 +18,28 @@
 
 #include <aurora/lib/telemetry.h>
 
+#include "hc12_internal.h"
+
 LOG_MODULE_REGISTER(telemetry_hc12, CONFIG_AURORA_TELEMETRY_LOG_LEVEL);
 
-#define HC12_UART_NODE DT_CHOSEN(auxspace_telemetry_uart)
-BUILD_ASSERT(DT_NODE_EXISTS(HC12_UART_NODE),
-	     "chosen 'auxspace,telemetry-uart' is required for HC-12 backend");
+BUILD_ASSERT(DT_HAS_COMPAT_STATUS_OKAY(auxspaceev_hc12),
+	     "An auxspaceev,hc12 node must be enabled in devicetree");
 
-static const struct device *const uart_dev = DEVICE_DT_GET(HC12_UART_NODE);
+#define HC12_NODE DT_INST(0, auxspaceev_hc12)
 
-/* Frame structure:
+const struct device *const hc12_uart_dev =
+	DEVICE_DT_GET(DT_INST_PHANDLE(0, uart));
+
+/* set_gpio.port == NULL when SET is not wired in DT: runtime AT is
+ * unavailable in that case (the shell command refuses, init still
+ * succeeds).
+ */
+static const struct gpio_dt_spec set_gpio =
+	GPIO_DT_SPEC_INST_GET_OR(0, set_gpios, {0});
+
+K_MUTEX_DEFINE(hc12_uart_lock);
+
+/* Wire frame:
  *   [0]    magic0 = 0xA5
  *   [1]    magic1 = 0x5A
  *   [2]    type
@@ -131,9 +147,17 @@ static void hc12_tx_task(void *, void *, void *)
 
 	while (1) {
 		(void)k_msgq_get(&tx_msgq, &f, K_FOREVER);
+
+		/* Hold the UART lock for the whole frame: an in-flight
+		 * AT exchange has reconfigured the line to 9600 baud
+		 * and pulled SET low, so writing here would garble
+		 * both the frame and the AT command.
+		 */
+		k_mutex_lock(&hc12_uart_lock, K_FOREVER);
 		for (uint8_t i = 0; i < f.len; i++) {
-			uart_poll_out(uart_dev, f.buf[i]);
+			uart_poll_out(hc12_uart_dev, f.buf[i]);
 		}
+		k_mutex_unlock(&hc12_uart_lock);
 	}
 }
 
@@ -143,12 +167,29 @@ K_THREAD_DEFINE(hc12_tx, CONFIG_AURORA_TELEMETRY_HC12_STACK_SIZE,
 
 static int hc12_init(void)
 {
-	if (!device_is_ready(uart_dev)) {
-		LOG_ERR("UART %s not ready", uart_dev->name);
+	if (!device_is_ready(hc12_uart_dev)) {
+		LOG_ERR("UART %s not ready", hc12_uart_dev->name);
 		return -ENODEV;
 	}
+
+	if (set_gpio.port) {
+		if (!gpio_is_ready_dt(&set_gpio)) {
+			LOG_ERR("SET GPIO not ready");
+			return -ENODEV;
+		}
+		/* Inactive (high w.r.t. line; the binding flags ACTIVE_LOW
+		 * so "inactive" means transparent mode). */
+		int rc = gpio_pin_configure_dt(&set_gpio, GPIO_OUTPUT_INACTIVE);
+		if (rc) {
+			LOG_ERR("SET GPIO configure failed (%d)", rc);
+			return rc;
+		}
+	} else {
+		LOG_INF("HC-12 SET pin not wired: runtime AT disabled");
+	}
+
 	atomic_set(&ready, 1);
-	LOG_INF("HC-12 backend up on %s", uart_dev->name);
+	LOG_INF("HC-12 backend up on %s", hc12_uart_dev->name);
 	return 0;
 }
 
