@@ -1,0 +1,64 @@
+# HC-12 433 MHz transparent UART-RF transceiver
+#
+# The HC-12 sits on a host UART and acts as a transparent serial bridge
+# to a peer HC-12 over the 433 MHz ISM band. Channel, air baud, TX power
+# and FU mode persist in the module's own flash and are configured by
+# pulling the SET pin low, sending AT commands at 9600 baud, and
+# releasing SET.
+#
+# Example:
+#
+#   / {
+#       chosen {
+#           auxspace,telemetry-hc12 = &hc12;
+#       };
+#
+#       hc12: hc12 {
+#           compatible = "auxspaceev,hc12";
+#           uart = <&uart1>;
+#           set-gpios = <&gpio0 6 GPIO_ACTIVE_LOW>;
+#           status = "okay";
+#       };
+#   };
+#
+#   &uart1 {
+#       current-speed = <9600>;
+#       pinctrl-0 = <&uart1_default>;
+#       pinctrl-names = "default";
+#       status = "okay";
+#   };
+#
+#   &gpio0 {
+#       status = "okay";
+#   }
+#
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+description: HC-12 433 MHz transparent UART-RF transceiver
+
+compatible: "auxspaceev,hc12"
+
+include: base.yaml
+
+properties:
+  uart:
+    type: phandle
+    required: true
+    description: |
+      UART peripheral the HC-12 is wired to. The host UART
+      `current-speed` should match the module's configured air-side
+      baud rate during normal (transparent) operation. While the
+      module is in AT-command mode (SET pulled low) it always uses
+      9600 baud regardless of the configured rate.
+
+  set-gpios:
+    type: phandle-array
+    required: false
+    description: |
+      Optional. GPIO line wired to the HC-12 SET pin. When provided,
+      firmware can enter AT-command mode at runtime (e.g. via the
+      telemetry shell) to read or update channel, baud, TX power and
+      FU mode. When omitted, the module is treated as
+      bench-provisioned and runtime reconfiguration is unavailable.
+      Active-low (the HC-12 enters AT mode while SET is held low).

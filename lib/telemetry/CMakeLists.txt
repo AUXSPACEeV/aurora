@@ -9,3 +9,11 @@ zephyr_library_sources(telemetry.c)
 if(CONFIG_AURORA_TELEMETRY_HC12)
   zephyr_library_sources(hc12/hc12.c)
 endif()
+
+if(CONFIG_AURORA_TELEMETRY_HC12_AT)
+  zephyr_library_sources(hc12/at.c)
+endif()
+
+if(CONFIG_AURORA_TELEMETRY_HC12_SHELL)
+  zephyr_library_sources(hc12/hc12_shell.c)
+endif()
