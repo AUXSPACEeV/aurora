@@ -10,4 +10,5 @@ powerfail
 pwm_melody
 sensors
 state
+telemetry
 ```
