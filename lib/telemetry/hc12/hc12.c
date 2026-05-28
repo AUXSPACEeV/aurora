@@ -39,34 +39,13 @@ static const struct gpio_dt_spec set_gpio =
 
 K_MUTEX_DEFINE(hc12_uart_lock);
 
-/* Wire frame:
- *   [0]    magic0 = 0xA5
- *   [1]    magic1 = 0x5A
- *   [2]    type
- *   [3]    len    (payload bytes excluding CRC)
- *   [4:]   payload
- *   [-2:]  crc16-ccitt over bytes [2 .. 4+len-1], little-endian
- */
+/* Wire frame: see hc12_frame_finalise() in hc12_internal.h. */
 #define HC12_MAGIC0 0xA5
 #define HC12_MAGIC1 0x5A
 #define HC12_HDR    4
 #define HC12_CRC    2
 
-#define HC12_TYPE_SM_UPDATE 0x01
-
-struct __packed sm_update_payload {
-	uint32_t timestamp_ms;
-	uint8_t  state;
-	uint8_t  armed;
-	int16_t  reserved;
-	float    altitude;
-	float    acceleration;
-	float    accel_vert;
-	float    velocity;
-	float    orientation[3];
-};
-
-#define MAX_PAYLOAD sizeof(struct sm_update_payload)
+#define MAX_PAYLOAD sizeof(struct hc12_sm_update_payload)
 #define MAX_FRAME   (HC12_HDR + MAX_PAYLOAD + HC12_CRC)
 
 struct hc12_frame {
@@ -79,20 +58,26 @@ K_MSGQ_DEFINE(tx_msgq, sizeof(struct hc12_frame),
 
 static atomic_t ready = ATOMIC_INIT(0);
 
-static void frame_finalise(struct hc12_frame *f, uint8_t type,
+size_t hc12_frame_finalise(uint8_t *buf, size_t buf_sz, uint8_t type,
 			   const void *payload, uint8_t payload_len)
 {
-	f->buf[0] = HC12_MAGIC0;
-	f->buf[1] = HC12_MAGIC1;
-	f->buf[2] = type;
-	f->buf[3] = payload_len;
-	memcpy(&f->buf[HC12_HDR], payload, payload_len);
+	const size_t total = (size_t)HC12_HDR + payload_len + HC12_CRC;
 
-	uint16_t crc = crc16_ccitt(0xFFFF, &f->buf[2],
+	if (!buf || buf_sz < total) {
+		return 0;
+	}
+
+	buf[0] = HC12_MAGIC0;
+	buf[1] = HC12_MAGIC1;
+	buf[2] = type;
+	buf[3] = payload_len;
+	memcpy(&buf[HC12_HDR], payload, payload_len);
+
+	uint16_t crc = crc16_ccitt(0xFFFF, &buf[2],
 				   (size_t)payload_len + 2);
-	sys_put_le16(crc, &f->buf[HC12_HDR + payload_len]);
+	sys_put_le16(crc, &buf[HC12_HDR + payload_len]);
 
-	f->len = HC12_HDR + payload_len + HC12_CRC;
+	return total;
 }
 
 static int hc12_send_sm_update(enum sm_state state,
@@ -117,7 +102,7 @@ static int hc12_send_sm_update(enum sm_state state,
 	k_spin_unlock(&rl_lock, key);
 #endif
 
-	struct sm_update_payload p = {
+	struct hc12_sm_update_payload p = {
 		.timestamp_ms = (uint32_t)k_uptime_get(),
 		.state        = (uint8_t)state,
 		.armed        = inputs->armed ? 1 : 0,
@@ -133,7 +118,10 @@ static int hc12_send_sm_update(enum sm_state state,
 	};
 
 	struct hc12_frame f;
-	frame_finalise(&f, HC12_TYPE_SM_UPDATE, &p, (uint8_t)sizeof(p));
+	size_t n = hc12_frame_finalise(f.buf, sizeof(f.buf),
+				       HC12_TYPE_SM_UPDATE, &p,
+				       (uint8_t)sizeof(p));
+	f.len = (uint8_t)n;
 
 	if (k_msgq_put(&tx_msgq, &f, K_NO_WAIT) != 0) {
 		return -ENOMEM;

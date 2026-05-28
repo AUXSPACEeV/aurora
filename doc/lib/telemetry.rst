@@ -119,7 +119,7 @@ Packet types:
      - ``SM_UPDATE``
      - State-machine snapshot (see below)
 
-``SM_UPDATE`` payload (30 bytes):
+``SM_UPDATE`` payload (36 bytes):
 
 .. list-table::
    :header-rows: 1
@@ -166,7 +166,7 @@ Packet types:
      - ``f32[3]``
      - ``orientation`` (roll/pitch/yaw, rad)
 
-At 10 Hz the link runs at roughly 340 B/s, about 35 % of a 9600-baud
+At 10 Hz the link runs at roughly 420 B/s, about 44 % of a 9600-baud
 HC-12 air link, leaving headroom for re-tries and other packet types.
 
 HC-12 threading and rate limiting

@@ -17,6 +17,7 @@ config AURORA_TELEMETRY_HC12
 	bool "HC-12 433 MHz transparent UART backend"
 	depends on SERIAL
 	select GPIO
+	select CRC
 	default y
 	help
 	  Frame outgoing messages and push them over the UART of an
