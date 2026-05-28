@@ -31,4 +31,8 @@ menu "State Machine"
 rsource "state/Kconfig"
 endmenu
 
+menu "Telemetry"
+rsource "telemetry/Kconfig"
+endmenu
+
 endmenu

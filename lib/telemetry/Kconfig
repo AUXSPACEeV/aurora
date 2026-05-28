@@ -1,0 +1,61 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+config AURORA_TELEMETRY
+	bool "Wireless telemetry downlink"
+	help
+	  Enable the telemetry subsystem. Each registered backend
+	  (HC-12, LoRaWAN, ...) receives every outgoing message.
+
+if AURORA_TELEMETRY
+
+module = AURORA_TELEMETRY
+module-str = AURORA_TELEMETRY
+source "subsys/logging/Kconfig.template.log_config"
+
+config AURORA_TELEMETRY_HC12
+	bool "HC-12 433 MHz transparent UART backend"
+	depends on SERIAL
+	default y
+	help
+	  Frame outgoing messages and push them over the UART selected
+	  by chosen 'auxspace,telemetry-uart'. The HC-12 itself is
+	  provisioned out of band on the bench (channel, air baud,
+	  TX power); firmware just opens the UART.
+
+if AURORA_TELEMETRY_HC12
+
+config AURORA_TELEMETRY_HC12_QUEUE_DEPTH
+	int "HC-12 TX frame queue depth"
+	default 16
+	range 1 128
+	help
+	  Number of frames buffered between the producer and the UART
+	  worker thread. Full queue → -ENOMEM (frame dropped); never
+	  blocks the producer.
+
+config AURORA_TELEMETRY_HC12_MIN_INTERVAL_MS
+	int "Minimum interval between HC-12 SM update frames (ms)"
+	default 0
+	range 0 10000
+	help
+	  Lower bound between consecutive SM updates transmitted via
+	  HC-12. Calls arriving sooner return -EAGAIN and are dropped.
+	  Set to 0 for no rate limit. Useful when the SM tick rate is
+	  higher than the 9600-baud air link can carry comfortably.
+
+config AURORA_TELEMETRY_HC12_STACK_SIZE
+	int "HC-12 TX worker stack size (bytes)"
+	default 1024
+
+config AURORA_TELEMETRY_HC12_THREAD_PRIORITY
+	int "HC-12 TX worker thread priority"
+	default 10
+	help
+	  Keep numerically above flight-critical threads (sensors and
+	  state machine run at priority 5-6) so telemetry can never
+	  preempt them.
+
+endif # AURORA_TELEMETRY_HC12
+
+endif # AURORA_TELEMETRY

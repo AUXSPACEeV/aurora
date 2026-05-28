@@ -11,6 +11,7 @@
 		auxspace,imu = &lsm6dso32_0;
 		auxspace,mmc = &mmc0;
 		auxspace,ffs = &ffs0;
+		auxspace,telemetry-uart = &uart1;
 	};
 
 	fstab {
@@ -58,6 +59,10 @@
 };
 
 &uart0 {
+	status = "okay";
+};
+
+&uart1 {
 	status = "okay";
 };
 
