@@ -21,3 +21,6 @@ add_subdirectory_ifdef(CONFIG_AURORA_PWM_MELODY pwm_melody)
 
 # state machine lib
 add_subdirectory_ifdef(CONFIG_AURORA_STATE_MACHINE state)
+
+# telemetry lib
+add_subdirectory_ifdef(CONFIG_AURORA_TELEMETRY telemetry)

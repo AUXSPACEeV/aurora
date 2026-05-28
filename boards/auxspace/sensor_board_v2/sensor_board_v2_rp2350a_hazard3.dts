@@ -57,10 +57,15 @@ zephyr_udc0: &usbd {
 };
 
 &uart0 {
-	status = "disabled";
-
 	current-speed = <115200>;
 	pinctrl-0 = <&uart0_default>;
+	pinctrl-names = "default";
+};
+
+/* HC-12 telemetry transceiver: transparent UART <-> 433 MHz RF bridge. */
+&uart1 {
+	current-speed = <9600>;
+	pinctrl-0 = <&uart1_default>;
 	pinctrl-names = "default";
 };
 

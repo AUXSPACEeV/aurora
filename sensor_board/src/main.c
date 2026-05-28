@@ -46,6 +46,10 @@
 #include <aurora/lib/powerfail.h>
 #endif /* CONFIG_AURORA_POWERFAIL */
 
+#if defined(CONFIG_AURORA_TELEMETRY)
+#include <aurora/lib/telemetry.h>
+#endif /* CONFIG_AURORA_TELEMETRY */
+
 #if defined(CONFIG_AURORA_STATE_MACHINE)
 #include <aurora/lib/state/state.h>
 static int armed = 0;
@@ -653,6 +657,14 @@ void state_machine_task(void *, void *, void *)
 		state = sm_get_state();
 		LOG_DBG("STATE = %d", state);
 
+#if defined(CONFIG_AURORA_TELEMETRY)
+		{
+			struct sm_inputs sm_in;
+			sm_get_inputs(&sm_in);
+			(void)telemetry_send_sm_update(state, &sm_in);
+		}
+#endif /* CONFIG_AURORA_TELEMETRY */
+
 #if defined(CONFIG_DATA_LOGGER_BIN)
 		{
 			struct sm_inputs sm_in;
@@ -819,6 +831,10 @@ int main(void)
 	notify_init();
 	notify_boot();
 #endif /* CONFIG_AURORA_NOTIFY */
+
+#if defined(CONFIG_AURORA_TELEMETRY)
+	(void)telemetry_init();
+#endif /* CONFIG_AURORA_TELEMETRY */
 
 	return 0;
 }

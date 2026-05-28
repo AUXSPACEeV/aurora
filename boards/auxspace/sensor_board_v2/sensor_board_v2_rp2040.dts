@@ -65,6 +65,13 @@ zephyr_udc0: &usbd {
 	pinctrl-names = "default";
 };
 
+/* HC-12 telemetry transceiver: transparent UART <-> 433 MHz RF bridge. */
+&uart1 {
+	current-speed = <9600>;
+	pinctrl-0 = <&uart1_default>;
+	pinctrl-names = "default";
+};
+
 &spi0 {
 	clock-frequency = <DT_FREQ_M(25)>;
 	cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
