@@ -1,0 +1,25 @@
+/*
+ * Copyright (c) 2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Route the HC-12 backend to Zephyr's emulated UART driver so the
+ * TX worker's frame bytes don't collide with ztest output on the
+ * real qemu uart0. The AT helper is not exercised here, so the SET
+ * GPIO and uart_configure() support are intentionally absent.
+ */
+
+/ {
+	test_uart: test-uart {
+		compatible = "zephyr,uart-emul";
+		status = "okay";
+		current-speed = <9600>;
+		tx-fifo-size = <128>;
+		rx-fifo-size = <128>;
+	};
+
+	hc12: hc12 {
+		compatible = "auxspaceev,hc12";
+		uart = <&test_uart>;
+		status = "okay";
+	};
+};
