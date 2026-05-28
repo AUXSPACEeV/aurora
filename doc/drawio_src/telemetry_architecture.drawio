@@ -1,0 +1,49 @@
+<mxfile host="Electron">
+  <diagram name="Seite-1" id="KUqV3TfUqu7KPuPVFzmZ">
+    <mxGraphModel dx="1712" dy="1001" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="CpjdwTDMSTJbZkOlujzT-16" edge="1" parent="1" source="CpjdwTDMSTJbZkOlujzT-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#d5e8d4;strokeColor=#82b366;" target="CpjdwTDMSTJbZkOlujzT-15">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CpjdwTDMSTJbZkOlujzT-1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="state-machine task" vertex="1">
+          <mxGeometry height="60" width="120" x="140" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="CpjdwTDMSTJbZkOlujzT-17" edge="1" parent="1" source="CpjdwTDMSTJbZkOlujzT-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#d5e8d4;strokeColor=#82b366;" target="CpjdwTDMSTJbZkOlujzT-15">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CpjdwTDMSTJbZkOlujzT-2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="telemetry_send_sm_update()" vertex="1">
+          <mxGeometry height="60" width="186" x="289.5" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="CpjdwTDMSTJbZkOlujzT-6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="HC-12" vertex="1">
+          <mxGeometry height="60" width="70" x="164.5" y="525" as="geometry" />
+        </mxCell>
+        <mxCell id="CpjdwTDMSTJbZkOlujzT-20" edge="1" parent="1" source="CpjdwTDMSTJbZkOlujzT-15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#dae8fc;strokeColor=#6c8ebf;" target="CpjdwTDMSTJbZkOlujzT-18">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CpjdwTDMSTJbZkOlujzT-21" edge="1" parent="1" source="CpjdwTDMSTJbZkOlujzT-15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#dae8fc;strokeColor=#6c8ebf;" target="CpjdwTDMSTJbZkOlujzT-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CpjdwTDMSTJbZkOlujzT-22" edge="1" parent="1" source="CpjdwTDMSTJbZkOlujzT-15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;fillColor=#dae8fc;strokeColor=#6c8ebf;" target="CpjdwTDMSTJbZkOlujzT-19">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="CpjdwTDMSTJbZkOlujzT-15" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;telemetry.c (core)&lt;br&gt;&lt;/b&gt;&lt;br&gt;- init dispatch&lt;div&gt;- fan-out send&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110" width="180" x="200" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="CpjdwTDMSTJbZkOlujzT-18" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="LoRaWAN" vertex="1">
+          <mxGeometry height="60" width="70" x="254.5" y="525" as="geometry" />
+        </mxCell>
+        <mxCell id="CpjdwTDMSTJbZkOlujzT-19" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="..." vertex="1">
+          <mxGeometry height="60" width="70" x="345.5" y="525" as="geometry" />
+        </mxCell>
+        <mxCell id="CpjdwTDMSTJbZkOlujzT-25" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontStyle=1;fontColor=#7EA6E0;" value="&lt;div&gt;&lt;font style=&quot;&quot;&gt;STRUCT_SECTION_FOREACH&lt;/font&gt;&lt;/div&gt;&lt;div&gt;&lt;font style=&quot;&quot;&gt;over telemetry_backend&lt;/font&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="190" x="285.5" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="CpjdwTDMSTJbZkOlujzT-26" parent="1" style="shape=umlFrame;whiteSpace=wrap;html=1;pointerEvents=0;width=160;height=40;align=left;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;&amp;nbsp;Auxspace e.V. - AURORA&lt;/b&gt;&lt;div&gt;&amp;nbsp;Telemetry Architecture&lt;/div&gt;" vertex="1">
+          <mxGeometry height="480" width="440" x="80" y="120" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
