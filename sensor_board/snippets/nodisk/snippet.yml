@@ -1,0 +1,11 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Drop the SD-card / FAT stack for bench tests without media inserted.
+# Telemetry, sensors, state machine and shell all stay live.
+#
+#   west build -b sensor_board_v2/rp2350a/hazard3 -S nodisk aurora/sensor_board
+
+name: nodisk
+append:
+  EXTRA_CONF_FILE: nodisk.conf
