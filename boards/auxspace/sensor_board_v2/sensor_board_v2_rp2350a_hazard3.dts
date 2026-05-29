@@ -27,13 +27,6 @@
 		zephyr,code-partition = &code_partition;
 	};
 
-	hc12: hc12 {
-		compatible = "auxspaceev,hc12";
-		uart = <&uart1>;
-		set-gpios = <&gpio0 6 GPIO_ACTIVE_LOW>;
-		status = "disabled";
-	};
-
 	aliases {
 		watchdog0 = &wdt0;
 	};
@@ -66,12 +59,6 @@ zephyr_udc0: &usbd {
 &uart0 {
 	current-speed = <115200>;
 	pinctrl-0 = <&uart0_default>;
-	pinctrl-names = "default";
-};
-
-&uart1 {
-	current-speed = <9600>;
-	pinctrl-0 = <&uart1_default>;
 	pinctrl-names = "default";
 };
 

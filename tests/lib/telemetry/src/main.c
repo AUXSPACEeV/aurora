@@ -114,27 +114,27 @@ ZTEST(telemetry_hc12_format, test_sm_update_frame_bytes)
 		.state        = 3,
 		.armed        = 1,
 		.reserved     = 0,
-		.altitude     = 123.5f,
-		.acceleration = 9.81f,
-		.accel_vert   = -1.25f,
-		.velocity     = 42.0f,
-		.orientation  = { 0.5f, -0.25f, 1.0f },
+		.altitude     = 123.5,
+		.acceleration = 9.81,
+		.accel_vert   = -1.25,
+		.velocity     = 42.0,
+		.orientation  = { 0.5, -0.25, 1.0 },
 	};
 
-	uint8_t buf[64] = { 0 };
+	uint8_t buf[128] = { 0 };
 	size_t  n = hc12_frame_finalise(buf, sizeof(buf), 0x01, &p,
 					(uint8_t)sizeof(p));
 
-	/* Total = 2 magic + 1 type + 1 len + 36 payload + 2 CRC = 42.
-	 * Payload = u32 + u8 + u8 + i16 + 5*f32 + 3*f32 = 36 bytes
+	/* Total = 2 magic + 1 type + 1 len + 64 payload + 2 CRC = 70.
+	 * Payload = u32 + u8 + u8 + i16 + 4*f64 + 3*f64 = 64 bytes
 	 * (packed, little-endian).
 	 */
-	zassert_equal(n, 42, "unexpected frame length: %zu", n);
+	zassert_equal(n, 70, "unexpected frame length: %zu", n);
 
 	zassert_equal(buf[0], 0xA5, "magic0");
 	zassert_equal(buf[1], 0x5A, "magic1");
 	zassert_equal(buf[2], 0x01, "type=SM_UPDATE");
-	zassert_equal(buf[3], 36,   "payload length byte");
+	zassert_equal(buf[3], 64,   "payload length byte");
 
 	/* Payload is little-endian, packed. Check the first u32 by hand
 	 * to lock byte order; trust memcpy semantics for the rest.
@@ -147,8 +147,8 @@ ZTEST(telemetry_hc12_format, test_sm_update_frame_bytes)
 	zassert_equal(buf[9], 1,    "armed byte");
 
 	/* CRC-16/CCITT (init 0xFFFF) over [type .. end of payload]. */
-	uint16_t expected_crc = crc16_ccitt(0xFFFF, &buf[2], 1 + 1 + 36);
-	uint16_t actual_crc   = sys_get_le16(&buf[40]);
+	uint16_t expected_crc = crc16_ccitt(0xFFFF, &buf[2], 1 + 1 + 64);
+	uint16_t actual_crc   = sys_get_le16(&buf[68]);
 	zassert_equal(actual_crc, expected_crc,
 		      "CRC mismatch: got %04x want %04x",
 		      actual_crc, expected_crc);
