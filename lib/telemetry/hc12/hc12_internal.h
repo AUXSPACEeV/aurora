@@ -24,17 +24,17 @@
 /* Wire frame packet types. */
 #define HC12_TYPE_SM_UPDATE 0x01
 
-/** @brief HC-12 SM_UPDATE wire payload (little-endian, packed, 30 B). */
+/** @brief HC-12 SM_UPDATE wire payload (little-endian, packed, 64 B). */
 struct __packed hc12_sm_update_payload {
 	uint32_t timestamp_ms;
 	uint8_t  state;
 	uint8_t  armed;
 	int16_t  reserved;
-	float    altitude;
-	float    acceleration;
-	float    accel_vert;
-	float    velocity;
-	float    orientation[3];
+	double   altitude;
+	double   acceleration;
+	double   accel_vert;
+	double   velocity;
+	double   orientation[3];
 };
 
 /**

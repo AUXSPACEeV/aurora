@@ -26,25 +26,6 @@
 		zephyr,code-partition = &code_partition;
 	};
 
-	/* HC-12 433 MHz transceiver on UART1. Disabled by default;
-	 * enable in an application overlay with `status = "okay"`.
-	 *
-	 * Module settings (channel, baud, TX power, FU mode) are
-	 * stored in the HC-12's own flash and persist across reboots,
-	 * so firmware never reprograms it on boot. Provision once on
-	 * the bench, or — if `set-gpios` is added below — at runtime
-	 * through the `telemetry hc12` shell.
-	 */
-	hc12: hc12 {
-		compatible = "auxspaceev,hc12";
-		uart = <&uart1>;
-		/* Add `set-gpios = <&gpio0 N GPIO_ACTIVE_LOW>;` in your
-		 * overlay to enable the runtime AT shell. Omit it for a
-		 * pure bench-provisioned setup.
-		 */
-		status = "disabled";
-	};
-
 	aliases {
 		watchdog0 = &wdt0;
 	};
@@ -81,12 +62,6 @@ zephyr_udc0: &usbd {
 &uart0 {
 	current-speed = <115200>;
 	pinctrl-0 = <&uart0_default>;
-	pinctrl-names = "default";
-};
-
-&uart1 {
-	current-speed = <9600>;
-	pinctrl-0 = <&uart1_default>;
 	pinctrl-names = "default";
 };
 
