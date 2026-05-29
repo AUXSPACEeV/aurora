@@ -17,6 +17,7 @@ Pip requirements are installed via `pip install -r tools/requirements.txt`
 
 gen_flight_replay
 plot_flight_data
+rec_zephyr
 sim_fetch
 sim_flight_kalman
 sweep_apogee
@@ -29,6 +30,7 @@ sync_defconfig
 |---|---|
 | [`gen_flight_replay.py`](gen_flight_replay.md) | Convert a recorded `flights.csv` into a generated C source file consumed by the `fake_sensors` replay backend. |
 | [`plot_flight_data.py`](plot_flight_data.md) | Plot recorded or simulated flight data — standalone CLI for telemetry logs, importable plotting module for `sim_flight_kalman`. |
+| [`rec_zephyr.py`](rec_zephyr.md) | MicroPython ground-station receiver for HC-12 telemetry — runs on a Raspberry Pi Pico and prints decoded state-machine frames to the REPL. |
 | [`sim_fetch.py`](sim_fetch.md) | Pull files out of a running `native_sim` Zephyr instance via the shell console. |
 | [`sim_flight_kalman.py`](sim_flight_kalman.md) | Run a synthetic flight through a Python mirror of the AURORA Kalman filter and attitude tracker. |
 | [`sweep_apogee.py`](sweep_apogee.md) | Grid-search Kalman filter tuning parameters against recorded flights. |
