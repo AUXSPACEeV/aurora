@@ -1,0 +1,52 @@
+/*
+ * Copyright (c) 2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Pico bench overlay: wires an HC-12 to uart1.
+ *   TX  -> GP4
+ *   RX  -> GP5
+ *   SET -> GP3  (active-low; lets the telemetry shell flip the module
+ *                into AT mode)
+ *
+ * Console/shell live on USB CDC.
+ */
+
+/ {
+	chosen {
+		zephyr,console = &cdc_acm_uart;
+		zephyr,shell-uart = &cdc_acm_uart;
+		auxspace,telemetry-hc12 = &hc12;
+	};
+
+	hc12: hc12 {
+		compatible = "auxspaceev,hc12";
+		uart = <&uart1>;
+		set-gpios = <&gpio0 3 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
+};
+
+&pinctrl {
+	uart1_default: uart1_default {
+		group1 {
+			pinmux = <UART1_TX_P4>;
+		};
+		group2 {
+			pinmux = <UART1_RX_P5>;
+			input-enable;
+		};
+	};
+};
+
+&uart1 {
+	current-speed = <9600>;
+	pinctrl-0 = <&uart1_default>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+zephyr_udc0: &usbd {
+	cdc_acm_uart: cdc_acm_uart {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
