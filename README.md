@@ -2,6 +2,12 @@
 
 > **AU**xspace **R**eal-time **O**nboard **R**ocket **A**vionics
 
+[![CI](https://github.com/AUXSPACEeV/aurora/actions/workflows/build.yml/badge.svg)](https://github.com/AUXSPACEeV/aurora/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/tag/AUXSPACEeV/aurora?label=Release&color=informational)](https://github.com/AUXSPACEeV/aurora/releases/latest)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![RTOS: Zephyr](https://img.shields.io/badge/RTOS-Zephyr-7929c9.svg)](https://www.zephyrproject.org/)
+[![Docs](https://img.shields.io/badge/Docs-aurora.auxspace.de-informational.svg)](https://aurora.auxspace.de/)
+
 ## General Info
 
 ### :warning: Disclaimer
