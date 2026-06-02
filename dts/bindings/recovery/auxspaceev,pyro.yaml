@@ -8,4 +8,4 @@ description: Auxspace e.V. basic pyro module
 
 compatible: "auxspaceev,basic-pyro"
 
-include: pyro-device.yaml
+include: recovery-device.yaml
