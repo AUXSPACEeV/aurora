@@ -1,32 +1,18 @@
 # Copyright (c) 2026 Auxspace e.V.
 # SPDX-License-Identifier: Apache-2.0
 
-menuconfig PYRO
-	bool "Pyro drivers"
+menuconfig RECOVERY
+	bool "Recovery drivers"
 	default n
 	help
-	  Enable driver for pyro modules.
+	  Enable recovery device drivers.
 
-if PYRO
+if RECOVERY
 
-module = PYRO
-module-str = pyro
-source "subsys/logging/Kconfig.template.log_config"
+menu "Recovery Drivers"
 
-config PYRO_INIT_PRIORITY
-	int "Pyro init priority"
-	default 80
-	depends on PYRO
-
-config PYRO_SHELL
-	bool "Pyro shell commands"
-	default y
-	depends on SHELL
-	help
-	  Enable shell commands for pyro devices.
-
-menu "Auxspace Pyro Drivers"
 rsource "auxspaceev/Kconfig"
+
 endmenu
 
-endif # PYRO
+endif # RECOVERY

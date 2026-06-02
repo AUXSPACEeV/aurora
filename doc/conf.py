@@ -264,7 +264,7 @@ _gbc.run_twister_cmake_only = _run_twister_with_aurora_boards
 # them after the catalog is built, and we also register "pyro" in the Zephyr domain's
 # BINDING_TYPE_TO_DOCUTILS_NODE dict so the section heading renders correctly.
 _AURORA_VENDOR_PREFIXES = _WORKSPACE / "aurora" / "dts" / "bindings" / "vendor-prefixes.txt"
-_AURORA_PYRO_BINDINGS  = _WORKSPACE / "aurora" / "dts" / "bindings" / "recovery"
+_AURORA_RECOVERY_BINDINGS = _WORKSPACE / "aurora" / "dts" / "bindings" / "recovery"
 _orig_get_catalog = _gbc.get_catalog
 
 def _get_catalog_with_aurora_fixes(**kwargs):

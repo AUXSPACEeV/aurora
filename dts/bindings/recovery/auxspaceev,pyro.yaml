@@ -1,11 +1,11 @@
-# Basic Pyro Module
+# Pyro Module
 #
 # Copyright (c) 2026 Auxspace e.V.
 # SPDX-License-Identifier: Apache-2.0
 
-title: Basic pyro module
-description: Auxspace e.V. basic pyro module
+title: pyro module
+description: Auxspace e.V. pyro module
 
-compatible: "auxspaceev,basic-pyro"
+compatible: "auxspaceev,pyro"
 
 include: recovery-device.yaml

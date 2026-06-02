@@ -1,11 +1,27 @@
-# Basic pyro module configuration options
-#
 # Copyright (c) 2026 Auxspace e.V.
 # SPDX-License-Identifier: Apache-2.0
 
-menuconfig BASIC_PYRO
-	bool "Basic pyro module."
-	default y
-	depends on DT_HAS_AUXSPACEEV_BASIC_PYRO_ENABLED
+menuconfig PYRO
+	bool "Pyro drivers"
+	default n
 	help
-	  Enable driver for basic pyro module.
+	  Enable driver for pyro modules.
+
+if PYRO
+
+module = PYRO
+module-str = pyro
+source "subsys/logging/Kconfig.template.log_config"
+
+config PYRO_INIT_PRIORITY
+	int "Pyro init priority"
+	default 80
+
+config PYRO_SHELL
+	bool "Pyro shell commands"
+	default y
+	depends on SHELL
+	help
+	  Enable shell commands for pyro devices.
+
+endif # PYRO

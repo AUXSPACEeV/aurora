@@ -2,5 +2,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
 menu "Drivers"
-rsource "pyro/Kconfig"
+rsource "recovery/Kconfig"
 endmenu

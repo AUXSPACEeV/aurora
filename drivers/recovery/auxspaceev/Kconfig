@@ -2,5 +2,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # zephyr-keep-sorted-start
-rsource "basic_pyro/Kconfig"
+rsource "pyro/Kconfig"
 # zephyr-keep-sorted-stop

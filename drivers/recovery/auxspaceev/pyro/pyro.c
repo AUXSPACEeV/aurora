@@ -25,11 +25,11 @@
 #include <zephyr/drivers/sensor.h>
 
 #include <aurora/drivers/pyro.h>
-#include "basic_pyro.h"
+#include "pyro.h"
 
 #define LOG_LEVEL CONFIG_PYRO_LOG_LEVEL
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(basic_pyro);
+LOG_MODULE_REGISTER(pyro);
 
 /**
  * @brief Initialize the basic pyro driver instance.
