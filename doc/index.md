@@ -1,7 +1,8 @@
 # AURORA
 
-**AURORA** (AUxspace ROcket opeRAting System) is a Zephyr RTOS-based avionics
-firmware for rockets, developed by [Auxspace e.V.](https://auxspace.de).
+**AURORA** (**AU**xspace **R**eal-time **O**nboard **R**ocket **A**vionics) is
+a Zephyr RTOS-based avionics firmware for rockets, developed by
+[Auxspace e.V.](https://auxspace.de).
 
 It manages sensor data, flight state detection, and pyrotechnic ignition across
 multiple interconnected boards communicating over CAN bus.

@@ -1,6 +1,6 @@
 # `AURORA`
 
-> **AU**xspace **RO**cket ope**RA**ting System
+> **AU**xspace **R**eal-time **O**nboard **R**ocket **A**vionics
 
 ## General Info
 
