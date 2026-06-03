@@ -1,0 +1,10 @@
+config PYRO_INIT_PRIORITY
+    int "Pyro init priority"
+    default 80
+
+config PYRO_SHELL
+    bool "Pyro shell commands"
+    default y
+    depends on SHELL
+    help
+      Enables shell commands for Pyro devices.

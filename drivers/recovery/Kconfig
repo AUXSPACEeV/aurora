@@ -8,7 +8,7 @@ menuconfig RECOVERY
 	  Enable recovery device drivers.
 
 if RECOVERY
-
+module = RECOVERY
 menu "Recovery Drivers"
 
 rsource "auxspaceev/Kconfig"
