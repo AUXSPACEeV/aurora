@@ -68,3 +68,49 @@ active development.
 If no µSD-Card is inserted, the board will have trouble booting, since the
 SPI-SDHC driver has no way to detect card presence without a card-detect-pin!
 ```
+
+## Building
+
+### RP2040
+
+The aurora software for the RP2040 is built with `sysbuild` since it uses the MCUBoot boot loader:
+
+```bash
+west build -p -b sensor_board_v2/rp2040 --sysbuild sensor_board
+```
+
+### RP2350
+The aurora software for the RP2350 is built without `sysbuild` at the moment.
+
+```bash
+west build -p -b sensor_board_v2/rp2350a/hazard3 sensor_board
+```
+
+## Flashing
+
+## RP2040
+
+Flashing the MCUBoot bootloader can not be done with `west flash` since it does not
+install both binary files in the correct location in the flash. Instead the software
+can be flashed with `picotool` allowing flashing via the USB interface. For this
+the board needs to be put into bootloader mode by holding the `BOOTSEL` button while
+plugging the board into the computer. Then the following commands can be used to flash the bootloader and the application:
+
+```bash
+# Flash the bootloader
+picotool load build/mcuboot/zephyr/zephyr.uf2
+# Flash the application
+picotool load build/sensor_board/zephyr/zephyr.signed.bin --offset 0x10010000
+# Reboot the board
+picotool reboot
+```
+
+````{note}
+```picotool```  can be obtained either by building it from source following the
+instructions on the [picotool](https://github.com/raspberrypi/picotool) repository or by installing it as a prebuilt binary from the release page of the [pico-sdk-tools](https://github.com/raspberrypi/pico-sdk-tools/releases) repository.
+````
+
+## RP2350
+
+Flashing the RP2350 can be done by copying the generated `zephyr.uf2` located in the
+`build/sensor_board/zephyr` directory to the board's USB mass storage device. The board needs to be put into bootloader mode by holding the `BOOTSEL` button while plugging the board into the computer.
