@@ -640,7 +640,18 @@ void state_machine_task(void *, void *, void *)
 			}
 		} while (zbus_sub_wait_msg(&sm_sub, &data_chan, &msg_buf, K_NO_WAIT) == 0);
 
-		/* Only update state machine once both sensors have fresh data */
+
+		/* This check is necessary to avoid updating the state machine
+		 * with uninitialized sensor data durring startup. This ensures
+		 * that updates to the state machine only after both the
+		 * barometer and IMU have reported valid data at least once.
+		 * The parameters don't have to be reset because the kalman filter
+		 * used inside the state machine can handle updates to a single
+		 * sensor (e.g. just the barometer. After receiving the first
+		 * valid values from all sensors the ZBUS messages ensure
+		 * that the state machine is only updated when at least
+		 * one of the sensors has sent a new value.
+		 */
 		if (!baro_ready || !imu_ready) {
 			continue;
 		}
@@ -751,10 +762,6 @@ void state_machine_task(void *, void *, void *)
 #endif /* CONFIG_DATA_LOGGER_BIN */
 			prev_state = state;
 		}
-
-		/* reset the measurements */
-		baro_ready = false;
-		imu_ready = false;
 
 #if defined(CONFIG_PYRO)
 		if (state == pyro_state)
