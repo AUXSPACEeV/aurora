@@ -25,13 +25,17 @@ tests:
       type: one_line
       regex:
         - "simulation complete"
+    extra_overlay_confs:
+      - boards/native_sim.conf
+    extra_dtc_overlay_files:
+      - boards/native_sim.overlay
     extra_configs:
       - CONFIG_AURORA_SIM_AUTOTEST=y
       - CONFIG_AURORA_FAKE_SENSORS_REPLAY=y
     platform_allow:
-      - native_sim
+      - native_sim/native/64
     integration_platforms:
-      - native_sim
+      - native_sim/native/64
   app.default.sysbuild:
     sysbuild: true
     platform_allow:
