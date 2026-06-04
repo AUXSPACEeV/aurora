@@ -24,3 +24,5 @@ manifest:
           - hal_espressif # required for ESP32
           - fatfs      # required for filesystem operations (ff.h)
           - mcuboot    # required as bootloader for ESP32
+          - mbedtls       # required by BT host crypto (pad_link / BLE)
+          - tf-psa-crypto # PSA crypto provider used by mbedtls
