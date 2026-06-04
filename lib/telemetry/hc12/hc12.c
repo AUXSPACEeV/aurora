@@ -80,7 +80,7 @@ size_t hc12_frame_finalise(uint8_t *buf, size_t buf_sz, uint8_t type,
 	return total;
 }
 
-static int hc12_send_sm_update(enum sm_state state,
+static int hc12_send_sm_update(enum sm_state state, enum sm_type type,
 			       const struct sm_inputs *inputs)
 {
 	if (!atomic_get(&ready)) {
@@ -106,6 +106,7 @@ static int hc12_send_sm_update(enum sm_state state,
 		.timestamp_ms = (uint32_t)k_uptime_get(),
 		.state        = (uint8_t)state,
 		.armed        = inputs->armed ? 1 : 0,
+		.sm_type      = (uint8_t)type,
 		.altitude     = inputs->altitude,
 		.acceleration = inputs->acceleration,
 		.accel_vert   = inputs->accel_vert,

@@ -62,10 +62,24 @@ MAGIC0 = 0xA5
 MAGIC1 = 0x5A
 HC12_TYPE_SM_UPDATE = 0x01
 
-SM_STATES = ("IDLE", "ARMED", "BOOST", "BURNOUT",
-             "APOGEE", "MAIN", "REDUNDANT", "LANDED", "ERROR")
+# State-name tables keyed by the sm_type byte from the protocol.
+# Must match enum sm_type in aurora/include/aurora/lib/state/state.h and the
+# implementation-specific sm_state enum it identifies. Append-only. NEVER
+# renumber an existing entry, the receiver may be running with a
+# firmware that still emits the old ID.
+SM_TYPE_SIMPLE = 0
+# SM_TYPE_TWO_STAGE = 1
+SM_STATE_TABLES = {
+    SM_TYPE_SIMPLE: ("IDLE", "ARMED", "BOOST", "BURNOUT",
+                     "APOGEE", "MAIN", "REDUNDANT", "LANDED", "ERROR"),
+}
+SM_TYPE_NAMES = {SM_TYPE_SIMPLE: "simple"}
 
-SM_UPDATE_FMT = "<IBBh7d"
+# Wire format: uint32 ts, uint8 state, uint8 armed, uint8 sm_type,
+# uint8 reserved, 7x double. Same 64-byte total as the previous
+# (state, armed, int16 reserved, 7d) layout. Note: the two trailing
+# scalar bytes were repurposed.
+SM_UPDATE_FMT = "<IBBBB7d"
 SM_UPDATE_LEN = struct.calcsize(SM_UPDATE_FMT)  # 64
 
 # Precomputed CRC-16/CCITT (reflected, poly 0x8408) table.
@@ -102,15 +116,18 @@ out_lines = []
 def queue_frame(ftype, mv, plen, crc_ok):
     tag = "OK " if crc_ok else "BAD"
     if ftype == HC12_TYPE_SM_UPDATE and plen == SM_UPDATE_LEN and crc_ok:
-        (ts, state, armed, _resv,
+        (ts, state, armed, sm_type, _resv,
          altitude, accel, accel_vert, velocity,
          yaw, pitch, roll) = struct.unpack_from(SM_UPDATE_FMT, mv, 0)
-        name = SM_STATES[state] if state < len(SM_STATES) else "?%d" % state
+        states = SM_STATE_TABLES.get(sm_type)
+        name = (states[state] if states and state < len(states)
+                else "?%d" % state)
+        tname = SM_TYPE_NAMES.get(sm_type, "?%d" % sm_type)
         out_lines.append(
-            "[OK ] SM t=%d ms  state=%-9s armed=%d  alt=%+.2f  "
+            "[OK ] SM[%s] t=%d ms  state=%-9s armed=%d  alt=%+.2f  "
             "a=%+.2f  av=%+.2f  v=%+.2f  ypr=%+.2f/%+.2f/%+.2f"
-            % (ts, name, armed, altitude, accel, accel_vert, velocity,
-               yaw, pitch, roll))
+            % (tname, ts, name, armed, altitude, accel, accel_vert,
+               velocity, yaw, pitch, roll))
     else:
         out_lines.append("[%s] type=0x%02x len=%d" % (tag, ftype, plen))
 

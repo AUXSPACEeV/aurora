@@ -21,6 +21,23 @@
 #endif /* CONFIG_SIMPLE_STATE */
 
 /*-----------------------------------------------------------
+ * State machine type
+ *----------------------------------------------------------*/
+
+/**
+ * @brief Identifier of the active state machine implementation.
+ *
+ * Each implementation defines its own @c sm_state enum, so any
+ * external consumer (ground station, post-flight tooling) needs to
+ * know which implementation produced a given state value before it
+ * can decode it.
+ */
+enum sm_type {
+    SM_TYPE_SIMPLE = 0,    /**< @ref aurora/lib/state/simple.h */
+    /* SM_TYPE_TWO_STAGE = 1, ... */
+};
+
+/*-----------------------------------------------------------
  * Types
  *----------------------------------------------------------*/
 
@@ -87,6 +104,15 @@ void sm_update(const struct sm_inputs *inputs);
  * (usually an enum implementation in state implementation).
  */
 enum sm_state sm_get_state(void);
+
+/**
+ * @brief Identify which state machine implementation is active.
+ *
+ * External consumers use it to pick the right @c sm_state enum mapping.
+ *
+ * @return Active state machine type ID.
+ */
+enum sm_type sm_get_type(void);
 
 /**
  * @brief Retrieve the most recent inputs the state machine evaluated.

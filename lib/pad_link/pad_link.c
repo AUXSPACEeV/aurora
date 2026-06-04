@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <string.h>
-
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
@@ -33,7 +31,8 @@ LOG_MODULE_REGISTER(pad_link, CONFIG_AURORA_PAD_LINK_LOG_LEVEL);
 /* ------------------------------------------------------------------ */
 /* One 128-bit base; low 32 bits identify the characteristic.
  * e8a591xx-7c0e-4b5b-9a4c-1f1b6f7c4d70
- *   xx = 00 service, 01 board, 02 state, 03 raw, 04 computed
+ *   xx = 00 service,    01 board,    02 sm_state,
+ *        03 raw sensor, 04 computed, 05 sm_type
  */
 #define PL_UUID_SVC_VAL \
 	BT_UUID_128_ENCODE(0xe8a59100, 0x7c0e, 0x4b5b, 0x9a4c, 0x1f1b6f7c4d70)
@@ -45,6 +44,8 @@ LOG_MODULE_REGISTER(pad_link, CONFIG_AURORA_PAD_LINK_LOG_LEVEL);
 	BT_UUID_128_ENCODE(0xe8a59103, 0x7c0e, 0x4b5b, 0x9a4c, 0x1f1b6f7c4d70)
 #define PL_UUID_COMP_VAL \
 	BT_UUID_128_ENCODE(0xe8a59104, 0x7c0e, 0x4b5b, 0x9a4c, 0x1f1b6f7c4d70)
+#define PL_UUID_SMTYPE_VAL \
+	BT_UUID_128_ENCODE(0xe8a59105, 0x7c0e, 0x4b5b, 0x9a4c, 0x1f1b6f7c4d70)
 
 static const struct bt_uuid_128 pl_uuid_svc =
 	BT_UUID_INIT_128(PL_UUID_SVC_VAL);
@@ -56,6 +57,8 @@ static const struct bt_uuid_128 pl_uuid_raw =
 	BT_UUID_INIT_128(PL_UUID_RAW_VAL);
 static const struct bt_uuid_128 pl_uuid_comp =
 	BT_UUID_INIT_128(PL_UUID_COMP_VAL);
+static const struct bt_uuid_128 pl_uuid_smtype =
+	BT_UUID_INIT_128(PL_UUID_SMTYPE_VAL);
 
 /* ------------------------------------------------------------------ */
 /* Wire formats (packed, little-endian by Zephyr build convention)     */
@@ -89,6 +92,7 @@ struct __packed pl_computed_payload {
 
 static struct {
 	struct k_spinlock lock;
+	uint8_t sm_type;
 	uint8_t sm_state;
 	struct pl_raw_payload raw;
 	struct pl_computed_payload comp;
@@ -113,6 +117,18 @@ static ssize_t read_board(struct bt_conn *conn,
 {
 	return bt_gatt_attr_read(conn, attr, buf, len, offset,
 				 board_id, sizeof(board_id) - 1);
+}
+
+static ssize_t read_smtype(struct bt_conn *conn,
+			   const struct bt_gatt_attr *attr,
+			   void *buf, uint16_t len, uint16_t offset)
+{
+	uint8_t v;
+	K_SPINLOCK(&snap.lock) {
+		v = snap.sm_type;
+	}
+	return bt_gatt_attr_read(conn, attr, buf, len, offset,
+				 &v, sizeof(v));
 }
 
 static ssize_t read_state(struct bt_conn *conn,
@@ -172,15 +188,16 @@ static void comp_ccc_cfg(const struct bt_gatt_attr *attr, uint16_t value)
 /* Service layout. Keep the value-attribute indices in sync with
  * the BT_GATT_SERVICE_DEFINE entries below; they're used by
  * bt_gatt_notify().
- *   [0] primary service
- *   [1] board declaration         [2] board value
- *   [3] state declaration         [4] state value   [5] state CCC
- *   [6] raw declaration           [7] raw value     [8] raw CCC
- *   [9] computed declaration     [10] computed val [11] computed CCC
+ *   [0]  primary service
+ *   [1]  board declaration         [2]  board value
+ *   [3]  sm_type declaration       [4]  sm_type value
+ *   [5]  state declaration         [6]  state value     [7]  state CCC
+ *   [8]  raw declaration           [9]  raw value      [10]  raw CCC
+ *   [11] computed declaration     [12] computed val    [13]  computed CCC
  */
-#define PL_ATTR_STATE_VALUE 4
-#define PL_ATTR_RAW_VALUE   7
-#define PL_ATTR_COMP_VALUE  10
+#define PL_ATTR_STATE_VALUE 6
+#define PL_ATTR_RAW_VALUE   9
+#define PL_ATTR_COMP_VALUE  12
 
 BT_GATT_SERVICE_DEFINE(pad_link_svc,
 	BT_GATT_PRIMARY_SERVICE(&pl_uuid_svc),
@@ -189,6 +206,11 @@ BT_GATT_SERVICE_DEFINE(pad_link_svc,
 		BT_GATT_CHRC_READ,
 		BT_GATT_PERM_READ,
 		read_board, NULL, NULL),
+
+	BT_GATT_CHARACTERISTIC(&pl_uuid_smtype.uuid,
+		BT_GATT_CHRC_READ,
+		BT_GATT_PERM_READ,
+		read_smtype, NULL, NULL),
 
 	BT_GATT_CHARACTERISTIC(&pl_uuid_state.uuid,
 		BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
@@ -341,7 +363,7 @@ int pad_link_init(void)
 	return 0;
 }
 
-void pad_link_publish_sm(enum sm_state state,
+void pad_link_publish_sm(enum sm_state state, enum sm_type type,
 			 const struct sm_inputs *inputs)
 {
 	if (!inputs) {
@@ -349,6 +371,7 @@ void pad_link_publish_sm(enum sm_state state,
 	}
 
 	uint8_t s = (uint8_t)state;
+	uint8_t t = (uint8_t)type;
 	struct pl_computed_payload comp = {
 		.uptime_ms  = k_uptime_get_32(),
 		.altitude   = (float)inputs->altitude,
@@ -360,6 +383,7 @@ void pad_link_publish_sm(enum sm_state state,
 	};
 
 	K_SPINLOCK(&snap.lock) {
+		snap.sm_type  = t;
 		snap.sm_state = s;
 		snap.comp     = comp;
 	}

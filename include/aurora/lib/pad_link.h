@@ -41,10 +41,14 @@ int pad_link_init(void);
  * Updates the read snapshot and, for any subscribed central, fires a
  * GATT notification. Safe to call from the SM thread; never blocks.
  *
+ * @c type lets the central pick the right @c sm_state enum mapping
+ *
  * @param state   Current flight state.
- * @param inputs  Snapshot returned by @ref sm_get_inputs.
+ * @param type    Active state machine implementation ID
+ *                (see @ref sm_get_type). Constant across a boot.
+ * @param inputs  Snapshot returned by @c sm_get_inputs.
  */
-void pad_link_publish_sm(enum sm_state state,
+void pad_link_publish_sm(enum sm_state state, enum sm_type type,
 			 const struct sm_inputs *inputs);
 
 /** @} */
