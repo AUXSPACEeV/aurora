@@ -1,0 +1,7 @@
+tests:
+  aurora.lib.pad_link:
+    integration_platforms:
+      - native_sim/native/64
+    platform_allow:
+      - native_sim/native/64
+    tags: test_pad_link

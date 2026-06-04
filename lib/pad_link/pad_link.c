@@ -24,6 +24,8 @@
 #include <aurora/lib/baro.h>
 #endif
 
+#include "pad_link_wire.h"
+
 LOG_MODULE_REGISTER(pad_link, CONFIG_AURORA_PAD_LINK_LOG_LEVEL);
 
 /* ------------------------------------------------------------------ */
@@ -60,35 +62,9 @@ static const struct bt_uuid_128 pl_uuid_comp =
 static const struct bt_uuid_128 pl_uuid_smtype =
 	BT_UUID_INIT_128(PL_UUID_SMTYPE_VAL);
 
-/* ------------------------------------------------------------------ */
-/* Wire formats (packed, little-endian by Zephyr build convention)     */
-/* ------------------------------------------------------------------ */
-
-/* Raw sensor snapshot. sensor_value (val1.val2) preserved so the
- * central reconstructs full precision; uptime_ms is the time of the
- * most recent contributing publish (IMU or baro), not both. */
-struct __packed pl_raw_payload {
-	uint32_t uptime_ms;
-	int32_t  accel_val1[3];
-	int32_t  accel_val2[3];
-	int32_t  gyro_val1[3];
-	int32_t  gyro_val2[3];
-	int32_t  temp_val1;
-	int32_t  temp_val2;
-	int32_t  press_val1;
-	int32_t  press_val2;
-};
-
-/* Computed kinematics. Doubles narrowed to float, enough for status. */
-struct __packed pl_computed_payload {
-	uint32_t uptime_ms;
-	float    altitude;
-	float    velocity;
-	float    yaw;
-	float    pitch;
-	float    roll;
-	float    accel_vert;
-};
+/* Wire-format payloads (pl_raw_payload, pl_computed_payload) live in
+ * pad_link_wire.h so the unit tests can include them directly.
+ */
 
 static struct {
 	struct k_spinlock lock;
@@ -457,3 +433,26 @@ void pad_link_publish_sm(enum sm_state state, enum sm_type type,
 out:
 	bt_conn_unref(conn);
 }
+
+#if defined(CONFIG_ZTEST)
+void pad_link_test_get_snapshot(uint8_t *sm_type,
+				uint8_t *sm_state,
+				struct pl_raw_payload *raw,
+				struct pl_computed_payload *comp)
+{
+	K_SPINLOCK(&snap.lock) {
+		if (sm_type) {
+			*sm_type = snap.sm_type;
+		}
+		if (sm_state) {
+			*sm_state = snap.sm_state;
+		}
+		if (raw) {
+			*raw = snap.raw;
+		}
+		if (comp) {
+			*comp = snap.comp;
+		}
+	}
+}
+#endif
