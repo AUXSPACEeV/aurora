@@ -351,3 +351,9 @@ There is intentionally no retry logic, no buffering for offline
 centrals, and no fail-safe mode. The pad link is allowed to be
 missing, reconnecting and imperfect.
 That is what the SD-card log and the HC-12 downlink are for.
+
+API Reference
+-------------
+
+.. doxygengroup:: lib_pad_link
+   :content-only:
