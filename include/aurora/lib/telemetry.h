@@ -36,8 +36,13 @@ struct telemetry_backend_api {
 	/** @brief Called once from telemetry_init(). */
 	int (*init)(void);
 
-	/** @brief Deliver a state-machine update. Must not block. */
-	int (*send_sm_update)(enum sm_state state,
+	/** @brief Deliver a state-machine update. Must not block.
+	 *
+	 * @c type identifies the @c sm_state enum mapping in use
+	 * (see @ref sm_get_type); backends forward it so the receiver
+	 * can decode the @c state value without prior agreement.
+	 */
+	int (*send_sm_update)(enum sm_state state, enum sm_type type,
 			      const struct sm_inputs *inputs);
 };
 
@@ -73,12 +78,15 @@ int telemetry_init(void);
  * enforce that themselves (typically by dropping on overflow).
  *
  * @param state   Current flight state.
+ * @param type    Active state machine implementation ID
+ *                (see @ref sm_get_type). Forwarded so the receiver
+ *                can decode @p state without prior agreement.
  * @param inputs  Current SM inputs snapshot (see sm_get_inputs).
  *
  * @retval 0 if every backend accepted the message.
  * @retval <0 the first error returned by any backend (others still tried).
  */
-int telemetry_send_sm_update(enum sm_state state,
+int telemetry_send_sm_update(enum sm_state state, enum sm_type type,
 			     const struct sm_inputs *inputs);
 
 /** @} */

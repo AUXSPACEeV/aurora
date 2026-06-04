@@ -492,6 +492,12 @@ enum sm_state sm_get_state(void)
 	return current_state;
 }
 
+/* sm_get_type - see state.h */
+enum sm_type sm_get_type(void)
+{
+	return SM_TYPE_SIMPLE;
+}
+
 /* sm_get_inputs – see state.h */
 void sm_get_inputs(struct sm_inputs *out)
 {

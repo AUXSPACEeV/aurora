@@ -9,8 +9,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "aurora/lib/state/simple.h"
-#include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/devicetree.h>
@@ -676,7 +674,8 @@ void state_machine_task(void *, void *, void *)
 		{
 			struct sm_inputs sm_in;
 			sm_get_inputs(&sm_in);
-			(void)telemetry_send_sm_update(state, &sm_in);
+			(void)telemetry_send_sm_update(state, sm_get_type(),
+						       &sm_in);
 		}
 #endif /* CONFIG_AURORA_TELEMETRY */
 
@@ -684,7 +683,7 @@ void state_machine_task(void *, void *, void *)
 		{
 			struct sm_inputs sm_in;
 			sm_get_inputs(&sm_in);
-			pad_link_publish_sm(state, &sm_in);
+			pad_link_publish_sm(state, sm_get_type(), &sm_in);
 		}
 #endif /* CONFIG_AURORA_PAD_LINK */
 

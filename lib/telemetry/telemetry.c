@@ -29,7 +29,7 @@ int telemetry_init(void)
 	return rc;
 }
 
-int telemetry_send_sm_update(enum sm_state state,
+int telemetry_send_sm_update(enum sm_state state, enum sm_type type,
 			     const struct sm_inputs *inputs)
 {
 	int rc = 0;
@@ -38,7 +38,7 @@ int telemetry_send_sm_update(enum sm_state state,
 		if (!backend->api || !backend->api->send_sm_update) {
 			continue;
 		}
-		int ret = backend->api->send_sm_update(state, inputs);
+		int ret = backend->api->send_sm_update(state, type, inputs);
 		if (ret && !rc) {
 			rc = ret;
 		}
