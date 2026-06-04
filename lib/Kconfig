@@ -35,4 +35,8 @@ menu "Telemetry"
 rsource "telemetry/Kconfig"
 endmenu
 
+menu "Pad Link"
+rsource "pad_link/Kconfig"
+endmenu
+
 endmenu

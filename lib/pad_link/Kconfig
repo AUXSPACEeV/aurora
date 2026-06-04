@@ -1,0 +1,35 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+config AURORA_PAD_LINK
+	bool "BLE pad-link status server"
+	select BT
+	select BT_PERIPHERAL
+	help
+	  Expose a custom BLE GATT service so a pad-side central
+	  (the launchrail) can fetch SM state, the last raw sensor
+	  values, the last computed kinematic outputs, and a board
+	  identifier while the rocket is on the pad. The link is
+	  passive (central polls/subscribes), short-range, and not
+	  intended as an in-flight downlink. Connection loss is a
+	  non-event and advertising resumes automatically.
+
+if AURORA_PAD_LINK
+
+module = AURORA_PAD_LINK
+module-str = AURORA_PAD_LINK
+source "subsys/logging/Kconfig.template.log_config"
+
+config AURORA_PAD_LINK_DEVICE_NAME
+	string "Advertised BLE device name"
+	default "AURORA-Rocket"
+
+config AURORA_PAD_LINK_BOARD_ID
+	string "Board identifier exposed over BLE"
+	default "$(BOARD)"
+	help
+	  Reported via the read-only board-identifier characteristic
+	  so the central can distinguish hardware revisions
+	  (e.g. sensor_board_v2/rp2040).
+
+endif # AURORA_PAD_LINK
