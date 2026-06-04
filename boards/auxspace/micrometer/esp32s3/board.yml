@@ -1,6 +1,6 @@
 board:
   name: micrometer
-  full_name: ESP32-S3-µMETER
+  full_name: micrometer
   vendor: auxspaceev
   socs:
   - name: esp32s3
