@@ -6,6 +6,7 @@
 data
 filter
 notify
+pad_link
 powerfail
 pwm_melody
 sensors
