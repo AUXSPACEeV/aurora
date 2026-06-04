@@ -7,6 +7,7 @@
 Minimal BLE central for the AURORA pad-link.
 """
 
+import argparse
 import asyncio
 import struct
 from bleak import BleakScanner, BleakClient
@@ -25,7 +26,52 @@ SM_STATES = {
 # matches CONFIG_AURORA_PAD_LINK_DEVICE_NAME
 DEVICE_NAME = "AURORA-Rocket"
 
+def parse_args():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--mode", choices=("notify", "poll"), default="notify",
+                   help="notify: subscribe to GATT notifications (peripheral "
+                        "pushes on every SM tick). poll: read characteristics "
+                        "on a timer (central drives the rate).")
+    p.add_argument("--interval", type=float, default=1.0,
+                   help="Poll interval in seconds (poll mode only).")
+    p.add_argument("--duration", type=float, default=60.0,
+                   help="How long to stay connected, in seconds.")
+    return p.parse_args()
+
+
+async def run_notify(c, sm_type, duration):
+    def on_state(_, data):
+        state = data[0]
+        name = SM_STATES.get(sm_type, ())
+        print("state:", name[state] if state < len(name) else state)
+
+    def on_comp(_, data):
+        ts, alt, vel, yaw, pitch, roll, az = struct.unpack(
+            "<Iffffff", data[:28])
+        print(f"t={ts}  alt={alt:+.1f}  v={vel:+.1f}  "
+              f"ypr={yaw:+.1f}/{pitch:+.1f}/{roll:+.1f}")
+
+    await c.start_notify(UUID_STATE, on_state)
+    await c.start_notify(UUID_COMP, on_comp)
+    await asyncio.sleep(duration)
+
+
+async def run_poll(c, sm_type, interval, duration):
+    name = SM_STATES.get(sm_type, ())
+    deadline = asyncio.get_event_loop().time() + duration
+    while asyncio.get_event_loop().time() < deadline:
+        state = (await c.read_gatt_char(UUID_STATE))[0]
+        comp = await c.read_gatt_char(UUID_COMP)
+        ts, alt, vel, yaw, pitch, roll, az = struct.unpack(
+            "<Iffffff", comp[:28])
+        s_name = name[state] if state < len(name) else state
+        print(f"state={s_name}  t={ts}  alt={alt:+.1f}  v={vel:+.1f}  "
+              f"ypr={yaw:+.1f}/{pitch:+.1f}/{roll:+.1f}")
+        await asyncio.sleep(interval)
+
+
 async def main():
+    args = parse_args()
     # 15 s window: ESP32-S3 advertising is bursty enough that BlueZ's
     # default 5 s sometimes misses everything in a single sweep.
     seen = await BleakScanner.discover(timeout=15.0, return_adv=True)
@@ -57,19 +103,9 @@ async def main():
         sm_type = (await c.read_gatt_char(UUID_SMTYPE))[0]
         print(f"connected to {board} (sm_type={sm_type})")
 
-        def on_state(_, data):
-            state = data[0]
-            name = SM_STATES.get(sm_type, ())
-            print("state:", name[state] if state < len(name) else state)
-
-        def on_comp(_, data):
-            ts, alt, vel, yaw, pitch, roll, az = struct.unpack(
-                "<Iffffff", data[:28])
-            print(f"t={ts}  alt={alt:+.1f}  v={vel:+.1f}  "
-                    f"ypr={yaw:+.1f}/{pitch:+.1f}/{roll:+.1f}")
-
-        await c.start_notify(UUID_STATE, on_state)
-        await c.start_notify(UUID_COMP, on_comp)
-        await asyncio.sleep(60)
+        if args.mode == "notify":
+            await run_notify(c, sm_type, args.duration)
+        else:
+            await run_poll(c, sm_type, args.interval, args.duration)
 
 asyncio.run(main())
