@@ -16,6 +16,7 @@ Pip requirements are installed via `pip install -r tools/requirements.txt`
 :maxdepth: 1
 
 gen_flight_replay
+pad_link_central_example
 plot_flight_data
 rec_zephyr
 sim_fetch
@@ -29,6 +30,7 @@ sync_defconfig
 | Script | Purpose |
 |---|---|
 | [`gen_flight_replay.py`](gen_flight_replay.md) | Convert a recorded `flights.csv` into a generated C source file consumed by the `fake_sensors` replay backend. |
+| [`pad_link_central_example.py`](pad_link_central_example.md) | Reference BLE central for the pad-link library — scans, connects, and prints SM state and computed kinematics from a rocket. |
 | [`plot_flight_data.py`](plot_flight_data.md) | Plot recorded or simulated flight data — standalone CLI for telemetry logs, importable plotting module for `sim_flight_kalman`. |
 | [`rec_zephyr.py`](rec_zephyr.md) | MicroPython ground-station receiver for HC-12 telemetry — runs on a Raspberry Pi Pico and prints decoded state-machine frames to the REPL. |
 | [`sim_fetch.py`](sim_fetch.md) | Pull files out of a running `native_sim` Zephyr instance via the shell console. |
