@@ -213,7 +213,7 @@ Start the command from the **\<aurora\>** dir:
 west build -b sensor_board_v2/rp2040 sensor_board
 
 # Another example: build for the custom Auxspace Micrometer PCB:
-west build -b esp32s3_micrometer/esp32s3/procpu sensor_board/
+west build -b micrometer/esp32s3/procpu --sysbuild sensor_board/
 ```
 
 The output from the build will be at

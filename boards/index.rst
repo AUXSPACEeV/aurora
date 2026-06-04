@@ -13,7 +13,7 @@ Custom Auxspace PCBs intended for use in flight.
    :glob:
 
    auxspace/sensor_board_v2/doc/sensor_board_v2
-   auxspace/esp32s3_micrometer/doc/esp32s3_micrometer
+   auxspace/micrometer/esp32s3/doc/micrometer
 
 Bench targets
 =============

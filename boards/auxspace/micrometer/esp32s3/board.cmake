@@ -2,7 +2,7 @@
 
 if(NOT SYSBUILD)
   message(WARNING
-    "esp32s3_micrometer requires sysbuild (MCUboot). "
+    "micrometer requires sysbuild (MCUboot). "
     "Use: west build --sysbuild")
 endif()
 

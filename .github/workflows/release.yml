@@ -28,8 +28,8 @@ jobs:
             artifact: sensor_board_v2_rp2350a_hazard3
             toolchain: riscv64-zephyr-elf
             extra_args: ""
-          - board: esp32s3_micrometer/esp32s3/procpu
-            artifact: esp32s3_micrometer
+          - board: micrometer/esp32s3/procpu
+            artifact: micrometer
             toolchain: xtensa-espressif_esp32s3_zephyr-elf
             extra_args: "--sysbuild"
           - board: native_sim

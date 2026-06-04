@@ -36,10 +36,10 @@ tests:
     sysbuild: true
     platform_allow:
       - sensor_board_v2/rp2040
-      - esp32s3_micrometer/esp32s3/procpu
+      - micrometer/esp32s3/procpu
     integration_platforms:
       - sensor_board_v2/rp2040
-      - esp32s3_micrometer/esp32s3/procpu
+      - micrometer/esp32s3/procpu
   app.bench:
     extra_args: SNIPPET="sim;nodisk"
     platform_allow:
@@ -65,7 +65,7 @@ tests:
       - debug.conf
     platform_allow:
       - sensor_board_v2/rp2040
-      - esp32s3_micrometer/esp32s3/procpu
+      - micrometer/esp32s3/procpu
     integration_platforms:
       - sensor_board_v2/rp2040
-      - esp32s3_micrometer/esp32s3/procpu
+      - micrometer/esp32s3/procpu
