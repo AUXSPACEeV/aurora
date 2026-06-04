@@ -26,7 +26,11 @@ LOG_MODULE_REGISTER(state_audit, CONFIG_STATE_MACHINE_LOG_LEVEL);
 
 #define AUDIT_SIZE       CONFIG_AURORA_STATE_MACHINE_AUDIT_LOG_SIZE
 #define AUDIT_MSGQ_DEPTH AUDIT_SIZE
-#define AUDIT_WRITER_STACK 2048
+/* 4096 not 2048: the writer chains fs_write through FATFS + deferred
+ * logging, and 2048 overflowed once BT_HCI_HOST pulled in extra log
+ * filter overhead (observed as ZEPHYR FATAL ERROR 2 on ESP32-S3).
+ */
+#define AUDIT_WRITER_STACK 4096
 #define AUDIT_WRITER_PRIO  10
 #define MAX_F_RETRIES 3
 
