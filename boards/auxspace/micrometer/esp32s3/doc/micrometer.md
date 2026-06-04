@@ -1,4 +1,4 @@
-```{zephyr:board} esp32s3_micrometer
+```{zephyr:board} micrometer
 ```
 
 # Overview
@@ -53,7 +53,7 @@ SPI-SDHC driver has no way to detect card presence without a card-detect-pin!
 µMeter is built with `sysbuild` since it uses the MCUBoot boot loader:
 
 ```bash
-west build -p -b esp32s3_micrometer/esp32s3/procpu --sysbuild sensor_board
+west build -p -b micrometer/esp32s3/procpu --sysbuild sensor_board
 ```
 
 ## Flashing

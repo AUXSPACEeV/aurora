@@ -1,0 +1,12 @@
+/*
+ * Copyright (c) 2024-2025 Espressif Systems (Shanghai) Co., Ltd.
+ * Copyright (c) 2026 Auxspace e.V.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/dts-v1/;
+
+#include <espressif/esp32s3/esp32s3_wroom_n8r8.dtsi>
+#include <espressif/partitions_0x0_amp.dtsi>
+#include "../common/micrometer-pinctrl-common.dtsi"
+#include "../common/micrometer.dtsi"

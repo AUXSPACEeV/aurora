@@ -31,7 +31,7 @@ west build -b sensor_board_v2/rp2040 sensor_board
 west build -b sensor_board_v2/rp2350a/hazard3 sensor_board
 
 # ESP32-S3 Micrometer board
-west build -b esp32s3_micrometer/esp32s3/procpu --sysbuild sensor_board/
+west build -b micrometer/esp32s3/procpu --sysbuild sensor_board/
 ```
 
 ````{note}
