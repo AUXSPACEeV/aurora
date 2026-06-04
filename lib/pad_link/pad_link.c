@@ -107,6 +107,18 @@ static bool sm_state_notify_enabled;
 static bool raw_notify_enabled;
 static bool comp_notify_enabled;
 
+/* Back-off gate for bt_gatt_notify. The LL link can die (timeout, RF
+ * loss) well before disconnected() fires; in that gap conn is
+ * non-NULL, bt_conn_get_info still reports CONNECTED, but ATT has no
+ * bearer. Calling bt_gatt_notify in that state makes the host log
+ * "No ATT channel for MTU N" at every SM tick (100 Hz). When a notify
+ * fails we sit out for NOTIFY_BACKOFF_MS before retrying;
+ * disconnected() clears the timer on the next real teardown so a
+ * fresh connection isn't penalised.
+ */
+#define NOTIFY_BACKOFF_MS 1000
+static int64_t notify_backoff_until_ms;
+
 /* ------------------------------------------------------------------ */
 /* GATT read handlers                                                  */
 /* ------------------------------------------------------------------ */
@@ -338,6 +350,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	sm_state_notify_enabled = false;
 	raw_notify_enabled      = false;
 	comp_notify_enabled     = false;
+	notify_backoff_until_ms = 0;
 
 	k_work_submit(&adv_start_work);
 }
@@ -388,20 +401,48 @@ void pad_link_publish_sm(enum sm_state state, enum sm_type type,
 		snap.comp     = comp;
 	}
 
+	/* Take a real reference for the notify window so disconnect()
+	 * can't free the conn underneath us. Stop talking the moment any
+	 * notify reports a teardown — bt_gatt_notify returns -ENOTCONN
+	 * once the LL link is down, well before disconnected() fires.
+	 * Silently dropping the rest avoids spamming the host with
+	 * "No ATT channel" warnings at the SM tick rate.
+	 */
 	struct bt_conn *conn = current_conn;
 	if (!conn) {
 		return;
 	}
+	conn = bt_conn_ref(conn);
+	if (!conn) {
+		return;
+	}
 
+	/* Back-off gate, see notify_backoff_until_ms file-scope decl. */
+	int64_t now_ms = k_uptime_get();
+	if (now_ms < notify_backoff_until_ms) {
+		goto out;
+	}
+
+	int rc;
 	if (sm_state_notify_enabled) {
-		(void)bt_gatt_notify(conn,
-				     &pad_link_svc.attrs[PL_ATTR_STATE_VALUE],
-				     &s, sizeof(s));
+		rc = bt_gatt_notify(conn,
+				    &pad_link_svc.attrs[PL_ATTR_STATE_VALUE],
+				    &s, sizeof(s));
+		if (rc != 0) {
+			LOG_WRN("notify state rc=%d len=%u", rc, sizeof(s));
+			notify_backoff_until_ms = now_ms + NOTIFY_BACKOFF_MS;
+			goto out;
+		}
 	}
 	if (comp_notify_enabled) {
-		(void)bt_gatt_notify(conn,
-				     &pad_link_svc.attrs[PL_ATTR_COMP_VALUE],
-				     &comp, sizeof(comp));
+		rc = bt_gatt_notify(conn,
+				    &pad_link_svc.attrs[PL_ATTR_COMP_VALUE],
+				    &comp, sizeof(comp));
+		if (rc != 0) {
+			LOG_WRN("notify comp rc=%d len=%u", rc, sizeof(comp));
+			notify_backoff_until_ms = now_ms + NOTIFY_BACKOFF_MS;
+			goto out;
+		}
 	}
 	if (raw_notify_enabled) {
 		struct pl_raw_payload raw;
@@ -412,4 +453,7 @@ void pad_link_publish_sm(enum sm_state state, enum sm_type type,
 				     &pad_link_svc.attrs[PL_ATTR_RAW_VALUE],
 				     &raw, sizeof(raw));
 	}
+
+out:
+	bt_conn_unref(conn);
 }
