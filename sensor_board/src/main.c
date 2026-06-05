@@ -101,7 +101,7 @@ static void powerfail_deassert()
 
 bool baro_active = false; /**< True once the barometer thread has initialized. */
 bool imu_active = false;  /**< True once the IMU thread has initialized. */
-static bool sm_active = false;	 /**< True once the state machine thread has initialized. */
+static bool sm_active = false;	/**< True once the state machine thread has initialized. */
 
 /* ============================================================
  *                     IMU TASK
@@ -239,6 +239,157 @@ int state_machine_error_handler(void *args)
 }
 
 /**
+ * @brief Processes raw IMU data to update orientation, acceleration, and attitude filtering.
+ *
+ * Calculates delta-time since the last sample, converts raw sensor data to double precision,
+ * and updates the attitude estimation filter. Handles sensor calibration tracking while the
+ * system is in the ARMED state, and computes vertical acceleration once calibrated.
+ *
+ * @param[in,out] last_imu_ns         Pointer to the timestamp of the last processed IMU sample.
+ * @param[in,out] attitude_state      Pointer to the internal attitude estimation filter state.
+ * @param[in]     imu_data            Pointer to the incoming raw IMU message buffer.
+ * @param[out]    orientation         Array where the calculated orientation [pitch, roll, yaw] is stored.
+ * @param[out]    acceleration        Pointer where the scalar acceleration magnitude is stored.
+ * @param[out]    accel_vert          Pointer where the earth-frame vertical acceleration is stored.
+ * @param[out]    imu_ready           Pointer set to true once fresh orientation and acceleration are available.
+ * @param[in,out] calibration_notified Pointer tracking whether the user has been notified of completion.
+ */
+static void handle_imu(int64_t *last_imu_ns, struct attitude *attitude_state, struct imu_data *imu_data,
+	double orientation[3], double *acceleration, double *accel_vert, bool *imu_ready, bool *calibration_notified)
+{
+	int64_t now_ns = (k_uptime_ticks() * NSEC_PER_SEC) / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
+	double dt_orient_s = (*last_imu_ns != 0) ? (double)(now_ns - *last_imu_ns) / 1e9 : 0.0;
+	if (dt_orient_s < 0.0 || dt_orient_s > 1.0) {
+		dt_orient_s = 0.0;
+	}
+
+	const double *bias_for_orient = attitude_is_calibrated(attitude_state) ? attitude_state->gyro_bias : NULL;
+
+	if (imu_sensor_value_to_orientation(imu_data, dt_orient_s, bias_for_orient, orientation) == 0
+		&& imu_sensor_value_to_acceleration(imu_data, acceleration) == 0) {
+		*imu_ready = true;
+	}
+
+	double accel_b[ATTITUDE_NUM_AXES] = {
+		sensor_value_to_double(&imu_data->accel[0]),
+		sensor_value_to_double(&imu_data->accel[1]),
+		sensor_value_to_double(&imu_data->accel[2]),
+	};
+	double gyro_b[ATTITUDE_NUM_AXES] = {
+		sensor_value_to_double(&imu_data->gyro[0]),
+		sensor_value_to_double(&imu_data->gyro[1]),
+		sensor_value_to_double(&imu_data->gyro[2]),
+	};
+
+	if (!attitude_is_calibrated(attitude_state)) {
+		if (sm_get_state() == SM_ARMED) {
+			attitude_calibrate_sample(attitude_state, accel_b, gyro_b);
+			if (attitude_state->cal_samples >= CONFIG_IMU_CALIBRATION_SAMPLES) {
+				if (attitude_calibrate_finish(attitude_state) == 0) {
+#if defined(CONFIG_AURORA_NOTIFY)
+					if (!(*calibration_notified)) {
+						notify_calibration_complete();
+						*calibration_notified = true;
+					}
+#endif /* CONFIG_AURORA_NOTIFY */
+#if defined(CONFIG_AURORA_FAKE_SENSORS)
+					fake_sensors_on_calibrated();
+#endif /* CONFIG_AURORA_FAKE_SENSORS */
+				}
+			}
+		}
+		*accel_vert = 0.0;
+	} else if (*last_imu_ns != 0) {
+		double dt_s = (double)(now_ns - *last_imu_ns) / 1e9;
+		if (dt_s > 0.0 && dt_s <= 1.0) {
+			double a_v;
+			if (attitude_update(attitude_state, accel_b, gyro_b, dt_s, &a_v) == 0) {
+				*accel_vert = a_v;
+			}
+		}
+	}
+	*last_imu_ns = now_ns;
+}
+
+/**
+ * @brief Handles pyrotechnic channel actions based on flight state transitions.
+ *
+ * Checks if a state change occurred, and triggers, arms, charges, or disarms
+ * the pyro channels accordingly. Tracks the internal pyro subsystem state
+ * to avoid redundant hardware calls.
+ *
+ * @param[in]     state      The current state of the flight state machine.
+ * @param[in,out] pyro_state Pointer to the previously processed pyro state.
+ * @param[in]     pyro0      Pointer to the Zephyr device structure for the pyro hardware.
+ */
+static void handle_pyro(enum sm_state state, enum sm_state *pyro_state, const struct device *pyro0)
+{
+#if defined(CONFIG_PYRO)
+	if (state == *pyro_state)
+		return;
+
+#define PYRO_ACT(fn, ch, past, action)                                                                                 \
+	do {                                                                                                               \
+		if (fn(pyro0, ch))                                                                                             \
+			LOG_ERR("Failed to " action " pyro0 channel " #ch);                                                        \
+		else                                                                                                           \
+			LOG_INF(past " pyro0 channel " #ch);                                                                       \
+	} while (0)
+
+	switch (state) {
+	case SM_IDLE:
+		PYRO_ACT(pyro_disarm, 0, "Disarmed", "disarm");
+		PYRO_ACT(pyro_disarm, 1, "Disarmed", "disarm");
+		break;
+	case SM_ARMED:
+		PYRO_ACT(pyro_arm, 0, "Armed", "arm");
+		PYRO_ACT(pyro_arm, 1, "Armed", "arm");
+		break;
+	case SM_APOGEE:
+		PYRO_ACT(pyro_trigger_channel, 0, "Triggered", "trigger");
+			/* Capacitors are empty after trigger. Recharge! */
+		PYRO_ACT(pyro_charge_channel, 1, "Charging", "charge");
+		break;
+	case SM_MAIN:
+		PYRO_ACT(pyro_trigger_channel, 1, "Triggered", "trigger");
+			/* Capacitors are empty after trigger. Recharge! */
+		PYRO_ACT(pyro_charge_channel, 1, "Recharging", "recharge");
+		break;
+	case SM_REDUNDANT: PYRO_ACT(pyro_trigger_channel, 1, "Re-triggered", "re-trigger"); break;
+	default: break;
+	}
+#undef PYRO_ACT
+	*pyro_state = state;
+#endif /* CONFIG_PYRO */
+}
+
+static void handle_state_transition(enum sm_state prev_state, enum sm_state state, struct attitude *attitude_state,
+	int64_t *last_imu_ns, bool *calibration_notified, double orientation[3])
+{
+#if defined(CONFIG_AURORA_FAKE_SENSORS)
+	__ASSERT(is_valid_transition(prev_state, state),
+		"Invalid SM transition: %s -> %s",
+		sm_state_str(prev_state),
+		sm_state_str(state));
+#endif /* CONFIG_AURORA_FAKE_SENSORS */
+#if defined(CONFIG_AURORA_NOTIFY)
+	notify_state_change(prev_state, state);
+#endif /* CONFIG_AURORA_NOTIFY */
+#if defined(CONFIG_IMU)
+			/* On return to IDLE, discard calibration so a re-arm
+			 * triggers a fresh stationary calibration window.
+			 */
+	if (state == SM_IDLE) {
+		attitude_init(attitude_state);
+		*last_imu_ns = 0;
+		*calibration_notified = false;
+		orientation[2] = 0.0;
+	}
+#endif /* CONFIG_IMU */
+	log_handle_flight_lifecycle(prev_state, state);
+}
+
+/**
  * @brief State machine thread.
  *
  * Waits for IMU and barometer readiness, then runs the flight state machine
@@ -265,6 +416,12 @@ void state_machine_task(void *, void *, void *)
 		.args = NULL,
 	};
 
+	struct sm_inputs inputs = {
+		.armed = armed,
+		.acceleration = acceleration,
+		.accel_vert = accel_vert,
+	};
+	memcpy(inputs.orientation, orientation, sizeof(inputs.orientation));
 #if defined(CONFIG_IMU)
 	static struct attitude attitude_state;
 	int64_t last_imu_ns = 0;
@@ -276,20 +433,14 @@ void state_machine_task(void *, void *, void *)
 #if defined(CONFIG_PYRO)
 	const struct device *pyro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_pyro));
 	enum sm_state pyro_state = SM_IDLE;
-#endif /* CONFIG_PYRO */
 
-	struct sm_inputs inputs = {
-		.armed = armed,
-		.acceleration = acceleration,
-		.accel_vert = accel_vert,
-	};
-	memcpy(inputs.orientation, orientation, sizeof(inputs.orientation));
-
-#if defined(CONFIG_PYRO)
 	while (!device_is_ready(pyro0)) {
 		LOG_ERR("Pyro device %s is not ready, trying again ...", pyro0->name);
 		k_sleep(K_SECONDS(1));
 	}
+#else
+	const struct device *pyro0 = NULL;
+	enum sm_state pyro_state = SM_IDLE;
 #endif /*.CONFIG_PYRO */
 
 	sm_init(&state_cfg, &sm_error_handler);
@@ -312,66 +463,21 @@ void state_machine_task(void *, void *, void *)
 		do {
 			if (data_chan == &imu_data_chan) {
 #if defined(CONFIG_IMU)
-				int64_t now_ns = (k_uptime_ticks() * NSEC_PER_SEC) / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
-				double dt_orient_s = (last_imu_ns != 0) ? (double)(now_ns - last_imu_ns) / 1e9 : 0.0;
-				if (dt_orient_s < 0.0 || dt_orient_s > 1.0) {
-					dt_orient_s = 0.0;
-				}
-				const double *bias_for_orient
-					= attitude_is_calibrated(&attitude_state) ? attitude_state.gyro_bias : NULL;
+				handle_imu(&last_imu_ns,
+					&attitude_state,
+					&msg_buf.imu,
+					orientation,
+					&acceleration,
+					&accel_vert,
+					&imu_ready,
+					&calibration_notified);
+				log_imu_data(&msg_buf.imu);
 #else
-				const double dt_orient_s = 0.0;
-				const double *bias_for_orient = NULL;
-#endif /* CONFIG_IMU */
-				if (imu_sensor_value_to_orientation(&msg_buf.imu, dt_orient_s, bias_for_orient, orientation) == 0
+				if (imu_sensor_value_to_orientation(&msg_buf.imu, 0.0, NULL, orientation) == 0
 					&& imu_sensor_value_to_acceleration(&msg_buf.imu, &acceleration) == 0) {
 					imu_ready = true;
 				}
-
-#if defined(CONFIG_IMU)
-				{
-					double accel_b[ATTITUDE_NUM_AXES] = {
-						sensor_value_to_double(&msg_buf.imu.accel[0]),
-						sensor_value_to_double(&msg_buf.imu.accel[1]),
-						sensor_value_to_double(&msg_buf.imu.accel[2]),
-					};
-					double gyro_b[ATTITUDE_NUM_AXES] = {
-						sensor_value_to_double(&msg_buf.imu.gyro[0]),
-						sensor_value_to_double(&msg_buf.imu.gyro[1]),
-						sensor_value_to_double(&msg_buf.imu.gyro[2]),
-					};
-
-					if (!attitude_is_calibrated(&attitude_state)) {
-						if (sm_get_state() == SM_ARMED) {
-							attitude_calibrate_sample(&attitude_state, accel_b, gyro_b);
-							if (attitude_state.cal_samples >= CONFIG_IMU_CALIBRATION_SAMPLES) {
-								if (attitude_calibrate_finish(&attitude_state) == 0) {
-#if defined(CONFIG_AURORA_NOTIFY)
-									if (!calibration_notified) {
-										notify_calibration_complete();
-										calibration_notified = true;
-									}
-#endif /* CONFIG_AURORA_NOTIFY */
-#if defined(CONFIG_AURORA_FAKE_SENSORS)
-									fake_sensors_on_calibrated();
-#endif /* CONFIG_AURORA_FAKE_SENSORS */
-								}
-							}
-						}
-						accel_vert = 0.0;
-					} else if (last_imu_ns != 0) {
-						double dt_s = (double)(now_ns - last_imu_ns) / 1e9;
-						if (dt_s > 0.0 && dt_s <= 1.0) {
-							double a_v;
-							if (attitude_update(&attitude_state, accel_b, gyro_b, dt_s, &a_v) == 0) {
-								accel_vert = a_v;
-							}
-						}
-					}
-					last_imu_ns = now_ns;
-				}
-#endif /* CONFIG_IMU */
-				log_imu_data(&msg_buf.imu);
+#endif
 			} else if (data_chan == &baro_data_chan) {
 				log_baro_data(&msg_buf.baro);
 
@@ -411,67 +517,24 @@ void state_machine_task(void *, void *, void *)
 		log_flight_telemetry();
 
 		if (state != prev_state) {
-#if defined(CONFIG_AURORA_FAKE_SENSORS)
-			__ASSERT(is_valid_transition(prev_state, state),
-				"Invalid SM transition: %s -> %s",
-				sm_state_str(prev_state),
-				sm_state_str(state));
-#endif /* CONFIG_AURORA_FAKE_SENSORS */
-#if defined(CONFIG_AURORA_NOTIFY)
-			notify_state_change(prev_state, state);
-#endif /* CONFIG_AURORA_NOTIFY */
 #if defined(CONFIG_IMU)
-			/* On return to IDLE, discard calibration so a re-arm
-			 * triggers a fresh stationary calibration window.
-			 */
-			if (state == SM_IDLE) {
-				attitude_init(&attitude_state);
-				last_imu_ns = 0;
-				calibration_notified = false;
-				orientation[2] = 0.0;
-			}
-#endif /* CONFIG_IMU */
-			log_handle_flight_lifecycle(prev_state, state);
+			handle_state_transition(prev_state,
+				state,
+				&attitude_state,
+				&last_imu_ns,
+				&calibration_notified,
+				orientation);
+#else
+			handle_state_transition(prev_state, state, NULL, NULL, NULL, orientation);
+#endif
 			prev_state = state;
 		}
 
-#if defined(CONFIG_PYRO)
-		if (state == pyro_state)
-			continue;
+		/* reset the measurements */
+		baro_ready = false;
+		imu_ready = false;
 
-#define PYRO_ACT(fn, ch, past, action)                                                                                 \
-	do {                                                                                                               \
-		if (fn(pyro0, ch))                                                                                             \
-			LOG_ERR("Failed to " action " pyro0 channel " #ch);                                                        \
-		else                                                                                                           \
-			LOG_INF(past " pyro0 channel " #ch);                                                                       \
-	} while (0)
-
-		switch (state) {
-		case SM_IDLE:
-			PYRO_ACT(pyro_disarm, 0, "Disarmed", "disarm");
-			PYRO_ACT(pyro_disarm, 1, "Disarmed", "disarm");
-			break;
-		case SM_ARMED:
-			PYRO_ACT(pyro_arm, 0, "Armed", "arm");
-			PYRO_ACT(pyro_arm, 1, "Armed", "arm");
-			break;
-		case SM_APOGEE:
-			PYRO_ACT(pyro_trigger_channel, 0, "Triggered", "trigger");
-			/* Capacitors are empty after trigger. Recharge! */
-			PYRO_ACT(pyro_charge_channel, 1, "Charging", "charge");
-			break;
-		case SM_MAIN:
-			PYRO_ACT(pyro_trigger_channel, 1, "Triggered", "trigger");
-			/* Capacitors are empty after trigger. Recharge! */
-			PYRO_ACT(pyro_charge_channel, 1, "Recharging", "recharge");
-			break;
-		case SM_REDUNDANT: PYRO_ACT(pyro_trigger_channel, 1, "Re-triggered", "re-trigger"); break;
-		default: break;
-		}
-#undef PYRO_ACT
-		pyro_state = state;
-#endif /* CONFIG_PYRO */
+		handle_pyro(state, &pyro_state, pyro0);
 	}
 }
 
