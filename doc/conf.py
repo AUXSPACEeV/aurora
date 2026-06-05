@@ -348,8 +348,8 @@ _zd.BINDING_TYPE_TO_DOCUTILS_NODE["pyro"] = _nodes.Text("Pyrotechnic Ignition")
 # Board status registry: board_id -> (display_name, status_string)
 # Extend this dict when new boards are added or maintenance status changes.
 _AURORA_BOARD_STATUS = {
-    "sensor_board_v2":      ("Auxspace Sensor Board V2", "Maintained"),
-    "esp32s3_micrometer":   ("ESP32-S3 Micrometer",      "Maintained"),
+    "sensor_board_v2": ("Auxspace Sensor Board V2", "Maintained"),
+    "micrometer":      ("µMETER", "Maintained"),
 }
 
 # Patch ConvertBoardNode to ensure the Board Overview sidebar always has a
