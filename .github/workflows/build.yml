@@ -41,6 +41,10 @@ jobs:
           toolchains: arm-zephyr-eabi:riscv64-zephyr-elf:x86_64-zephyr-elf:xtensa-espressif_esp32s3_zephyr-elf
           ccache-cache-key: ${{ matrix.os }}
 
+      - name: Fetch West Blobs
+        run: |
+          west blobs fetch
+
       - name: Build firmware
         working-directory: aurora
         shell: bash
