@@ -3,8 +3,9 @@
 
 # Overview
 
-The Auxspace e.V. micrometer PCB is a minimal flight computer on a 4-layer
-PCB with an ESP32-S3-WROOM-1 from [Espressif](https://www.espressif.com/).
+The Auxspace e.V. µMETER (micrometer) PCB is a minimal flight computer on a
+4-layer PCB with an ESP32-S3-WROOM-1 from
+[Espressif](https://www.espressif.com/).
 
 # Hardware
 
