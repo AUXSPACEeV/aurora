@@ -3,6 +3,10 @@
 
 zephyr_library()
 
+if(CONFIG_IMU_WATCHDOG OR CONFIG_BARO_WATCHDOG)
+    zephyr_library_sources(sensor_watchdog.c)
+endif()
+
 if(CONFIG_IMU)
     zephyr_library_sources(imu.c)
 endif()

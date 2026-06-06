@@ -19,6 +19,9 @@
 #include <zephyr/zbus/zbus.h>
 
 #include <aurora/lib/baro.h>
+#if defined(CONFIG_BARO_WATCHDOG)
+#include <aurora/lib/sensor_watchdog.h>
+#endif
 
 LOG_MODULE_REGISTER(baro, CONFIG_AURORA_SENSORS_LOG_LEVEL);
 
@@ -28,6 +31,15 @@ ZBUS_CHAN_DEFINE(baro_data_chan,
 		 NULL,
 		 ZBUS_OBSERVERS_EMPTY,
 		 ZBUS_MSG_INIT(0));
+
+#if defined(CONFIG_BARO_WATCHDOG)
+static struct sensor_watchdog baro_wd = {
+	.name = "baro",
+	.timeout_ms = CONFIG_BARO_WATCHDOG_TIMEOUT_MS,
+	.period_ms = CONFIG_BARO_WATCHDOG_PERIOD_MS,
+	.recover = baro_recover,
+};
+#endif
 
 /**
  * @brief Fetch and log accelerometer and gyroscope readings.
@@ -63,8 +75,13 @@ static int fetch_and_send(const struct device *dev)
 	ret = zbus_chan_pub(&baro_data_chan, &msg, K_NO_WAIT);
 	if (ret != 0) {
 		LOG_ERR("Failed to publish baro data");
+		return ret;
 	}
-	return ret;
+
+#if defined(CONFIG_BARO_WATCHDOG)
+	sensor_watchdog_mark_publish(&baro_wd);
+#endif
+	return 0;
 }
 
 
@@ -126,8 +143,59 @@ int baro_init(const struct device *dev)
 	LOG_DBG("Baro initialized in trigger mode");
 #endif /* CONFIG_BARO_TRIGGER */
 
+#if defined(CONFIG_BARO_WATCHDOG)
+	baro_wd.dev = dev;
+	sensor_watchdog_init(&baro_wd);
+#endif
+
 	return 0;
 }
+
+#if defined(CONFIG_BARO_WATCHDOG)
+void baro_watchdog_run(void)
+{
+	sensor_watchdog_run(&baro_wd);
+}
+
+int baro_recover(const struct device *dev)
+{
+	if (dev == NULL) {
+		return -EINVAL;
+	}
+
+	struct sensor_value freq = {
+		.val1 = CONFIG_BARO_WATCHDOG_RECOVERY_HZ,
+		.val2 = 0,
+	};
+	int rc;
+
+	rc = sensor_attr_set(dev, SENSOR_CHAN_ALL,
+			     SENSOR_ATTR_SAMPLING_FREQUENCY, &freq);
+	if (rc == -ENOTSUP) {
+		/* Some drivers only accept the attribute on specific channels. */
+		rc = sensor_attr_set(dev, SENSOR_CHAN_PRESS,
+				     SENSOR_ATTR_SAMPLING_FREQUENCY, &freq);
+	}
+	if (rc != 0 && rc != -ENOTSUP) {
+		LOG_ERR("baro_recover: ODR set failed (%d)", rc);
+		return rc;
+	}
+
+#if defined(CONFIG_BARO_TRIGGER)
+	struct sensor_trigger trig = {
+		.type = SENSOR_TRIG_DATA_READY,
+		.chan = SENSOR_CHAN_ALL,
+	};
+	rc = sensor_trigger_set(dev, &trig, trigger_handler);
+	if (rc != 0) {
+		LOG_ERR("baro_recover: trigger re-arm failed (%d)", rc);
+		return rc;
+	}
+#endif
+
+	return 0;
+}
+#endif /* CONFIG_BARO_WATCHDOG */
 
 /*-----------------------------------------------------------
  * Pressure-to-altitude conversion (ISA troposphere)

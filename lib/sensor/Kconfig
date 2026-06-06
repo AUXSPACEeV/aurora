@@ -29,6 +29,44 @@ config IMU_TRIGGER
 		This option enables functionality for the IMU
 		to run triggers in an interrupt context.
 
+config IMU_WATCHDOG
+	bool "IMU stall watchdog (trigger mode)"
+	depends on IMU && IMU_TRIGGER
+	default y
+	help
+	  Periodically check that the IMU is still publishing samples on the
+	  zbus channel. If no sample arrives within IMU_WATCHDOG_TIMEOUT_MS,
+	  re-apply the configured ODR and re-arm the data-ready trigger. Acts
+	  as a safety net against IMU soft-resets caused by power-rail
+	  transients (e.g. cap-pyro arming inrush).
+
+config IMU_WATCHDOG_TIMEOUT_MS
+	int "IMU stall watchdog timeout (ms)"
+	depends on IMU_WATCHDOG
+	default 200
+	range 50 10000
+	help
+	  Maximum allowed time between two consecutive IMU samples before the
+	  watchdog declares the IMU stalled and triggers recovery.
+
+config IMU_WATCHDOG_PERIOD_MS
+	int "IMU stall watchdog check period (ms)"
+	depends on IMU_WATCHDOG
+	default 100
+	range 10 1000
+	help
+	  How often the watchdog thread wakes up to check the publish age.
+
+config IMU_WATCHDOG_RECOVERY_HZ
+	int "IMU sampling frequency (Hz) re-applied during watchdog recovery"
+	depends on IMU_WATCHDOG
+	default 104
+	range 1 1000
+	help
+	  ODR re-applied to the accelerometer and gyroscope when the watchdog
+	  attempts recovery. Must match the IMU's intended operating ODR
+	  (which is normally set by the device tree). Defaults to 104 Hz.
+
 # Only show frequency options when IMU is enabled
 config IMU_FREQUENCY
 	int "IMU update frequency (Hz)"
@@ -112,6 +150,44 @@ config BARO_TRIGGER
 	help
 		This option enables functionality for barometric pressure
 		sensors to run triggers in an interrupt context.
+
+config BARO_WATCHDOG
+	bool "Baro stall watchdog (trigger mode)"
+	depends on BARO && BARO_TRIGGER
+	default y
+	help
+	  Periodically check that the barometer is still publishing samples on
+	  the zbus channel. If no sample arrives within BARO_WATCHDOG_TIMEOUT_MS,
+	  re-apply the configured ODR and re-arm the data-ready trigger. Acts as
+	  a safety net against baro soft-resets caused by power-rail transients
+	  (e.g. cap-pyro arming inrush).
+
+config BARO_WATCHDOG_TIMEOUT_MS
+	int "Baro stall watchdog timeout (ms)"
+	depends on BARO_WATCHDOG
+	default 200
+	range 50 10000
+	help
+	  Maximum allowed time between two consecutive baro samples before the
+	  watchdog declares the baro stalled and triggers recovery.
+
+config BARO_WATCHDOG_PERIOD_MS
+	int "Baro stall watchdog check period (ms)"
+	depends on BARO_WATCHDOG
+	default 100
+	range 10 1000
+	help
+	  How often the watchdog thread wakes up to check the publish age.
+
+config BARO_WATCHDOG_RECOVERY_HZ
+	int "Baro sampling frequency (Hz) re-applied during watchdog recovery"
+	depends on BARO_WATCHDOG
+	default 100
+	range 1 1000
+	help
+	  ODR re-applied to the barometer when the watchdog attempts recovery.
+	  Must match the baro's intended operating ODR (which is normally set
+	  by the device tree). Defaults to 100 Hz (LPS22HH).
 
 # Only show frequency options when BARO is enabled
 config BARO_FREQUENCY

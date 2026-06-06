@@ -18,6 +18,9 @@
 #include <zephyr/zbus/zbus.h>
 
 #include <aurora/lib/imu.h>
+#if defined(CONFIG_IMU_WATCHDOG)
+#include <aurora/lib/sensor_watchdog.h>
+#endif
 
 #ifndef M_PI
 #define M_PI ((double)3.1415926535)
@@ -31,6 +34,15 @@ ZBUS_CHAN_DEFINE(imu_data_chan,
 		 NULL,
 		 ZBUS_OBSERVERS_EMPTY,
 		 ZBUS_MSG_INIT(0));
+
+#if defined(CONFIG_IMU_WATCHDOG)
+static struct sensor_watchdog imu_wd = {
+	.name = "imu",
+	.timeout_ms = CONFIG_IMU_WATCHDOG_TIMEOUT_MS,
+	.period_ms = CONFIG_IMU_WATCHDOG_PERIOD_MS,
+	.recover = imu_recover,
+};
+#endif
 
 /**
  * @brief Convert a Zephyr sensor_value to a double.
@@ -77,8 +89,13 @@ static int fetch_and_send(const struct device *dev)
 	ret = zbus_chan_pub(&imu_data_chan, &msg, K_NO_WAIT);
 	if (ret != 0) {
 		LOG_ERR("Failed to publish IMU data");
+		return ret;
 	}
-	return ret;
+
+#if defined(CONFIG_IMU_WATCHDOG)
+	sensor_watchdog_mark_publish(&imu_wd);
+#endif
+	return 0;
 }
 
 #if defined(CONFIG_IMU_TRIGGER)
@@ -136,8 +153,61 @@ int imu_init(const struct device *dev)
 	run_trigger_mode(dev);
 #endif
 
+#if defined(CONFIG_IMU_WATCHDOG)
+	imu_wd.dev = dev;
+	sensor_watchdog_init(&imu_wd);
+#endif
+
 	return 0;
 }
+
+#if defined(CONFIG_IMU_WATCHDOG)
+void imu_watchdog_run(void)
+{
+	sensor_watchdog_run(&imu_wd);
+}
+
+int imu_recover(const struct device *dev)
+{
+	if (dev == NULL) {
+		return -EINVAL;
+	}
+
+	struct sensor_value freq = {
+		.val1 = CONFIG_IMU_WATCHDOG_RECOVERY_HZ,
+		.val2 = 0,
+	};
+	int rc;
+
+	rc = sensor_attr_set(dev, SENSOR_CHAN_ACCEL_XYZ,
+			     SENSOR_ATTR_SAMPLING_FREQUENCY, &freq);
+	if (rc != 0 && rc != -ENOTSUP) {
+		LOG_ERR("imu_recover: accel ODR set failed (%d)", rc);
+		return rc;
+	}
+
+	rc = sensor_attr_set(dev, SENSOR_CHAN_GYRO_XYZ,
+			     SENSOR_ATTR_SAMPLING_FREQUENCY, &freq);
+	if (rc != 0 && rc != -ENOTSUP) {
+		LOG_ERR("imu_recover: gyro ODR set failed (%d)", rc);
+		return rc;
+	}
+
+#if defined(CONFIG_IMU_TRIGGER)
+	struct sensor_trigger trig = {
+		.type = SENSOR_TRIG_DATA_READY,
+		.chan = SENSOR_CHAN_ACCEL_XYZ,
+	};
+	rc = sensor_trigger_set(dev, &trig, trigger_handler);
+	if (rc != 0) {
+		LOG_ERR("imu_recover: trigger re-arm failed (%d)", rc);
+		return rc;
+	}
+#endif
+
+	return 0;
+}
+#endif /* CONFIG_IMU_WATCHDOG */
 
 /* imu_sensor_value_to_acceleration – see imu.h */
 int imu_sensor_value_to_acceleration(const struct imu_data *data, double *acc_out)

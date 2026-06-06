@@ -73,6 +73,31 @@ int imu_set_sampling_freq(const struct device *dev, int sampling_rate_hz);
  */
 int imu_init(const struct device *dev);
 
+#if defined(CONFIG_IMU_WATCHDOG)
+/**
+ * @brief Run the IMU stall watchdog. Never returns.
+ *
+ * Intended as the post-init body of the IMU thread when the IMU is driven by
+ * a hardware data-ready trigger (no polling loop).
+ */
+void imu_watchdog_run(void);
+
+/**
+ * @brief Attempt to recover a stalled IMU.
+ *
+ * Re-applies @c CONFIG_IMU_WATCHDOG_RECOVERY_HZ to the accelerometer and
+ * gyroscope and re-arms the data-ready trigger. Intended to recover from a
+ * soft-reset caused by a power-rail transient.
+ *
+ * @param dev Pointer to the IMU device.
+ *
+ * @retval 0 on success.
+ * @retval -EINVAL if @p dev is NULL.
+ * @retval -errno from the underlying sensor API on failure.
+ */
+int imu_recover(const struct device *dev);
+#endif /* CONFIG_IMU_WATCHDOG */
+
 /**
  * @brief calculate the average acceleration from IMU sensor values in m/s^2.
  *
