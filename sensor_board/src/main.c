@@ -31,6 +31,13 @@
 
 #if defined(CONFIG_PYRO)
 #include <aurora/drivers/pyro.h>
+/* Build-time dependency: the state machine fires a pyro device selected via the
+ * 'auxspace,pyro' chosen node. */
+#if !DT_HAS_CHOSEN(auxspace_pyro)
+#error "CONFIG_PYRO requires DT chosen 'auxspace,pyro' to point at a pyro device node."
+#endif
+BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_pyro), okay),
+	     "the 'auxspace,pyro' chosen node must have status \"okay\"");
 #endif /* CONFIG_PYRO */
 
 #if defined(CONFIG_DATA_LOGGER_BIN)
@@ -109,6 +116,13 @@ static bool sm_active = false; /**< True once the state machine thread has initi
  *                     IMU TASK
  * ============================================================ */
 #if defined(CONFIG_IMU) && !defined(CONFIG_AURORA_FAKE_SENSORS)
+/* Build-time dependency: the IMU task fetches its device from the
+ * 'auxspace,imu' chosen node. */
+#if !DT_HAS_CHOSEN(auxspace_imu)
+#error "CONFIG_IMU requires DT chosen 'auxspace,imu' to point at an IMU sensor node."
+#endif
+BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_imu), okay),
+	     "the 'auxspace,imu' chosen node must have status \"okay\"");
 /**
  * @brief IMU polling thread.
  *

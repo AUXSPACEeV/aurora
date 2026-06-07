@@ -23,7 +23,16 @@ LOG_MODULE_REGISTER(notify_led, CONFIG_AURORA_NOTIFY_LOG_LEVEL);
 
 #define MAX_BRIGHTNESS 100
 
+/* Build-time dependency: AURORA_NOTIFY_LED needs the board/app to select a
+ * pwm-leds device via the 'auxspace,led' chosen node. */
+#if !DT_HAS_CHOSEN(auxspace_led)
+#error "CONFIG_AURORA_NOTIFY_LED requires DT chosen 'auxspace,led' to point at a pwm-leds node."
+#endif
+
 #define LED_PWM_NODE_ID	 DT_CHOSEN(auxspace_led)
+
+BUILD_ASSERT(DT_NODE_HAS_STATUS(LED_PWM_NODE_ID, okay),
+	     "the 'auxspace,led' chosen node must have status \"okay\"");
 
 static const struct device *pwm_leds = DEVICE_DT_GET(LED_PWM_NODE_ID);
 static const char *led_labels[] = {
