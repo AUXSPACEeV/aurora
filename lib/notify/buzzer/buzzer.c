@@ -30,6 +30,14 @@
 
 LOG_MODULE_REGISTER(notify_buzzer, CONFIG_AURORA_NOTIFY_LOG_LEVEL);
 
+/* Build-time dependency: AURORA_NOTIFY_BUZZER needs the board/app to select a
+ * pwm-buzzer (auxspaceev,pwm-buzzer) via the 'auxspace,buzzer' chosen node. */
+#if !DT_HAS_CHOSEN(auxspace_buzzer)
+#error "CONFIG_AURORA_NOTIFY_BUZZER requires DT chosen 'auxspace,buzzer' to point at a pwm-buzzer (auxspaceev,pwm-buzzer) node."
+#endif
+BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_buzzer), okay),
+	     "the 'auxspace,buzzer' chosen node must have status \"okay\"");
+
 static const struct pwm_dt_spec buzzer =
 	PWM_DT_SPEC_GET(DT_CHOSEN(auxspace_buzzer));
 
