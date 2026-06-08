@@ -4,4 +4,5 @@
 
 config HEAP_MEM_POOL_ADD_SIZE_BOARD
 	int
+	default 16384 if NETWORKING
 	default 4096
