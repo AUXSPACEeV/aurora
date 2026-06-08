@@ -1,0 +1,21 @@
+/*
+ * Copyright (c) 2021 Yonatan Schachter
+ * Copyright (c) 2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * RP2040-specific device tree for the Sensor Board V2. Boots via MCUboot
+ * out of a 2 MiB external flash (sysbuild partition layout).
+ */
+
+#include <raspberrypi/partitions_2M_sysbuild.dtsi>
+
+/ {
+	chosen {
+		zephyr,flash-controller = &ssi;
+		zephyr,code-partition = &slot0_partition;
+	};
+};
+
+&flash0 {
+	reg = <0x10000000 DT_SIZE_M(2)>;
+};
