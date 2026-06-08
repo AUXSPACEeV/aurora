@@ -4,4 +4,9 @@ board:
   vendor: auxspaceev
   socs:
     - name: rp2040
+      variants:
+        - name: w
     - name: rp2350a
+      variants:
+        - name: w
+          cpucluster: m33

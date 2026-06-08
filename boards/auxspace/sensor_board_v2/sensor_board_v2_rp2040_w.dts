@@ -1,0 +1,164 @@
+/*
+ * Copyright (c) 2021 Yonatan Schachter
+ * Copyright (c) 2023 Dave Rensberger - Beechwoods Software
+ * Copyright (c) 2026 Auxspace e.V.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+
+#include <raspberrypi/rpi_pico/rp2040.dtsi>
+#include <raspberrypi/partitions_2M_sysbuild.dtsi>
+#include "sensor_board_v2_rp2040-pinctrl.dtsi"
+#include <zephyr/dt-bindings/i2c/i2c.h>
+#include <zephyr/dt-bindings/sensor/lsm6dso.h>
+#include <freq.h>
+
+/ {
+	model = "Auxspace e.V. Sensor Board V2 (WiFi)";
+	compatible = "auxspaceev,sensor-board-v2";
+
+	chosen {
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,flash-controller = &ssi;
+		zephyr,console = &cdc_acm_uart;
+		zephyr,shell-uart = &cdc_acm_uart;
+		zephyr,code-partition = &slot0_partition;
+	};
+
+	aliases {
+		watchdog0 = &wdt0;
+	};
+};
+
+&flash0 {
+	reg = <0x10000000 DT_SIZE_M(2)>;
+};
+
+zephyr_udc0: &usbd {
+	cdc_acm_uart: cdc_acm_uart {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+&uart0 {
+	current-speed = <115200>;
+	pinctrl-0 = <&uart0_default>;
+	pinctrl-names = "default";
+};
+
+&spi0 {
+	clock-frequency = <DT_FREQ_M(25)>;
+	cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi0_default>;
+	pinctrl-names = "default";
+
+	sdhc0: sdhc@0 {
+		compatible = "zephyr,sdhc-spi-slot";
+		reg = <0>;
+		status = "disabled";
+
+		mmc0: mmc {
+			compatible = "zephyr,sdmmc-disk";
+			disk-name = "MMC";
+			status = "disabled";
+		};
+
+		spi-max-frequency = <25000000>;
+	};
+};
+
+&spi1 {
+	clock-frequency = <DT_FREQ_M(8)>;
+	cs-gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi1_default>;
+	pinctrl-names = "default";
+};
+
+&i2c0 {
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&i2c0_default>;
+	pinctrl-names = "default";
+
+	lsm6dso32_0: lsm6dso32@6b {
+		compatible = "st,lsm6dso32";
+		reg = <0x6b>;
+		status = "disabled";
+	};
+
+	ms5607_0: ms5607@77 {
+		compatible = "meas,ms5607";
+		reg = <0x77>;
+		status = "disabled";
+	};
+};
+
+/* The CYW43439 WiFi/Bluetooth module is connected to the RP2040 via a PIO-SPI
+ * bus on GPIO 23/24/25/29.  None of these pins are used by the sensor board's
+ * peripherals, so they are free for the on-module radio.
+ */
+&pinctrl {
+	pio0_spi0_default: pio0_spi0_default {
+		/* gpio 25 is used for chip select, not assigned to the PIO */
+		group1 {
+			pinmux = <PIO0_P29>;
+		};
+	};
+
+	airoc_wifi_default: airoc_wifi_default {
+		/* Control of GPIO24 is done through the WiFi driver */
+		group1 {
+			pinmux = <PIO0_P24>;
+			input-enable;
+		};
+	};
+
+	airoc_wifi_host_wake: airoc_wifi_host_wake {
+		/* Assign GPIO24 to SIO (GPIO) for use as an interrupt source */
+		group1 {
+			pinmux = <GPIO_P24>;
+			input-enable;
+		};
+	};
+};
+
+&pio0 {
+	status = "okay";
+
+	pio0_spi0: pio0_spi0 {
+		compatible = "raspberrypi,pico-spi-pio";
+		clocks = <&clocks RPI_PICO_CLKID_CLK_SYS>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		cs-gpios = <&gpio0 25 GPIO_ACTIVE_LOW>;
+		clk-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
+		sio-gpios = <&gpio0 24 GPIO_ACTIVE_HIGH>;
+		pinctrl-0 = <&pio0_spi0_default>;
+		pinctrl-names = "default";
+		status = "okay";
+
+		airoc-wifi@0 {
+			compatible = "infineon,airoc-wifi";
+			reg = <0>;
+			wifi-reg-on-gpios = <&gpio0 23 GPIO_ACTIVE_HIGH>;
+			bus-select-gpios = <&gpio0 24 GPIO_ACTIVE_HIGH>;
+			wifi-host-wake-gpios = <&gpio0 24 GPIO_ACTIVE_HIGH>;
+			spi-max-frequency = <10000000>;
+			spi-half-duplex;
+			spi-data-irq-shared;
+			pinctrl-0 = <&airoc_wifi_default>;
+			pinctrl-1 = <&airoc_wifi_host_wake>;
+			pinctrl-names = "default", "host_wake";
+			status = "okay";
+
+			cyw43_gpio: gpio {
+				compatible = "infineon,cyw43-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				ngpios = <3>;
+			};
+		};
+	};
+};
