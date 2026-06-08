@@ -1,0 +1,15 @@
+/*
+ * Copyright (c) 2021 Yonatan Schachter
+ * Copyright (c) 2023 Dave Rensberger - Beechwoods Software
+ * Copyright (c) 2026 Auxspace e.V.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+
+#include <raspberrypi/rpi_pico/rp2040.dtsi>
+#include "sensor_board_v2_rp2040-pinctrl.dtsi"
+#include "sensor_board_v2_common.dtsi"
+#include "sensor_board_v2_rp2040.dtsi"
+#include "sensor_board_v2_wifi.dtsi"

@@ -47,7 +47,8 @@ static int  stub_b_init_rc;
 static int  stub_b_send_rc;
 
 static int stub_a_init(void) { stub_a_init_calls++; return stub_a_init_rc; }
-static int stub_a_send(enum sm_state s, const struct sm_inputs *in)
+static int stub_a_send(enum sm_state s, enum sm_type type,
+		       const struct sm_inputs *in)
 {
 	ARG_UNUSED(s); ARG_UNUSED(in);
 	stub_a_send_calls++;
@@ -55,7 +56,8 @@ static int stub_a_send(enum sm_state s, const struct sm_inputs *in)
 }
 
 static int stub_b_init(void) { stub_b_init_calls++; return stub_b_init_rc; }
-static int stub_b_send(enum sm_state s, const struct sm_inputs *in)
+static int stub_b_send(enum sm_state s, enum sm_type type,
+		       const struct sm_inputs *in)
 {
 	ARG_UNUSED(s); ARG_UNUSED(in);
 	stub_b_send_calls++;
@@ -187,20 +189,21 @@ static void rate_before(void *fixture)
 
 ZTEST(telemetry_rate, test_first_call_accepted)
 {
-	int rc = telemetry_send_sm_update(SM_IDLE, &DUMMY_INPUTS);
+	int rc = telemetry_send_sm_update(SM_IDLE, sm_get_type(), &DUMMY_INPUTS);
 
 	zassert_equal(rc, 0, "first send should succeed, got %d", rc);
 }
 
 ZTEST(telemetry_rate, test_second_call_within_window_rejected)
 {
-	zassert_equal(telemetry_send_sm_update(SM_IDLE, &DUMMY_INPUTS), 0,
-		      "first send");
+	zassert_equal(telemetry_send_sm_update(SM_IDLE, sm_get_type(),
+		      &DUMMY_INPUTS), 0, "first send");
 
 	/* Burst the second one immediately. HC-12 should reject with
 	 * -EAGAIN; the dispatcher returns the first non-zero rc.
 	 */
-	int rc = telemetry_send_sm_update(SM_IDLE, &DUMMY_INPUTS);
+	int rc = telemetry_send_sm_update(SM_IDLE, sm_get_type(),
+		 &DUMMY_INPUTS);
 
 	zassert_equal(rc, -EAGAIN,
 		      "second send should be rate-limited, got %d", rc);
@@ -215,14 +218,15 @@ ZTEST(telemetry_rate, test_second_call_within_window_rejected)
 
 ZTEST(telemetry_rate, test_recovery_after_window)
 {
-	zassert_equal(telemetry_send_sm_update(SM_IDLE, &DUMMY_INPUTS), 0,
-		      "first send");
-	zassert_equal(telemetry_send_sm_update(SM_IDLE, &DUMMY_INPUTS),
-		      -EAGAIN, "second send");
+	zassert_equal(telemetry_send_sm_update(SM_IDLE, sm_get_type(),
+		      &DUMMY_INPUTS), 0, "first send");
+	zassert_equal(telemetry_send_sm_update(SM_IDLE, sm_get_type(),
+		      &DUMMY_INPUTS), -EAGAIN, "second send");
 
 	clear_rate_window();
 
-	int rc = telemetry_send_sm_update(SM_IDLE, &DUMMY_INPUTS);
+	int rc = telemetry_send_sm_update(SM_IDLE, sm_get_type(),
+					  &DUMMY_INPUTS);
 
 	zassert_equal(rc, 0,
 		      "send after window should succeed, got %d", rc);
@@ -277,7 +281,8 @@ ZTEST(telemetry_dispatch, test_send_fans_out_to_all_backends)
 	stub_reset();
 	clear_rate_window();
 
-	int rc = telemetry_send_sm_update(SM_IDLE, &DUMMY_INPUTS);
+	int rc = telemetry_send_sm_update(SM_IDLE, sm_get_type(),
+					  &DUMMY_INPUTS);
 
 	zassert_equal(rc, 0, "all backends accepted");
 	zassert_equal(stub_a_send_calls, 1,
@@ -295,7 +300,8 @@ ZTEST(telemetry_dispatch, test_send_surfaces_first_error)
 	stub_a_send_rc = -EIO;
 	stub_b_send_rc = -ENOSPC;
 
-	int rc = telemetry_send_sm_update(SM_IDLE, &DUMMY_INPUTS);
+	int rc = telemetry_send_sm_update(SM_IDLE, sm_get_type(),
+					  &DUMMY_INPUTS);
 
 	zassert_true(rc == -EIO || rc == -ENOSPC,
 		     "dispatcher returned an error from one of the stubs "

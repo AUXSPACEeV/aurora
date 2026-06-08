@@ -48,6 +48,10 @@
 	status = "okay";
 };
 
+&esp32_bt_hci {
+	status = "okay";
+};
+
 &gpio0 {
 	status = "okay";
 };

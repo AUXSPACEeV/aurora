@@ -48,7 +48,7 @@ register it at link time.
 
    static int my_init(void) { /* ... */ return 0; }
 
-   static int my_send_sm_update(enum sm_state state,
+   static int my_send_sm_update(enum sm_state state, enum sm_type type,
                                 const struct sm_inputs *inputs)
    {
        /* Frame and enqueue. Must not block. Return:
@@ -142,8 +142,13 @@ Packet types:
      - ``u8``
      - ``armed`` (0/1)
    * - 6
-     - 2
-     - ``i16``
+     - 1
+     - ``u8``
+     - ``sm_type`` (:c:enum:`sm_type` identifies the ``state``
+       enum mapping the firmware is using)
+   * - 7
+     - 1
+     - ``u8``
      - reserved (zero)
    * - 8
      - 4

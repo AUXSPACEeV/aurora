@@ -24,12 +24,19 @@
 /* Wire frame packet types. */
 #define HC12_TYPE_SM_UPDATE 0x01
 
-/** @brief HC-12 SM_UPDATE wire payload (little-endian, packed, 64 B). */
+/** @brief HC-12 SM_UPDATE wire payload (little-endian, packed, 64 B).
+ *
+ * @c sm_type identifies the @c state enum mapping in use (see
+ * @ref sm_get_type) so the receiver can decode @c state without
+ * prior agreement with the firmware. The trailing @c reserved byte
+ * keeps the 64-byte frame size unchanged from earlier revisions.
+ */
 struct __packed hc12_sm_update_payload {
 	uint32_t timestamp_ms;
 	uint8_t  state;
 	uint8_t  armed;
-	int16_t  reserved;
+	uint8_t  sm_type;
+	uint8_t  reserved;
 	double   altitude;
 	double   acceleration;
 	double   accel_vert;

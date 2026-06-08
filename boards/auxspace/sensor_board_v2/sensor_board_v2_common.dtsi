@@ -1,0 +1,89 @@
+/*
+ * Copyright (c) 2025-2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Common device tree shared by every Sensor Board V2 variant.
+ *
+ * The SoC- and core-specific pieces (flash size and controller, code
+ * partition and USB device defaults) live in the per-SoC includes
+ * sensor_board_v2_rp2040.dtsi / sensor_board_v2_rp2350a.dtsi, and the
+ * optional CYW43 radio in sensor_board_v2_wifi.dtsi.
+ */
+
+#include <zephyr/dt-bindings/i2c/i2c.h>
+#include <zephyr/dt-bindings/sensor/lsm6dso.h>
+#include <freq.h>
+
+/ {
+	model = "Auxspace e.V. Sensor Board V2";
+	compatible = "auxspaceev,sensor-board-v2";
+
+	chosen {
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,console = &cdc_acm_uart;
+		zephyr,shell-uart = &cdc_acm_uart;
+	};
+
+	aliases {
+		watchdog0 = &wdt0;
+	};
+};
+
+zephyr_udc0: &usbd {
+	cdc_acm_uart: cdc_acm_uart {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+&uart0 {
+	current-speed = <115200>;
+	pinctrl-0 = <&uart0_default>;
+	pinctrl-names = "default";
+};
+
+&spi0 {
+	clock-frequency = <DT_FREQ_M(25)>;
+	cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi0_default>;
+	pinctrl-names = "default";
+
+	sdhc0: sdhc@0 {
+		compatible = "zephyr,sdhc-spi-slot";
+		reg = <0>;
+		status = "disabled";
+
+		mmc0: mmc {
+			compatible = "zephyr,sdmmc-disk";
+			disk-name = "MMC";
+			status = "disabled";
+		};
+
+		spi-max-frequency = <25000000>;
+	};
+};
+
+&spi1 {
+	clock-frequency = <DT_FREQ_M(8)>;
+	cs-gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&spi1_default>;
+	pinctrl-names = "default";
+};
+
+&i2c0 {
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&i2c0_default>;
+	pinctrl-names = "default";
+
+	lsm6dso32_0: lsm6dso32@6b {
+		compatible = "st,lsm6dso32";
+		reg = <0x6b>;
+		status = "disabled";
+	};
+
+	ms5607_0: ms5607@77 {
+		compatible = "meas,ms5607";
+		reg = <0x77>;
+		status = "disabled";
+	};
+};

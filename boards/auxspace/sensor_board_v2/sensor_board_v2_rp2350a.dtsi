@@ -1,0 +1,36 @@
+/*
+ * Copyright (c) 2025 Andrew Featherstone
+ * Copyright (c) 2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * RP2350A-specific device tree for the Sensor Board V2. The full 4 MiB of
+ * external flash is reserved for code; the USB device is enabled by the
+ * application overlay.
+ */
+
+/ {
+	chosen {
+		zephyr,flash-controller = &qmi;
+		zephyr,code-partition = &code_partition;
+	};
+};
+
+&flash0 {
+	reg = <0x10000000 DT_SIZE_M(4)>;
+
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		code_partition: partition@0 {
+			label = "code-partition";
+			reg = <0x00000000 DT_SIZE_M(4)>;
+			read-only;
+		};
+	};
+};
+
+&usbd {
+	status = "disabled";
+};

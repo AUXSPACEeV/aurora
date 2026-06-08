@@ -164,7 +164,11 @@ config DATA_LOGGER_BIN_BUF_ALIGN
 
 config DATA_LOGGER_BIN_WRITER_STACK_SIZE
 	int "Binary log writer thread stack size (bytes)"
-	default 1024
+	default 4096
+	help
+	  Was 1024 historically; bumped after FATFS write frames plus
+	  the deferred-log filter overhead (notably when BT_HCI_HOST
+	  is in the build) started tipping it over on ESP32-S3.
 
 config DATA_LOGGER_BIN_WRITER_PRIO
 	int "Binary log writer thread priority"
