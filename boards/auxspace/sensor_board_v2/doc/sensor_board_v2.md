@@ -59,6 +59,55 @@ support
 The connectors remain undocumented for the time being, since the PCB is under
 active development.
 
+### Wireless connectivity (`_w` variants)
+
+The `_w` board variants are fitted with the Infineon CYW43439 combo radio (as
+on the Raspberry Pi Pico W / Pico 2 W). It hangs off a PIO-SPI ("gSPI") bus on
+GPIO 23/24/25/29, defined in `sensor_board_v2_wifi.dtsi`.
+
+### Wi-Fi (supported)
+
+Wi-Fi works through the upstream `infineon,airoc-wifi` driver. Enable it with
+`CONFIG_WIFI=y` / `CONFIG_WIFI_AIROC=y` plus the module selection
+(`CONFIG_CYW43439=y`, `CONFIG_CYW43439_MURATA_1YN=y`).
+
+### Bluetooth / BLE (**NOT** supported)
+
+```{warning}
+There is currently **no way to enable Bluetooth on the `_w` boards through
+configuration alone.**
+The CYW43439's Bluetooth shares the same PIO-SPI bus as Wi-Fi, and
+**Zephyr has no HCI transport driver for CYW43439 BT over that shared bus**
+(verified against the *Zephyr 4.4* tree).
+```
+
+Why config-only attempts fail:
+
+- The only AIROC Bluetooth HCI driver in Zephyr is `hci_uart_infineon.c`
+  (`compatible = "infineon,bt-hci-uart"`), which requires a **dedicated BT
+  UART** (see the `cy8cproto_062_4343w` board). Every CYW43439 BT Kconfig
+  option (`CONFIG_CYW43439`, ...) gates on `BT_H4` (UART). The Pico W does not
+  route BT out on a UART; its BT is multiplexed on the Wi-Fi PIO SPI bus.
+- The Zephyr 4.4 migration guide folded the old combo-chip compatible into the
+  UART driver: `infineon,cyw43xxx-bt-hci` => `infineon,bt-hci-uart`,
+  `CONFIG_BT_CYW43XX` => `CONFIG_BT_HCI_UART_INFINEON`.
+- Upstream `rpi_pico_rp2040_w.dts` deliberately wires Wi-Fi only — no BT node,
+  no `chosen { zephyr,bt-hci }`.
+
+Symptom of trying anyway: declaring a `bt-hci` / `infineon,airoc-bt-hci` node
+plus `chosen { zephyr,bt-hci = ... }` makes the BT host `DEVICE_DT_GET()` the
+node, but no driver has a matching `DT_DRV_COMPAT`, so the link fails with
+`undefined reference to __device_dts_ord_<N>` (the node number shifts as the DT
+is restructured, but the cause is always "no driver behind the compatible").
+
+The only code that drives CYW43439 BT over the shared bus is the Pico SDK's
+BTStack transport (`hal_rpi_pico/.../pico_cyw43_driver`), which is a separate
+host stack and is **not** wired into Zephyr's Bluetooth subsystem.
+
+Enabling BLE here is therefore a driver-development task (port the BTStack
+cyw43 transport to a Zephyr `bt-hci` driver with Wi-Fi/BT bus arbitration), not
+a configuration task.
+
 # Programming and Debugging
 
 ```{zephyr:board-supported-runners}
