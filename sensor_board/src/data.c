@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#if defined(CONFIG_DATA_LOGGER_BIN)
 LOG_MODULE_DECLARE(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 
 K_THREAD_DEFINE(logger_thread, 2048, logger_task, NULL, NULL, NULL, 8, 0, 0);
@@ -72,7 +73,6 @@ static void log_end_work_handler(struct k_work *work)
 	log_end_flight();
 }
 static K_WORK_DELAYABLE_DEFINE(log_end_work, log_end_work_handler);
-
 void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state)
 {
 	/* Flight-time logging lifecycle:
@@ -135,3 +135,4 @@ void log_flight_telemetry()
 	sensor_value_from_double(&or_dp.channels[2], sm_in.orientation[2]);
 	log_enqueue(&or_dp);
 }
+#endif

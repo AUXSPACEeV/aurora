@@ -194,6 +194,7 @@ int baro_sensor_value_to_altitude(const struct sensor_value *press, double *alti
 	return 0;
 }
 
+#if defined(CONFIG_DATA_LOGGER_BIN)
 void log_baro_data(const struct baro_data *baro)
 {
 	uint64_t ts = k_ticks_to_ns_floor64(k_uptime_ticks());
@@ -205,3 +206,4 @@ void log_baro_data(const struct baro_data *baro)
 	};
 	log_enqueue(&dp);
 }
+#endif
