@@ -19,6 +19,7 @@
 #include <zephyr/zbus/zbus.h>
 
 #include <aurora/lib/baro.h>
+#include <aurora/lib/data_logger.h>
 
 LOG_MODULE_REGISTER(baro, CONFIG_AURORA_SENSORS_LOG_LEVEL);
 
@@ -191,4 +192,16 @@ int baro_sensor_value_to_altitude(const struct sensor_value *press, double *alti
 
 	*altitude_out = baro_pressure_to_altitude(press_kpa);
 	return 0;
+}
+
+void log_baro_data(const struct baro_data *baro)
+{
+	uint64_t ts = k_ticks_to_ns_floor64(k_uptime_ticks());
+	struct datapoint dp = {
+		.timestamp_ns = ts,
+		.type = AURORA_DATA_BARO,
+		.channel_count = 2,
+		.channels = {baro->temperature, baro->pressure},
+	};
+	log_enqueue(&dp);
 }

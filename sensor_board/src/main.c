@@ -9,6 +9,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "aurora/lib/state/simple.h"
+#include "logger.h"
+#include <string.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/kernel.h>
@@ -32,9 +35,6 @@
 
 #if defined(CONFIG_DATA_LOGGER_BIN)
 #include <aurora/lib/data_logger.h>
-#include <zephyr/fs/fs.h>
-LOG_MODULE_REGISTER(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
-#include "logger.h"
 #endif /* CONFIG_DATA_LOGGER_BIN */
 
 #if defined(CONFIG_AURORA_NOTIFY)
@@ -79,6 +79,8 @@ static const struct sm_thresholds state_cfg = {
 };
 #endif /* CONFIG_AURORA_STATE_MACHINE */
 
+LOG_MODULE_REGISTER(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
+
 ZBUS_MSG_SUBSCRIBER_DEFINE(sm_sub);
 ZBUS_CHAN_ADD_OBS(imu_data_chan, sm_sub, 1);
 ZBUS_CHAN_ADD_OBS(baro_data_chan, sm_sub, 1);
@@ -101,7 +103,7 @@ static void powerfail_deassert()
 
 bool baro_active = false; /**< True once the barometer thread has initialized. */
 bool imu_active = false;  /**< True once the IMU thread has initialized. */
-static bool sm_active = false;	/**< True once the state machine thread has initialized. */
+static bool sm_active = false; /**< True once the state machine thread has initialized. */
 
 /* ============================================================
  *                     IMU TASK

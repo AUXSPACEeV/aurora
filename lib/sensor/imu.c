@@ -17,6 +17,7 @@
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/zbus/zbus.h>
 
+#include <aurora/lib/data_logger.h>
 #include <aurora/lib/imu.h>
 
 #ifndef M_PI
@@ -206,4 +207,22 @@ int imu_sensor_value_to_orientation(const struct imu_data *data,
 	}
 
 	return 0;
+}
+
+void log_imu_data(const struct imu_data *imu)
+{
+	uint64_t ts = k_ticks_to_ns_floor64(k_uptime_ticks());
+	struct datapoint dp = {
+		.timestamp_ns = ts,
+		.type = AURORA_DATA_IMU_ACCEL,
+		.channel_count = 3,
+		.channels = {imu->accel[0], imu->accel[1], imu->accel[2]},
+	};
+	log_enqueue(&dp);
+
+	dp.type = AURORA_DATA_IMU_GYRO;
+	dp.channels[0] = imu->gyro[0];
+	dp.channels[1] = imu->gyro[1];
+	dp.channels[2] = imu->gyro[2];
+	log_enqueue(&dp);
 }

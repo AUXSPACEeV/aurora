@@ -130,4 +130,6 @@ int imu_sensor_value_to_orientation(const struct imu_data *data,
 
 /** @} */
 
+void log_imu_data(const struct imu_data *imu);
+
 #endif /* APP_LIB_IMU_H_ */
