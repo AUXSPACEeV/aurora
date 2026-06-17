@@ -9,7 +9,7 @@ void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_s
 void log_flight_telemetry();
 
 #else
-static inline void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state);
+static inline void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state) {};
 static inline void log_flight_telemetry() {};
 #endif
 

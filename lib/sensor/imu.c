@@ -209,6 +209,7 @@ int imu_sensor_value_to_orientation(const struct imu_data *data,
 	return 0;
 }
 
+#if defined(CONFIG_DATA_LOGGER_BIN)
 void log_imu_data(const struct imu_data *imu)
 {
 	uint64_t ts = k_ticks_to_ns_floor64(k_uptime_ticks());
@@ -226,3 +227,4 @@ void log_imu_data(const struct imu_data *imu)
 	dp.channels[2] = imu->gyro[2];
 	log_enqueue(&dp);
 }
+#endif
