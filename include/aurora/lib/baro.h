@@ -92,4 +92,6 @@ int baro_sensor_value_to_altitude(const struct sensor_value *press, double *alti
 
 /** @} */
 
+void log_baro_data(const struct baro_data *baro);
+
 #endif /* APP_LIB_BARO_H_ */

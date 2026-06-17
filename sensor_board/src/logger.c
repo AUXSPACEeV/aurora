@@ -10,151 +10,7 @@
 
 LOG_MODULE_DECLARE(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 
-static struct data_logger sm_logger;
-static atomic_t sm_logger_live = ATOMIC_INIT(0);
-
-/* Decouple logging from the SM hot path: SM pushes datapoints into this
- * queue with K_NO_WAIT; a dedicated logger thread drains it and owns all
- * FS-touching operations (write + periodic flush). Sized to absorb the
- * worst-case flush stall at full IMU+baro rate.
- */
-#define LOG_MSGQ_DEPTH 256
-#define LOG_FLUSH_PERIOD_MS 1000
-
-/* How long SM→ARMED will wait for a pending conversion to finish. */
-#define LOG_ARM_CONVERT_TIMEOUT_MS 1500
-
-K_MSGQ_DEFINE(log_msgq, sizeof(struct datapoint), LOG_MSGQ_DEPTH, 4);
-
-/* convert_idle has one token whenever no conversion is in flight. The
- * converter thread holds it while running; SM→ARMED tries to acquire it
- * (with a short timeout) to verify the last flight has been fully
- * translated before opening a new binary file.
- */
-K_SEM_DEFINE(convert_idle, 1, 1);
-
-/* Woken by SM→(IDLE|LANDED|ERROR) to kick off conversion of the just-
- * closed binary file.
- */
-K_SEM_DEFINE(convert_request, 0, 1);
-
-static inline void log_enqueue(const struct datapoint *dp)
-{
-	/* Drop on overflow rather than stall the SM thread. */
-	(void)k_msgq_put(&log_msgq, dp, K_NO_WAIT);
-}
-
-static void logger_task(void *, void *, void *)
-{
-	struct datapoint dp;
-	int64_t last_flush = k_uptime_get();
-
-	while (1) {
-		int64_t now = k_uptime_get();
-		int64_t wait_ms = LOG_FLUSH_PERIOD_MS - (now - last_flush);
-		if (wait_ms < 0) {
-			wait_ms = 0;
-		}
-
-		if (k_msgq_get(&log_msgq, &dp, K_MSEC(wait_ms)) == 0) {
-			if (atomic_get(&sm_logger_live)) {
-				data_logger_log(&dp);
-			}
-		}
-
-		if (k_uptime_get() - last_flush >= LOG_FLUSH_PERIOD_MS) {
-			if (atomic_get(&sm_logger_live)) {
-				data_logger_flush(&sm_logger);
-			}
-			last_flush = k_uptime_get();
-		}
-	}
-}
-
 K_THREAD_DEFINE(logger_thread, 2048, logger_task, NULL, NULL, NULL, 8, 0, 0);
-
-/* Pick the next free /<base>/flight_<N>.<probe_ext> on the filesystem,
- * writing "/<base>/flight_<N>" (without extension) into @p out. The
- * converter then appends each formatter's file_ext. Falls back to
- * index 0 (overwrites) if every slot is taken.
- */
-static void pick_convert_out_base(char *out, size_t out_sz)
-{
-#if defined(CONFIG_DATA_LOGGER_CONVERT_CSV)
-	const char *probe_ext = data_logger_csv_formatter.file_ext;
-#elif defined(CONFIG_DATA_LOGGER_CONVERT_INFLUX)
-	const char *probe_ext = data_logger_influx_formatter.file_ext;
-#else
-	const char *probe_ext = "out";
-#endif
-
-	for (int i = 0; i <= CONFIG_DATA_LOGGER_MAX_FILES; i++) {
-		char probe[DATA_LOGGER_PATH_MAX];
-		struct fs_dirent entry;
-
-		int n = snprintf(probe, sizeof(probe), "%s/flight_%d.%s", CONFIG_DATA_LOGGER_BASE_PATH, i,
-						 probe_ext);
-		if (n < 0 || n >= (int)sizeof(probe)) {
-			break;
-		}
-		if (fs_stat(probe, &entry) == -ENOENT) {
-			(void)snprintf(out, out_sz, "%s/flight_%d", CONFIG_DATA_LOGGER_BASE_PATH, i);
-			return;
-		}
-	}
-
-	LOG_WRN("convert: out of /flight_N slots — overwriting flight_0");
-	(void)snprintf(out, out_sz, "%s/flight_0", CONFIG_DATA_LOGGER_BASE_PATH);
-}
-
-static void converter_task(void *, void *, void *)
-{
-	while (1) {
-		k_sem_take(&convert_request, K_FOREVER);
-		k_sem_take(&convert_idle, K_FOREVER);
-
-		/* DATA_LOGGER_PATH_MAX minus struct data_logger_formatter's member
-		 * "file_ext" */
-		char base[DATA_LOGGER_PATH_MAX - 8];
-
-		pick_convert_out_base(base, sizeof(base));
-
-#if defined(CONFIG_DATA_LOGGER_CONVERT_CSV)
-		{
-			char out_path[DATA_LOGGER_PATH_MAX];
-
-			(void)snprintf(out_path, sizeof(out_path), "%s.%s", base,
-						   data_logger_csv_formatter.file_ext);
-			int rc = data_logger_convert(&data_logger_csv_formatter, out_path);
-
-			if (rc != 0) {
-				LOG_ERR("CSV conversion → %s failed (%d)", out_path, rc);
-			} else {
-				LOG_INF("converted flight_log → %s", out_path);
-			}
-		}
-#endif /* CONFIG_DATA_LOGGER_CONVERT_CSV */
-
-#if defined(CONFIG_DATA_LOGGER_CONVERT_INFLUX)
-		{
-			char out_path[DATA_LOGGER_PATH_MAX];
-
-			(void)snprintf(out_path, sizeof(out_path), "%s.%s", base,
-						   data_logger_influx_formatter.file_ext);
-			int rc = data_logger_convert(&data_logger_influx_formatter, out_path);
-
-			if (rc != 0) {
-				LOG_ERR("Influx conversion → %s failed (%d)", out_path, rc);
-			} else {
-				LOG_INF("converted flight_log → %s", out_path);
-			}
-		}
-#endif /* CONFIG_DATA_LOGGER_CONVERT_INFLUX */
-
-		k_sem_give(&convert_idle);
-	}
-}
-
 K_THREAD_DEFINE(converter_thread, 2048, converter_task, NULL, NULL, NULL, 9, 0, 0);
 
 static void log_begin_flight(void)
@@ -162,7 +18,7 @@ static void log_begin_flight(void)
 	if (k_sem_take(&convert_idle, K_MSEC(LOG_ARM_CONVERT_TIMEOUT_MS)) != 0) {
 		LOG_ERR("ARMED: prior conversion still running after %d ms — "
 				"flight will not be logged",
-				LOG_ARM_CONVERT_TIMEOUT_MS);
+			LOG_ARM_CONVERT_TIMEOUT_MS);
 #if defined(CONFIG_AURORA_NOTIFY)
 		notify_error();
 #endif
@@ -217,24 +73,6 @@ static void log_end_work_handler(struct k_work *work)
 }
 static K_WORK_DELAYABLE_DEFINE(log_end_work, log_end_work_handler);
 
-void log_imu_data(const struct imu_data *imu)
-{
-	uint64_t ts = k_ticks_to_ns_floor64(k_uptime_ticks());
-	struct datapoint dp = {
-		.timestamp_ns = ts,
-		.type = AURORA_DATA_IMU_ACCEL,
-		.channel_count = 3,
-		.channels = {imu->accel[0], imu->accel[1], imu->accel[2]},
-	};
-	log_enqueue(&dp);
-
-	dp.type = AURORA_DATA_IMU_GYRO;
-	dp.channels[0] = imu->gyro[0];
-	dp.channels[1] = imu->gyro[1];
-	dp.channels[2] = imu->gyro[2];
-	log_enqueue(&dp);
-}
-
 void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state)
 {
 	/* Flight-time logging lifecycle:
@@ -261,18 +99,6 @@ void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_s
 		(void)k_work_cancel_delayable(&log_end_work);
 		log_end_flight();
 	}
-}
-
-void log_baro_data(const struct baro_data *baro)
-{
-	uint64_t ts = k_ticks_to_ns_floor64(k_uptime_ticks());
-	struct datapoint dp = {
-		.timestamp_ns = ts,
-		.type = AURORA_DATA_BARO,
-		.channel_count = 2,
-		.channels = {baro->temperature, baro->pressure},
-	};
-	log_enqueue(&dp);
 }
 
 void log_flight_telemetry()

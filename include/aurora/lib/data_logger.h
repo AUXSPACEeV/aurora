@@ -396,4 +396,25 @@ int data_logger_convert(const struct data_logger_formatter *out_fmt,
 
 /** @} */
 
+extern struct data_logger sm_logger;
+extern atomic_t sm_logger_live;
+
+extern struct k_sem convert_idle;
+extern struct k_sem convert_request;
+
+/* Decouple logging from the SM hot path: SM pushes datapoints into this
+ * queue with K_NO_WAIT; a dedicated logger thread drains it and owns all
+ * FS-touching operations (write + periodic flush). Sized to absorb the
+ * worst-case flush stall at full IMU+baro rate.
+ */
+#define LOG_MSGQ_DEPTH 256
+#define LOG_FLUSH_PERIOD_MS 1000
+
+/* How long SM→ARMED will wait for a pending conversion to finish. */
+#define LOG_ARM_CONVERT_TIMEOUT_MS 1500
+
+void pick_convert_out_base(char *out, size_t out_sz);
+void converter_task(void *, void *, void *);
+void log_enqueue(const struct datapoint *dp);
+void logger_task(void *, void *, void *);
 #endif /* AURORA_LIB_DATA_LOGGER_H_ */
