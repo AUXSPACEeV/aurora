@@ -10,7 +10,7 @@
  */
 
 #include "aurora/lib/state/simple.h"
-#include "logger.h"
+#include "data.h"
 #include <string.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
