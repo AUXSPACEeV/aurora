@@ -1,12 +1,12 @@
-#include "logger.h"
-#include <aurora/lib/baro.h>
-#include <stdint.h>
-#include <stdio.h>
+#include "data.h"
 #include "aurora/lib/data_logger.h"
 #include "aurora/lib/notify.h"
 #include "aurora/lib/state/state.h"
 #include "zephyr/fs/fs.h"
 #include "zephyr/logging/log.h"
+#include <aurora/lib/baro.h>
+#include <stdint.h>
+#include <stdio.h>
 
 LOG_MODULE_DECLARE(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 
