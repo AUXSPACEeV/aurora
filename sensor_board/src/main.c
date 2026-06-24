@@ -86,14 +86,14 @@ ZBUS_CHAN_ADD_OBS(imu_data_chan, sm_sub, 1);
 ZBUS_CHAN_ADD_OBS(baro_data_chan, sm_sub, 1);
 
 #if defined(CONFIG_AURORA_POWERFAIL)
-static void powerfail_assert()
+static void powerfail_assert(void)
 {
 #if defined(CONFIG_AURORA_STATE_MACHINE)
 	armed = 0;
 #endif /* CONFIG_AURORA_STATE_MACHINE */
 }
 
-static void powerfail_deassert()
+static void powerfail_deassert(void)
 {
 #if defined(CONFIG_AURORA_STATE_MACHINE)
 	armed = 1;
@@ -260,14 +260,18 @@ static void handle_imu(int64_t *last_imu_ns, struct attitude *attitude_state, st
 	double orientation[3], double *acceleration, double *accel_vert, bool *imu_ready, bool *calibration_notified)
 {
 	int64_t now_ns = (k_uptime_ticks() * NSEC_PER_SEC) / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
-	double dt_orient_s = (*last_imu_ns != 0) ? (double)(now_ns - *last_imu_ns) / 1e9 : 0.0;
-	if (dt_orient_s < 0.0 || dt_orient_s > 1.0) {
-		dt_orient_s = 0.0;
+	/* Delta-time since the last sample, clamped to a sane range; 0.0 on the
+	 * first sample or after a discontinuity. Shared by orientation
+	 * integration and the attitude update below.
+	 */
+	double dt_s = (*last_imu_ns != 0) ? (double)(now_ns - *last_imu_ns) / 1e9 : 0.0;
+	if (dt_s < 0.0 || dt_s > 1.0) {
+		dt_s = 0.0;
 	}
 
 	const double *bias_for_orient = attitude_is_calibrated(attitude_state) ? attitude_state->gyro_bias : NULL;
 
-	if (imu_sensor_value_to_orientation(imu_data, dt_orient_s, bias_for_orient, orientation) == 0
+	if (imu_sensor_value_to_orientation(imu_data, dt_s, bias_for_orient, orientation) == 0
 		&& imu_sensor_value_to_acceleration(imu_data, acceleration) == 0) {
 		*imu_ready = true;
 	}
@@ -301,13 +305,10 @@ static void handle_imu(int64_t *last_imu_ns, struct attitude *attitude_state, st
 			}
 		}
 		*accel_vert = 0.0;
-	} else if (*last_imu_ns != 0) {
-		double dt_s = (double)(now_ns - *last_imu_ns) / 1e9;
-		if (dt_s > 0.0 && dt_s <= 1.0) {
-			double a_v;
-			if (attitude_update(attitude_state, accel_b, gyro_b, dt_s, &a_v) == 0) {
-				*accel_vert = a_v;
-			}
+	} else if (dt_s > 0.0) {
+		double a_v;
+		if (attitude_update(attitude_state, accel_b, gyro_b, dt_s, &a_v) == 0) {
+			*accel_vert = a_v;
 		}
 	}
 	*last_imu_ns = now_ns;
@@ -448,7 +449,7 @@ void state_machine_task(void *, void *, void *)
 	sm_init(&state_cfg, &sm_error_handler);
 	sm_active = true;
 
-	// TODO: Add idling
+	/* TODO: Add idling */
 	while (!baro_active || !imu_active) {
 		k_sleep(K_MSEC(100));
 	}
