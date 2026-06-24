@@ -1,12 +1,23 @@
+/**
+ * @file data.c
+ * @brief Flight-time logging lifecycle and telemetry glue for the sensor board.
+ *
+ * Drives the binary data logger across flight state transitions and enqueues
+ * state-machine telemetry datapoints.
+ *
+ * Copyright (c) 2025-2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "data.h"
-#include "aurora/lib/data_logger.h"
-#include "aurora/lib/notify.h"
-#include "aurora/lib/state/state.h"
-#include "zephyr/fs/fs.h"
-#include "zephyr/logging/log.h"
-#include <aurora/lib/baro.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <zephyr/fs/fs.h>
+#include <zephyr/logging/log.h>
+#include <aurora/lib/baro.h>
+#include <aurora/lib/data_logger.h>
+#include <aurora/lib/notify.h>
+#include <aurora/lib/state/state.h>
 
 #if defined(CONFIG_DATA_LOGGER_BIN)
 LOG_MODULE_DECLARE(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
@@ -101,7 +112,7 @@ void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_s
 	}
 }
 
-void log_flight_telemetry()
+void log_flight_telemetry(void)
 {
 	struct sm_inputs sm_in;
 	sm_get_inputs(&sm_in);
