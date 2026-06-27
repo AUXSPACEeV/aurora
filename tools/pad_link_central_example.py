@@ -12,11 +12,32 @@ import asyncio
 import struct
 from bleak import BleakScanner, BleakClient
 
-SERVICE_UUID = "e8a59100-7c0e-4b5b-9a4c-1f1b6f7c4d70"
-UUID_BOARD   = "e8a59101-7c0e-4b5b-9a4c-1f1b6f7c4d70"
-UUID_STATE   = "e8a59102-7c0e-4b5b-9a4c-1f1b6f7c4d70"
-UUID_COMP    = "e8a59104-7c0e-4b5b-9a4c-1f1b6f7c4d70"
-UUID_SMTYPE  = "e8a59105-7c0e-4b5b-9a4c-1f1b6f7c4d70"
+SERVICE_UUID    = "e8a59100-7c0e-4b5b-9a4c-1f1b6f7c4d70"
+UUID_BOARD      = "e8a59101-7c0e-4b5b-9a4c-1f1b6f7c4d70"
+UUID_STATE      = "e8a59102-7c0e-4b5b-9a4c-1f1b6f7c4d70"
+UUID_RAW        = "e8a59103-7c0e-4b5b-9a4c-1f1b6f7c4d70"  # deprecated
+UUID_COMP       = "e8a59104-7c0e-4b5b-9a4c-1f1b6f7c4d70"
+UUID_SMTYPE     = "e8a59105-7c0e-4b5b-9a4c-1f1b6f7c4d70"
+UUID_BOARDCAP   = "e8a591a0-7c0e-4b5b-9a4c-1f1b6f7c4d70"
+UUID_BARO       = "e8a591a1-7c0e-4b5b-9a4c-1f1b6f7c4d70"
+UUID_ACCEL      = "e8a591a2-7c0e-4b5b-9a4c-1f1b6f7c4d70"
+UUID_GYRO       = "e8a591a3-7c0e-4b5b-9a4c-1f1b6f7c4d70"
+UUID_IMU6       = "e8a591a4-7c0e-4b5b-9a4c-1f1b6f7c4d70"
+UUID_INNER_TEMP = "e8a591a7-7c0e-4b5b-9a4c-1f1b6f7c4d70"
+
+# Board capability flags (boardcap characteristic, uint32 LE)
+BOARDCAP_IMU  = (1 << 0)  # accel (a2), gyro (a3), 6-DoF IMU (a4) available
+BOARDCAP_BARO = (1 << 1)  # baro (a1), inner_temp (a7) available
+
+# Decode helpers (all little-endian, values in micro-units → divide by 1e6):
+#   baro:       struct.unpack("<Iqq",      data[:20]) → uptime_ms, temp_us, press_us
+#   accel:      struct.unpack("<Iqqq",     data[:28]) → uptime_ms, x_us, y_us, z_us
+#   gyro:       struct.unpack("<Iqqq",     data[:28]) → uptime_ms, x_us, y_us, z_us
+#   imu6:       struct.unpack("<Iqqqqqq",  data[:52]) → uptime_ms, ax,ay,az,gx,gy,gz
+#   inner_temp: struct.unpack("<Iq",       data[:12]) → uptime_ms, temp_us
+#   boardcap:   struct.unpack("<I",        data[:4])  → flags
+#
+# Example: temp_c = temp_us / 1_000_000
 
 SM_STATES = {
     0: ("IDLE", "ARMED", "BOOST", "BURNOUT",
