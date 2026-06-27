@@ -575,6 +575,13 @@ void state_machine_task(void *, void *, void *)
 		state = sm_get_state();
 		LOG_DBG("STATE = %d", state);
 
+#if defined(CONFIG_AURORA_PAD_LINK)
+		struct sm_inputs sm_snap;
+
+		sm_get_inputs(&sm_snap);
+		pad_link_publish_sm(state, sm_get_type(), &sm_snap);
+#endif /* CONFIG_AURORA_PAD_LINK */
+
 		log_flight_telemetry();
 		log_vbat_telemetry();
 
