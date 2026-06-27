@@ -13,7 +13,10 @@
  *
  * bt_enable() is intentionally never called: pad_link_publish_sm
  * early-exits when current_conn is NULL, so we exercise the
- * snapshot-update path without bringing up the BT host.
+ * snapshot-update path without bringing up the BT host. Board
+ * capability flags are only computed inside pad_link_init(), so the
+ * boardcap test calls pad_link_test_trigger_boardcap() to run that
+ * same logic directly.
  *
  * Copyright (c) 2026 Auxspace e.V.
  *
@@ -43,6 +46,64 @@
  * field reorder here must fail this suite before it reaches the
  * central.
  */
+
+ZTEST(pad_link_format, test_boardcap_flags)
+{
+	zassert_equal(PL_BOARDCAP_IMU,  (1U << 0), "IMU flag");
+	zassert_equal(PL_BOARDCAP_BARO, (1U << 1), "BARO flag");
+}
+
+ZTEST(pad_link_format, test_baro_payload_layout)
+{
+	zassert_equal(sizeof(struct pl_baro_payload), 20,
+		      "baro payload size drifted: %zu",
+		      sizeof(struct pl_baro_payload));
+
+	zassert_equal(offsetof(struct pl_baro_payload, uptime_ms),  0,  "uptime_ms");
+	zassert_equal(offsetof(struct pl_baro_payload, temp_us),    4,  "temp_us");
+	zassert_equal(offsetof(struct pl_baro_payload, press_us),   12, "press_us");
+}
+
+ZTEST(pad_link_format, test_accel_payload_layout)
+{
+	zassert_equal(sizeof(struct pl_accel_payload), 28,
+		      "accel payload size drifted: %zu",
+		      sizeof(struct pl_accel_payload));
+
+	zassert_equal(offsetof(struct pl_accel_payload, uptime_ms),  0, "uptime_ms");
+	zassert_equal(offsetof(struct pl_accel_payload, accel_us),   4, "accel_us");
+}
+
+ZTEST(pad_link_format, test_gyro_payload_layout)
+{
+	zassert_equal(sizeof(struct pl_gyro_payload), 28,
+		      "gyro payload size drifted: %zu",
+		      sizeof(struct pl_gyro_payload));
+
+	zassert_equal(offsetof(struct pl_gyro_payload, uptime_ms),  0, "uptime_ms");
+	zassert_equal(offsetof(struct pl_gyro_payload, gyro_us),    4, "gyro_us");
+}
+
+ZTEST(pad_link_format, test_imu6_payload_layout)
+{
+	zassert_equal(sizeof(struct pl_imu6_payload), 52,
+		      "imu6 payload size drifted: %zu",
+		      sizeof(struct pl_imu6_payload));
+
+	zassert_equal(offsetof(struct pl_imu6_payload, uptime_ms),  0,  "uptime_ms");
+	zassert_equal(offsetof(struct pl_imu6_payload, accel_us),   4,  "accel_us");
+	zassert_equal(offsetof(struct pl_imu6_payload, gyro_us),    28, "gyro_us");
+}
+
+ZTEST(pad_link_format, test_inner_temp_payload_layout)
+{
+	zassert_equal(sizeof(struct pl_inner_temp_payload), 12,
+		      "inner_temp payload size drifted: %zu",
+		      sizeof(struct pl_inner_temp_payload));
+
+	zassert_equal(offsetof(struct pl_inner_temp_payload, uptime_ms),  0, "uptime_ms");
+	zassert_equal(offsetof(struct pl_inner_temp_payload, temp_us),    4, "temp_us");
+}
 
 ZTEST(pad_link_format, test_raw_payload_layout)
 {
@@ -145,7 +206,8 @@ ZTEST(pad_link_snap, test_imu_publish_updates_snap_raw)
 		   "imu publish");
 
 	struct pl_raw_payload raw;
-	pad_link_test_get_snapshot(NULL, NULL, &raw, NULL);
+	pad_link_test_get_snapshot(NULL, NULL, &raw, NULL,
+				   NULL, NULL, NULL, NULL, NULL, NULL);
 
 	for (int i = 0; i < 3; i++) {
 		zassert_equal(raw.accel_val1[i], msg.accel[i].val1,
@@ -173,7 +235,8 @@ ZTEST(pad_link_snap, test_baro_publish_updates_snap_raw)
 		   "baro publish");
 
 	struct pl_raw_payload raw;
-	pad_link_test_get_snapshot(NULL, NULL, &raw, NULL);
+	pad_link_test_get_snapshot(NULL, NULL, &raw, NULL,
+				   NULL, NULL, NULL, NULL, NULL, NULL);
 
 	zassert_equal(raw.temp_val1,  msg.temperature.val1, "temp_val1");
 	zassert_equal(raw.temp_val2,  msg.temperature.val2, "temp_val2");
@@ -196,7 +259,8 @@ ZTEST(pad_link_snap, test_publish_sm_updates_snap_comp)
 
 	uint8_t sm_type, sm_state;
 	struct pl_computed_payload comp;
-	pad_link_test_get_snapshot(&sm_type, &sm_state, NULL, &comp);
+	pad_link_test_get_snapshot(&sm_type, &sm_state, NULL, &comp,
+				   NULL, NULL, NULL, NULL, NULL, NULL);
 
 	zassert_equal(sm_state, (uint8_t)SM_BOOST,      "sm_state byte");
 	zassert_equal(sm_type,  (uint8_t)SM_TYPE_SIMPLE, "sm_type byte");
@@ -222,13 +286,156 @@ ZTEST(pad_link_snap, test_publish_sm_null_inputs_is_noop)
 	struct pl_computed_payload before, after;
 	uint8_t st_before, st_after;
 
-	pad_link_test_get_snapshot(NULL, &st_before, NULL, &before);
+	pad_link_test_get_snapshot(NULL, &st_before, NULL, &before,
+				   NULL, NULL, NULL, NULL, NULL, NULL);
 	pad_link_publish_sm(SM_LANDED, SM_TYPE_SIMPLE, NULL);
-	pad_link_test_get_snapshot(NULL, &st_after,  NULL, &after);
+	pad_link_test_get_snapshot(NULL, &st_after,  NULL, &after,
+				   NULL, NULL, NULL, NULL, NULL, NULL);
 
 	zassert_equal(st_before, st_after, "sm_state must not move");
 	zassert_mem_equal(&before, &after, sizeof(before),
 			  "comp payload must not move");
+}
+
+ZTEST(pad_link_snap, test_boardcap_flags_set)
+{
+	/* prj.conf enables both CONFIG_IMU and CONFIG_BARO. */
+	pad_link_test_trigger_boardcap();
+
+	uint32_t cap;
+	pad_link_test_get_snapshot(NULL, NULL, NULL, NULL,
+				   &cap, NULL, NULL, NULL, NULL, NULL);
+
+	zassert_true(cap & PL_BOARDCAP_IMU,  "IMU flag should be set");
+	zassert_true(cap & PL_BOARDCAP_BARO, "BARO flag should be set");
+}
+
+ZTEST(pad_link_snap, test_baro_publish_updates_snap_baro)
+{
+	struct baro_data msg = {
+		.temperature = { .val1 = 23,  .val2 = 456000 },
+		.pressure    = { .val1 = 101, .val2 = 325000 },
+	};
+
+	/* k_uptime_get_32() returns 0 during the very first millisecond
+	 * of boot; see test_imu_publish_updates_snap_raw for the same
+	 * workaround.
+	 */
+	k_msleep(2);
+
+	zassert_ok(zbus_chan_pub(&baro_data_chan, &msg, K_SECONDS(1)),
+		   "baro publish");
+
+	struct pl_baro_payload baro;
+	pad_link_test_get_snapshot(NULL, NULL, NULL, NULL,
+				   NULL, &baro, NULL, NULL, NULL, NULL);
+
+	int64_t exp_temp  = (int64_t)23  * 1000000LL + 456000;
+	int64_t exp_press = (int64_t)101 * 1000000LL + 325000;
+
+	zassert_equal(baro.temp_us,  exp_temp,  "temp_us mismatch");
+	zassert_equal(baro.press_us, exp_press, "press_us mismatch");
+}
+
+ZTEST(pad_link_snap, test_baro_publish_updates_snap_inner_temp)
+{
+	struct baro_data msg = {
+		.temperature = { .val1 = 25, .val2 = 100000 },
+		.pressure    = { .val1 = 99, .val2 = 0 },
+	};
+
+	zassert_ok(zbus_chan_pub(&baro_data_chan, &msg, K_SECONDS(1)),
+		   "baro publish");
+
+	struct pl_inner_temp_payload it;
+	pad_link_test_get_snapshot(NULL, NULL, NULL, NULL,
+				   NULL, NULL, NULL, NULL, NULL, &it);
+
+	int64_t exp = (int64_t)25 * 1000000LL + 100000;
+
+	zassert_equal(it.temp_us, exp, "inner_temp.temp_us mismatch");
+}
+
+ZTEST(pad_link_snap, test_imu_publish_updates_snap_accel)
+{
+	struct imu_data msg = {
+		.accel = {
+			{ .val1 = 1, .val2 = 100 },
+			{ .val1 = 2, .val2 = 200 },
+			{ .val1 = 3, .val2 = 300 },
+		},
+		.gyro = { {0}, {0}, {0} },
+	};
+
+	zassert_ok(zbus_chan_pub(&imu_data_chan, &msg, K_SECONDS(1)),
+		   "imu publish");
+
+	struct pl_accel_payload accel;
+	pad_link_test_get_snapshot(NULL, NULL, NULL, NULL,
+				   NULL, NULL, &accel, NULL, NULL, NULL);
+
+	for (int i = 0; i < 3; i++) {
+		int64_t exp = (int64_t)msg.accel[i].val1 * 1000000LL
+			      + msg.accel[i].val2;
+		zassert_equal(accel.accel_us[i], exp, "accel_us[%d]", i);
+	}
+}
+
+ZTEST(pad_link_snap, test_imu_publish_updates_snap_gyro)
+{
+	struct imu_data msg = {
+		.accel = { {0}, {0}, {0} },
+		.gyro  = {
+			{ .val1 = 10, .val2 = 1000 },
+			{ .val1 = 20, .val2 = 2000 },
+			{ .val1 = 30, .val2 = 3000 },
+		},
+	};
+
+	zassert_ok(zbus_chan_pub(&imu_data_chan, &msg, K_SECONDS(1)),
+		   "imu publish");
+
+	struct pl_gyro_payload gyro;
+	pad_link_test_get_snapshot(NULL, NULL, NULL, NULL,
+				   NULL, NULL, NULL, &gyro, NULL, NULL);
+
+	for (int i = 0; i < 3; i++) {
+		int64_t exp = (int64_t)msg.gyro[i].val1 * 1000000LL
+			      + msg.gyro[i].val2;
+		zassert_equal(gyro.gyro_us[i], exp, "gyro_us[%d]", i);
+	}
+}
+
+ZTEST(pad_link_snap, test_imu_publish_updates_snap_imu6)
+{
+	struct imu_data msg = {
+		.accel = {
+			{ .val1 = 5, .val2 = 500 },
+			{ .val1 = 6, .val2 = 600 },
+			{ .val1 = 7, .val2 = 700 },
+		},
+		.gyro = {
+			{ .val1 = 50, .val2 = 5000 },
+			{ .val1 = 60, .val2 = 6000 },
+			{ .val1 = 70, .val2 = 7000 },
+		},
+	};
+
+	zassert_ok(zbus_chan_pub(&imu_data_chan, &msg, K_SECONDS(1)),
+		   "imu publish");
+
+	struct pl_imu6_payload imu6;
+	pad_link_test_get_snapshot(NULL, NULL, NULL, NULL,
+				   NULL, NULL, NULL, NULL, &imu6, NULL);
+
+	for (int i = 0; i < 3; i++) {
+		int64_t exp_a = (int64_t)msg.accel[i].val1 * 1000000LL
+				+ msg.accel[i].val2;
+		int64_t exp_g = (int64_t)msg.gyro[i].val1 * 1000000LL
+				+ msg.gyro[i].val2;
+		zassert_equal(imu6.accel_us[i], exp_a, "imu6.accel_us[%d]", i);
+		zassert_equal(imu6.gyro_us[i],  exp_g, "imu6.gyro_us[%d]",  i);
+	}
 }
 
 ZTEST_SUITE(pad_link_snap, NULL, NULL, NULL, NULL, NULL);
