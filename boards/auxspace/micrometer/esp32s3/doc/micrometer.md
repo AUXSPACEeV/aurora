@@ -25,6 +25,22 @@ Specifically added features include:
 - CAN-bus for communication with posible expansion PCBs
 - µSD-Card slot
 
+## Revisions
+
+The µMETER PCB exists in two hardware revisions, selected via the Zephyr board
+revision suffix.
+Revision 1 is the default, so the bare board name resolves to it.
+
+| Target                          | PCB | Notes                              |
+|:--------------------------------|:---:|:-----------------------------------|
+| `micrometer/esp32s3/procpu`     | v1  | default (same as `@1`)             |
+| `micrometer@1/esp32s3/procpu`   | v1  | explicit rev. 1                    |
+| `micrometer@2/esp32s3/procpu`   | v2  | updated sensors, dedicated ARM pin |
+
+Revision 2 additionally changes to native (4-bit) SDHC instead of the
+SPI-attached card, uses a faster and better barometer and adds a dedicated
+"Remove Before Flight" pin for launch-safety.
+
 ## Supported Features
 
 ```{zephyr:board-supported-hw}
@@ -38,6 +54,7 @@ Specifically added features include:
 - Pins for battery
 - 6-pin connector for expansion PCBs;
 don't throw heavy loads an the 3V3 pin, it may overheat the LDO.
+- `rev2`: USB-C
 
 # Programming and Debugging
 
@@ -45,8 +62,9 @@ don't throw heavy loads an the 3V3 pin, it may overheat the LDO.
 ```
 
 ```{warning}
-If no µSD-Card is inserted, the board will have trouble booting, since the
-SPI-SDHC driver has no way to detect card presence without a card-detect-pin!
+On revision 1, if no µSD-Card is inserted the board will have trouble booting,
+since the SPI-SDHC driver has no way to detect card presence without a
+card-detect-pin!
 ```
 
 ## Building
@@ -54,7 +72,11 @@ SPI-SDHC driver has no way to detect card presence without a card-detect-pin!
 µMeter is built with `sysbuild` since it uses the MCUBoot boot loader:
 
 ```bash
+# Revision 1 (default)
 west build -p -b micrometer/esp32s3/procpu --sysbuild sensor_board
+
+# Revision 2
+west build -p -b micrometer@2/esp32s3/procpu --sysbuild sensor_board
 ```
 
 ## Flashing

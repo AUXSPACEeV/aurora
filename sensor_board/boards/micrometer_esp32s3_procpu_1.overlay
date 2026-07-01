@@ -1,0 +1,27 @@
+/*
+ * Copyright (c) 2025-2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * µMETER rev.1: Rocinante
+ */
+
+/ {
+	chosen {
+		/* Auxspace specific */
+		auxspace,baro = &lps22hh0;
+		auxspace,pfm = &button0;
+	};
+};
+
+&lps22hh0 {
+	status = "okay";
+	odr = <LPS22HH_DT_ODR_100HZ>;
+};
+
+&spi2 {
+	status = "okay";
+};
+
+&sdhc2 {
+	status = "okay";
+};
