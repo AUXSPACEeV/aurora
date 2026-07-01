@@ -2,5 +2,11 @@ board:
   name: micrometer
   full_name: µMETER
   vendor: auxspaceev
+  revision:
+    format: number
+    default: "1"
+    revisions:
+    - name: "1"
+    - name: "2"
   socs:
   - name: esp32s3

@@ -1,0 +1,31 @@
+/*
+ * Copyright (c) 2025-2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * µMETER rev.2: Razorback
+ */
+
+/ {
+	chosen {
+		/* Auxspace specific */
+		auxspace,baro = &bmp581_0;
+		auxspace,pfm = &button1;
+	};
+};
+
+&bmp581_0 {
+	status = "okay";
+	odr = <BMP581_DT_ODR_100_2_HZ>;
+};
+
+&vbatt {
+	status = "okay";
+};
+
+&sdhc {
+	status = "okay";
+};
+
+&sdhc0 {
+	status = "okay";
+};
