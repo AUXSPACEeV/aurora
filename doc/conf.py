@@ -187,6 +187,10 @@ gh_link_prefixes = {
 # which fails for Aurora's own boards that live outside the Zephyr tree.
 # Patch it to return a srcdir-relative path via the doc/boards/ symlink instead.
 import gen_boards_catalog as _gbc
+# As of Zephyr's board-catalog refactor, the twister/EDT gathering constants and
+# logic moved out of gen_boards_catalog into scripts/ci/gen_catalogs.py.
+# gen_boards_catalog inserts scripts/ci into sys.path on import, so this works.
+import gen_catalogs as _gcat
 
 _AURORA_BOARDS = _WORKSPACE / "aurora" / "boards"
 _orig_guess_image = _gbc.guess_image
@@ -227,8 +231,8 @@ def _run_twister_with_aurora_boards(outdir, vendor_filter):
         "-T", "samples/hello_world/",
         "-M",
         "--board-root", str(_AURORA_BOARDS.parent),  # aurora/boards/
-        *[arg for path in _gbc.EDT_PICKLE_PATHS for arg in ("--keep-artifacts", path)],
-        *[arg for path in _gbc.RUNNERS_YAML_PATHS for arg in ("--keep-artifacts", path)],
+        *[arg for path in _gcat.EDT_PICKLE_PATHS for arg in ("--keep-artifacts", path)],
+        *[arg for path in _gcat.RUNNERS_YAML_PATHS for arg in ("--keep-artifacts", path)],
         "--cmake-only",
         "-v",
         "--outdir", str(outdir),
@@ -296,8 +300,12 @@ def _get_catalog_with_aurora_fixes(**kwargs):
     #    (default "zephyr" module) or a "<module>: <path>" form.
     _AURORA_REPO = _AURORA_BOARDS.parent
     for board_data in catalog.get("boards", {}).values():
-        for target_features in board_data.get("supported_features", {}).values():
-            misc = target_features.get("misc", {})
+        for target_data in board_data.get("supported_features", {}).values():
+            # As of Zephyr's board-catalog refactor, each board target maps to a
+            # dict of {"ram_size", "flash_size", "features"}; the binding-type ->
+            # compat buckets we care about live under the "features" sub-dict.
+            features = target_data.get("features", {})
+            misc = features.get("misc", {})
             to_move = {
                 compat: fdata
                 for compat, fdata in misc.items()
@@ -307,13 +315,13 @@ def _get_catalog_with_aurora_fixes(**kwargs):
                 )
             }
             if to_move:
-                target_features.setdefault("pyro", {}).update(to_move)
+                features.setdefault("pyro", {}).update(to_move)
                 for compat in to_move:
                     del misc[compat]
 
             for fdata in (
                 fd
-                for bucket in target_features.values()
+                for bucket in features.values()
                 for fd in bucket.values()
             ):
                 all_nodes = fdata.get("okay_nodes", []) + fdata.get("disabled_nodes", [])
