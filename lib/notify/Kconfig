@@ -61,4 +61,26 @@ config AURORA_NOTIFY_LED
 	help
 	  Drive an LED via PWM to signal boot, state changes, and errors.
 
+config AURORA_NOTIFY_DISK_LED
+	bool "SD-card activity LED"
+	depends on GPIO
+	help
+	  Drive the GPIO LED referenced by the "auxspace,disk-led" chosen
+	  node as an SD-card activity indicator. Independent of the PWM
+	  state-machine LED: it lights on disk writes and turns itself off
+	  after a short idle window.
+
+if AURORA_NOTIFY_DISK_LED
+
+config AURORA_NOTIFY_DISK_LED_HOLD_MS
+	int "SD activity LED hold time (ms)"
+	default 40
+	range 1 1000
+	help
+	  How long the SD activity LED stays lit after the most recent disk
+	  access. Continuous writes keep it on; a pause longer than this
+	  turns it off.
+
+endif # AURORA_NOTIFY_DISK_LED
+
 endif # AURORA_NOTIFY

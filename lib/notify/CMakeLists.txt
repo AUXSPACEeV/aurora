@@ -13,3 +13,7 @@ endif()
 if(CONFIG_AURORA_NOTIFY_LED)
   zephyr_library_sources(led/led.c)
 endif()
+
+if(CONFIG_AURORA_NOTIFY_DISK_LED)
+  zephyr_library_sources(disk_led/disk_led.c)
+endif()

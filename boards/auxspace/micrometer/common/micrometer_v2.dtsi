@@ -32,6 +32,15 @@
 		skip-calibration;
 		status = "disabled";
 	};
+
+	status_leds: status-leds {
+		compatible = "gpio-leds";
+
+		sd_activity_led: led_sd {
+			gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
+			label = "SD Activity LED";
+		};
+	};
 };
 
 &pinctrl {
