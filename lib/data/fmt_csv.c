@@ -73,6 +73,7 @@ static const struct csv_column csv_columns[] = {
 	{ AURORA_DATA_SM_KINEMATICS, 2, "sm_kinematics_velocity" },
 	{ AURORA_DATA_SM_POSE,       1, "sm_pose_altitude" },
 	{ AURORA_DATA_SM_POSE,       0, "sm_pose_orientation" },
+	{ AURORA_DATA_VBAT,          0, "vbat_voltage" },
 };
 
 #define CSV_COLUMN_COUNT ARRAY_SIZE(csv_columns)

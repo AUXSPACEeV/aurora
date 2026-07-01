@@ -518,6 +518,7 @@ void state_machine_task(void *, void *, void *)
 		LOG_DBG("STATE = %d", state);
 
 		log_flight_telemetry();
+		log_vbat_telemetry();
 
 		if (state != prev_state) {
 #if defined(CONFIG_IMU)

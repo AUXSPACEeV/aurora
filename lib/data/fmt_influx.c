@@ -50,6 +50,7 @@ static const char *field_names_for(enum aurora_data type, int channel)
 	static const char *const pose_fields[]  = {"velocity", "altitude",
 						   NULL};
 	static const char *const or_fields[]  = {"yaw", "pitch", "roll"};
+	static const char *const vbat_fields[]  = {"voltage"};
 
 	switch (type) {
 	case AURORA_DATA_BARO:
@@ -64,6 +65,8 @@ static const char *field_names_for(enum aurora_data type, int channel)
 		return (channel < 2) ? pose_fields[channel] : "unknown";
 	case AURORA_DATA_ORIENTATION:
 		return (channel < 3) ? or_fields[channel] : "unknown";
+	case AURORA_DATA_VBAT:
+		return (channel < 1) ? vbat_fields[channel] : "unknown";
 	default:
 		return "unknown";
 	}
