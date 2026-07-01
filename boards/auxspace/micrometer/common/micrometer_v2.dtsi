@@ -96,6 +96,7 @@
 	bus-width = <4>;
 	pinctrl-0 = <&sdmmc_default>;
 	pinctrl-names = "default";
+	max-bus-freq = <40000000>;
 	status = "disabled";
 
 	mmc0: mmc_0 {

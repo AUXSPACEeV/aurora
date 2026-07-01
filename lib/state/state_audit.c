@@ -16,6 +16,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/fs/fs.h>
@@ -77,7 +78,6 @@ static int sm_audit_file_write_header(void)
 
 static int sm_audit_file_create(void)
 {
-	struct fs_dir_t ptr;
 	struct fs_dirent entry;
 	char dir[64];
 	char full_path[64];
@@ -113,11 +113,9 @@ static int sm_audit_file_create(void)
 	sep = strrchr(dir, '/');
 	if (sep != NULL && sep != dir) {
 		*sep = '\0';
-		fs_dir_t_init(&ptr);
-		if (fs_opendir(&ptr, dir) < 0) {
-			(void)fs_mkdir(dir);
-		} else {
-			fs_closedir(&ptr);
+		rc = fs_mkdir(dir);
+		if (rc != 0 && rc != -EEXIST) {
+			LOG_WRN("failed to create audit dir %s (%d)", dir, rc);
 		}
 	}
 
