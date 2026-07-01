@@ -546,6 +546,34 @@ enum sm_type sm_get_type(void)
 	return SM_TYPE_SIMPLE;
 }
 
+/* sm_restore_state - see state.h */
+void sm_restore_state(enum sm_state state)
+{
+	stop_timers();
+	current_state = state;
+
+	/* Re-arm the timeout that gates this state's exit so a recovered
+	 * flight can still progress. Duration timers (dt_ab, dt_l) are
+	 * condition-driven and restart themselves from the update loop.
+	 */
+	switch (state) {
+	case SM_APOGEE:
+		k_timer_start(&to_a, K_MSEC(th.TO_A), K_NO_WAIT);
+		break;
+	case SM_MAIN:
+		k_timer_start(&to_m, K_MSEC(th.TO_M), K_NO_WAIT);
+		break;
+	case SM_REDUNDANT:
+		k_timer_start(&to_r, K_MSEC(th.TO_R), K_NO_WAIT);
+		break;
+	default:
+		break;
+	}
+
+	SM_EVENT("state restored after watchdog recovery");
+	LOG_WRN("restored state %s after watchdog recovery", sm_state_str(state));
+}
+
 /* sm_get_inputs – see state.h */
 void sm_get_inputs(struct sm_inputs *out)
 {

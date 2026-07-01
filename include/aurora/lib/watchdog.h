@@ -83,6 +83,17 @@ int aurora_wdt_feed(aurora_wdt_task_t task);
  */
 int aurora_wdt_unregister(aurora_wdt_task_t task);
 
+/**
+ * @brief Hook invoked once when the supervisor decides to reset the SoC.
+ *
+ * Called from the monitor thread the moment it starts withholding the feed
+ * because a task missed its deadline i.e. one timeout period before the
+ * hardware watchdog actually resets. The default implementation is a no-op;
+ * override it (e.g. wdt_recovery library does) to persist state before reset.
+ * Runs in the monitor thread context, so it may take locks but must be brief.
+ */
+void aurora_wdt_reset_imminent(void);
+
 /** @} */
 
 #endif /* APP_LIB_WATCHDOG_H_ */

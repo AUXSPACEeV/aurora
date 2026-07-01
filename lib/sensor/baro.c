@@ -178,6 +178,12 @@ int baro_set_reference(double ref_kpa)
 	return 0;
 }
 
+/* baro_get_reference – see baro.h */
+double baro_get_reference(void)
+{
+	return ref_pressure_kpa;
+}
+
 /* baro_sensor_value_to_altitude – see baro.h */
 int baro_sensor_value_to_altitude(const struct sensor_value *press, double *altitude_out)
 {

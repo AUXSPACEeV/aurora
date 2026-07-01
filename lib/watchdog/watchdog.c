@@ -18,7 +18,7 @@ LOG_MODULE_REGISTER(watchdog, CONFIG_AURORA_WATCHDOG_LOG_LEVEL);
 BUILD_ASSERT(DT_NODE_HAS_STATUS(WDT_NODE, okay),
 	     "chosen auxspace,wdt is missing or disabled");
 
-/** @brief One supervised task slot. Protected by @ref lock. */
+/** @brief One supervised task slot. Protected by @c lock. */
 struct wdt_task {
 	const char *name;
 	uint32_t deadline_ms;
@@ -29,8 +29,8 @@ struct wdt_task {
 static const struct device *const wdt_dev = DEVICE_DT_GET(WDT_NODE);
 static int wdt_channel;
 
-static struct wdt_task tasks[CONFIG_AURORA_WATCHDOG_MAX_TASKS];
-static struct k_spinlock lock;
+static struct wdt_task tasks[CONFIG_AURORA_WATCHDOG_MAX_TASKS]; /**< Supervised task table. */
+static struct k_spinlock lock; /**< Protects @c tasks. */
 
 /* Name of the task that last missed its deadline, for the expiry callback.
  * Written by the monitor thread, read from ISR context.
@@ -39,6 +39,11 @@ static const char *volatile stale_task;
 
 static K_THREAD_STACK_DEFINE(monitor_stack, CONFIG_AURORA_WATCHDOG_MONITOR_STACK_SIZE);
 static struct k_thread monitor_thread;
+
+/* Weak no-op; overridden by the recovery library to persist state pre-reset. */
+__weak void aurora_wdt_reset_imminent(void)
+{
+}
 
 /**
  * @brief Hardware watchdog pre-reset (interrupt) handler.
@@ -67,6 +72,8 @@ static void wdt_monitor(void *a, void *b, void *c)
 	ARG_UNUSED(a);
 	ARG_UNUSED(b);
 	ARG_UNUSED(c);
+
+	bool reset_hook_fired = false;
 
 	while (1) {
 		k_sleep(K_MSEC(CONFIG_AURORA_WATCHDOG_FEED_INTERVAL_MS));
@@ -99,6 +106,13 @@ static void wdt_monitor(void *a, void *b, void *c)
 			 * resets the SoC.
 			 */
 			stale_task = culprit;
+			if (!reset_hook_fired) {
+				/* Once, before the reset lands, so consumers can
+				 * persist state (e.g. the recovery library).
+				 */
+				aurora_wdt_reset_imminent();
+				reset_hook_fired = true;
+			}
 			LOG_ERR("task '%s' missed its watchdog deadline; "
 				"withholding feed -> reset imminent", culprit);
 		}

@@ -17,6 +17,7 @@
 		auxspace,led = &pwmleds;
 		auxspace,flight-log-disk = &flight_log_disk;
 		auxspace,wdt = &wdt0;
+		auxspace,recovery = &retention0;
 	};
 
 	fstab {
@@ -117,4 +118,32 @@
 
 &wdt0 {
 	status = "okay";
+};
+
+/*
+ * Watchdog-recovery record. Lives in RTC fast RAM, which survives a warm
+ * (watchdog) reset but is cleared on power loss, so a flight is never resumed
+ * after a full ground power cycle. The retention subsystem wraps the 32-byte
+ * area with a magic prefix and checksum, so a cold boot or clobbered region
+ * degrades safely to "no recovery".
+ */
+&rtc_fast_ram {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	retainedmem0: retainedmem {
+		compatible = "zephyr,retained-ram";
+		status = "okay";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		retention0: retention@0 {
+			compatible = "zephyr,retention";
+			status = "okay";
+			reg = <0x0 0x20>;
+			prefix = [41 58]; /* "AX" */
+			checksum = <1>;
+		};
+	};
 };

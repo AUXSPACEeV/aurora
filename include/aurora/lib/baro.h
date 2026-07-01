@@ -67,7 +67,10 @@ int baro_init(const struct device *dev);
  *
  * Must be called before @ref baro_sensor_value_to_altitude to establish the
  * zero-altitude baseline. Typically called once at startup with the first valid
- * pressure reading.
+ * pressure reading. Only the first call takes effect; later calls are ignored
+ * so the frame stays fixed. Watchdog recovery exploits this by restoring the
+ * pre-reset reference before the first post-reboot measurement, keeping altitude
+ * in a consistent frame across the reset.
  *
  * @param ref_kpa Ground-level pressure in kilopascals.
  *
@@ -75,6 +78,13 @@ int baro_init(const struct device *dev);
  * @retval -EINVAL if @p ref_kpa is not positive.
  */
 int baro_set_reference(double ref_kpa);
+
+/**
+ * @brief Get the current ground-level reference pressure.
+ *
+ * @return Reference pressure in kilopascals, or 0.0 if not yet set.
+ */
+double baro_get_reference(void);
 
 /**
  * @brief Convert a pressure reading to altitude AGL.

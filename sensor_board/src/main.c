@@ -56,6 +56,10 @@ BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_pyro), okay),
 #include <aurora/lib/watchdog.h>
 #endif /* CONFIG_AURORA_WATCHDOG */
 
+#if defined(CONFIG_AURORA_WDT_RECOVERY)
+#include <aurora/lib/wdt_recovery.h>
+#endif /* CONFIG_AURORA_WDT_RECOVERY */
+
 #if defined(CONFIG_AURORA_TELEMETRY)
 #include <aurora/lib/telemetry.h>
 #endif /* CONFIG_AURORA_TELEMETRY */
@@ -465,6 +469,10 @@ static void handle_state_transition(enum sm_state prev_state, enum sm_state stat
 		orientation[2] = 0.0;
 	}
 #endif /* CONFIG_IMU */
+#if defined(CONFIG_AURORA_WDT_RECOVERY)
+	/* Persist the new state so a watchdog reset can resume from here. */
+	aurora_wdt_recovery_save_state(state);
+#endif /* CONFIG_AURORA_WDT_RECOVERY */
 	log_handle_flight_lifecycle(prev_state, state);
 }
 
@@ -524,6 +532,22 @@ void state_machine_task(void *, void *, void *)
 
 	sm_init(&state_cfg, &sm_error_handler);
 	sm_active = true;
+
+#if defined(CONFIG_AURORA_WDT_RECOVERY)
+	/* Resume a flight interrupted by a watchdog reset. Seed prev_state and
+	 * pyro_state to the recovered state so the loop does not treat the
+	 * resume as a fresh transition and re-fire already-deployed pyros;
+	 * future transitions (e.g. into REDUNDANT) still fire normally.
+	 */
+	enum sm_state recovered_state;
+	if (aurora_wdt_recovery_pending(&recovered_state)) {
+		sm_restore_state(recovered_state);
+		prev_state = recovered_state;
+		pyro_state = recovered_state;
+		LOG_WRN("resumed flight in state %s after watchdog reset",
+			sm_state_str(recovered_state));
+	}
+#endif /* CONFIG_AURORA_WDT_RECOVERY */
 
 	/* TODO: Add idling */
 	while (!baro_active || !imu_active) {
@@ -640,6 +664,15 @@ K_THREAD_DEFINE(state_machine, 4096, state_machine_task, NULL, NULL, NULL, 6, 0,
 int main(void)
 {
 	LOG_INF("Auxspace AURORA %s", APP_VERSION_STRING);
+
+#if defined(CONFIG_AURORA_WDT_RECOVERY)
+	/* Resolve the reboot reason and latch any pending flight-state
+	 * recovery first, before the state-machine thread reads it. Runs to
+	 * completion here because main() is higher priority and this call
+	 * does not block.
+	 */
+	(void)aurora_wdt_recovery_init();
+#endif /* CONFIG_AURORA_WDT_RECOVERY */
 
 #if defined(CONFIG_AURORA_WATCHDOG)
 	/* Arm the hardware watchdog before the sensor/state threads reach

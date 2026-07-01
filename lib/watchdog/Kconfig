@@ -52,4 +52,27 @@ config AURORA_WATCHDOG_MONITOR_PRIORITY
 	  not starved by them, while still allowing a runaway higher-priority
 	  thread to trip the hardware watchdog as the ultimate backstop.
 
+config AURORA_WDT_RECOVERY
+	bool "Resume flight state after a watchdog reset"
+	depends on DT_HAS_ZEPHYR_RETENTION_ENABLED
+	select RETAINED_MEM
+	select RETENTION
+	select HWINFO
+	help
+	  Persist the flight state in a retained-memory area and, after a
+	  watchdog reset that occurred mid-flight, resume from it instead of
+	  booting cold in SM_IDLE. Requires a zephyr,retention devicetree node
+	  selected via the auxspace,recovery dt chosen node. The retained area
+	  survives a warm reset but is cleared on power loss, so recovery never
+	  triggers after a full ground power cycle. This is watchdog recovery of
+	  the firmware state, not the vehicle's physical (parachute) recovery.
+
+if AURORA_WDT_RECOVERY
+
+module = AURORA_WDT_RECOVERY
+module-str = AURORA_WDT_RECOVERY
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # AURORA_WDT_RECOVERY
+
 endif # AURORA_WATCHDOG

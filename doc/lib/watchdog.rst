@@ -56,6 +56,10 @@ There are two backstops, in order of severity:
    watchdog is never fed and resets the SoC directly. This is why the
    hardware watchdog, not just the software check, is the real safety net.
 
+A reset need not mean the flight is lost: the :doc:`wdt_recovery` subsystem can
+persist the flight state and resume it after a mid-flight watchdog reset instead
+of rebooting cold into ``IDLE``.
+
 Hardware backends
 -----------------
 

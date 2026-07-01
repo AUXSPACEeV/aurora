@@ -141,6 +141,23 @@ enum sm_state sm_get_state(void);
 enum sm_type sm_get_type(void);
 
 /**
+ * @brief Force the state machine into a given state (watchdog recovery).
+ *
+ * Bypasses the normal transition logic to resume a flight after a watchdog
+ * reset. Stops any running timers and, for states whose exit is gated by a
+ * timeout (APOGEE, MAIN, REDUNDANT), restarts that timeout from now so the
+ * sequence can still complete on live sensor data. Must be called after
+ * sm_init() and before the update loop starts.
+ *
+ * @note Only control-flow state is restored. Hardware side effects already
+ *       performed before the reset (e.g. fired pyro channels) are not replayed
+ *       and must be handled by the caller.
+ *
+ * @param state State to resume from.
+ */
+void sm_restore_state(enum sm_state state);
+
+/**
  * @brief Retrieve the most recent inputs the state machine evaluated.
  *
  * When CONFIG_FILTER is enabled, ``altitude`` and ``velocity`` are the
