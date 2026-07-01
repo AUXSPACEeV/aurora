@@ -28,6 +28,10 @@
 #include <zephyr/fs/fs.h>
 #include <zephyr/storage/disk_access.h>
 #include <zephyr/logging/log.h>
+#if defined(CONFIG_LOG_BACKEND_FS)
+#include <zephyr/logging/log_backend.h>
+#include <zephyr/logging/log_ctrl.h>
+#endif
 #include <zephyr/sys/util.h>
 
 #include <ff.h>
@@ -253,5 +257,57 @@ int flight_log_disk_auto_format(void)
 	return 0;
 }
 
+#if defined(CONFIG_LOG_BACKEND_FS)
+/*
+ * Bring up the file-system log backend, but only once the FAT volume is
+ * actually mounted.  With CONFIG_LOG_BACKEND_FS_AUTOSTART=n the backend stays
+ * idle at boot, so the logging thread never flushes into an unmounted /MMC:
+ * Safe to call on every path: if nothing is mounted, simply leave disk logging
+ * off.
+ */
+static void flight_log_fs_backend_start(void)
+{
+	struct fs_statvfs stat;
+	const struct log_backend *backend;
+	int rc;
+
+	if (fs_statvfs(FS_MOUNT_POINT, &stat) != 0) {
+		LOG_WRN("fs log backend: %s not mounted — disk logging disabled",
+			FS_MOUNT_POINT);
+		return;
+	}
+
+	/* fs_open() creates files, not their parent directory. */
+	rc = fs_mkdir(CONFIG_LOG_BACKEND_FS_DIR);
+	if (rc != 0 && rc != -EEXIST) {
+		LOG_WRN("fs log backend: mkdir(%s) failed (%d) — disk logging "
+			"disabled", CONFIG_LOG_BACKEND_FS_DIR, rc);
+		return;
+	}
+
+	backend = log_backend_get_by_name("log_backend_fs");
+	if (backend == NULL) {
+		LOG_WRN("fs log backend: backend not found");
+		return;
+	}
+
+	log_backend_enable(backend, backend->cb->ctx, CONFIG_LOG_MAX_LEVEL);
+	LOG_INF("fs log backend: enabled on %s", CONFIG_LOG_BACKEND_FS_DIR);
+}
+#else
+static inline void flight_log_fs_backend_start(void) { }
+#endif /* CONFIG_LOG_BACKEND_FS */
+
+/*
+ * SYS_INIT entry point: format the FAT volume if needed, then start the
+ * file-system log backend now that /MMC: is (or isn't) mounted.
+ */
+static int flight_log_disk_bringup(void)
+{
+	(void)flight_log_disk_auto_format();
+	flight_log_fs_backend_start();
+	return 0;
+}
+
 /* Run after fstab automount (APPLICATION level, default priority). */
-SYS_INIT(flight_log_disk_auto_format, APPLICATION, 99);
+SYS_INIT(flight_log_disk_bringup, APPLICATION, 99);
