@@ -1,0 +1,55 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+config AURORA_WATCHDOG
+	bool "Watchdog supervision subsystem"
+	select WATCHDOG
+	help
+	  Enable hardware-watchdog supervision of critical threads. Threads
+	  register with the supervisor and check in each loop iteration; a
+	  monitor thread feeds the SoC hardware watchdog only while every
+	  registered task is healthy and resets the SoC otherwise.
+	  The watchdog device is taken from the auxspace,wdt dt chosen node.
+
+if AURORA_WATCHDOG
+
+module = AURORA_WATCHDOG
+module-str = AURORA_WATCHDOG
+source "subsys/logging/Kconfig.template.log_config"
+
+config AURORA_WATCHDOG_TIMEOUT_MS
+	int "Hardware watchdog timeout (ms)"
+	default 2000
+	help
+	  Time without a hardware feed before the watchdog acts. On the ESP32
+	  MWDT the stage-0 warning interrupt fires after this period and the
+	  stage-1 SoC reset one further period later. Must be comfortably
+	  larger than AURORA_WATCHDOG_FEED_INTERVAL_MS.
+
+config AURORA_WATCHDOG_FEED_INTERVAL_MS
+	int "Supervisor feed interval (ms)"
+	default 500
+	help
+	  How often the monitor thread evaluates task health and feeds the
+	  hardware watchdog.
+
+config AURORA_WATCHDOG_MAX_TASKS
+	int "Maximum supervised tasks"
+	default 4
+	help
+	  Number of registration slots. One per critical thread.
+
+config AURORA_WATCHDOG_MONITOR_STACK_SIZE
+	int "Monitor thread stack size"
+	default 1024
+
+config AURORA_WATCHDOG_MONITOR_PRIORITY
+	int "Monitor thread priority"
+	default 3
+	help
+	  Preemptible priority of the supervisor thread. Should be higher
+	  (numerically lower) than the supervised sensor/state threads so it is
+	  not starved by them, while still allowing a runaway higher-priority
+	  thread to trip the hardware watchdog as the ultimate backstop.
+
+endif # AURORA_WATCHDOG

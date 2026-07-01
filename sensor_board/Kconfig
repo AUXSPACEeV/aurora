@@ -82,6 +82,35 @@ config AURORA_SIM_AUTOLAUNCH_TIMEOUT_MS
 	  after triggering the flight profile. Exits with code 1 if this
 	  deadline is exceeded.
 
+menu "Watchdog task deadlines"
+	depends on AURORA_WATCHDOG
+
+config AURORA_WATCHDOG_IMU_DEADLINE_MS
+	int "IMU thread check-in deadline (ms)"
+	default 100
+	help
+	  Maximum time the IMU polling thread may go without feeding its
+	  watchdog before the SoC is reset. Should exceed the IMU poll period
+	  (1000 / CONFIG_IMU_FREQUENCY ms) with margin.
+
+config AURORA_WATCHDOG_BARO_DEADLINE_MS
+	int "Barometer thread check-in deadline (ms)"
+	default 100
+	help
+	  Maximum time the barometer polling thread may go without feeding its
+	  watchdog before the SoC is reset. Should exceed the baro measure
+	  period (1000 / CONFIG_BARO_FREQUENCY ms) with margin.
+
+config AURORA_WATCHDOG_SM_DEADLINE_MS
+	int "State machine thread check-in deadline (ms)"
+	default 100
+	help
+	  Maximum time the state machine thread may block waiting for sensor
+	  data before the SoC is reset. Sensors stream continuously in normal
+	  operation, so a longer stall indicates both sensor paths have died.
+
+endmenu
+
 menu "State Machine Configuration"
 
 config BOOST_ACCELERATION

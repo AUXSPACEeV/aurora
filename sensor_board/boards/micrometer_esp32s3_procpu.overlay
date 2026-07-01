@@ -16,6 +16,7 @@
 		auxspace,buzzer = &buzzer0;
 		auxspace,led = &pwmleds;
 		auxspace,flight-log-disk = &flight_log_disk;
+		auxspace,wdt = &wdt0;
 	};
 
 	fstab {

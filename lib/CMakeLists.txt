@@ -16,6 +16,9 @@ add_subdirectory_ifdef(CONFIG_AURORA_NOTIFY notify)
 # powerfail lib
 add_subdirectory_ifdef(CONFIG_AURORA_POWERFAIL powerfail)
 
+# watchdog supervision lib
+add_subdirectory_ifdef(CONFIG_AURORA_WATCHDOG watchdog)
+
 # pwm melodies
 add_subdirectory_ifdef(CONFIG_AURORA_PWM_MELODY pwm_melody)
 

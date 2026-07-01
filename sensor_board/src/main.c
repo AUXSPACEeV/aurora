@@ -52,6 +52,10 @@ BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_pyro), okay),
 #include <aurora/lib/powerfail.h>
 #endif /* CONFIG_AURORA_POWERFAIL */
 
+#if defined(CONFIG_AURORA_WATCHDOG)
+#include <aurora/lib/watchdog.h>
+#endif /* CONFIG_AURORA_WATCHDOG */
+
 #if defined(CONFIG_AURORA_TELEMETRY)
 #include <aurora/lib/telemetry.h>
 #endif /* CONFIG_AURORA_TELEMETRY */
@@ -147,7 +151,13 @@ void imu_task(void *, void *, void *)
 
 #if !defined(CONFIG_IMU_TRIGGER)
 	const int imu_hz = CONFIG_IMU_FREQUENCY;
+#if defined(CONFIG_AURORA_WATCHDOG)
+	aurora_wdt_task_t wdt = aurora_wdt_register("imu", CONFIG_AURORA_WATCHDOG_IMU_DEADLINE_MS);
+#endif /* CONFIG_AURORA_WATCHDOG */
 	while (1) {
+#if defined(CONFIG_AURORA_WATCHDOG)
+		aurora_wdt_feed(wdt);
+#endif /* CONFIG_AURORA_WATCHDOG */
 		int rc = imu_poll(imu0);
 		if (rc != 0) {
 			LOG_ERR("IMU polling failed (%d)", rc);
@@ -186,7 +196,13 @@ void baro_task(void *, void *, void *)
 
 #if !defined(CONFIG_BARO_TRIGGER)
 	const int baro_hz = CONFIG_BARO_FREQUENCY;
+#if defined(CONFIG_AURORA_WATCHDOG)
+	aurora_wdt_task_t wdt = aurora_wdt_register("baro", CONFIG_AURORA_WATCHDOG_BARO_DEADLINE_MS);
+#endif /* CONFIG_AURORA_WATCHDOG */
 	while (1) {
+#if defined(CONFIG_AURORA_WATCHDOG)
+		aurora_wdt_feed(wdt);
+#endif /* CONFIG_AURORA_WATCHDOG */
 		if (baro_measure(baro0)) {
 			LOG_ERR("Failed to measure baro0");
 			continue;
@@ -514,7 +530,15 @@ void state_machine_task(void *, void *, void *)
 		k_sleep(K_MSEC(100));
 	}
 
+#if defined(CONFIG_AURORA_WATCHDOG)
+	aurora_wdt_task_t wdt = aurora_wdt_register("state_machine",
+		CONFIG_AURORA_WATCHDOG_SM_DEADLINE_MS);
+#endif /* CONFIG_AURORA_WATCHDOG */
+
 	while (1) {
+#if defined(CONFIG_AURORA_WATCHDOG)
+		aurora_wdt_feed(wdt);
+#endif /* CONFIG_AURORA_WATCHDOG */
 		/* Block until at least one message arrives */
 		if (zbus_sub_wait_msg(&sm_sub, &data_chan, &msg_buf, K_FOREVER) != 0) {
 			continue;
@@ -616,6 +640,15 @@ K_THREAD_DEFINE(state_machine, 4096, state_machine_task, NULL, NULL, NULL, 6, 0,
 int main(void)
 {
 	LOG_INF("Auxspace AURORA %s", APP_VERSION_STRING);
+
+#if defined(CONFIG_AURORA_WATCHDOG)
+	/* Arm the hardware watchdog before the sensor/state threads reach
+	 * their loops so their check-ins keep it fed from the start.
+	 */
+	if (aurora_wdt_init() != 0) {
+		LOG_ERR("watchdog init failed; running unprotected");
+	}
+#endif /* CONFIG_AURORA_WATCHDOG */
 
 #if defined(CONFIG_AURORA_POWERFAIL)
 	powerfail_setup(&powerfail_assert, &powerfail_deassert);
