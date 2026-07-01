@@ -12,6 +12,8 @@
 #include "data.h"
 #include <stdint.h>
 #include <stdio.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/sensor.h>
 #include <zephyr/fs/fs.h>
 #include <zephyr/logging/log.h>
 #include <aurora/lib/baro.h>
@@ -146,4 +148,46 @@ void log_flight_telemetry(void)
 	sensor_value_from_double(&or_dp.channels[2], sm_in.orientation[2]);
 	log_enqueue(&or_dp);
 }
+
+#if DT_HAS_CHOSEN(auxspace_vbat)
+/* Battery voltage changes slowly; cap the ADC sample rate independently of
+ * the (much faster) state-machine telemetry cadence.
+ */
+#define LOG_VBAT_PERIOD_MS 500
+
+static const struct device *const vbat_dev = DEVICE_DT_GET(DT_CHOSEN(auxspace_vbat));
+
+void log_vbat_telemetry(void)
+{
+	static int64_t next_sample_ms;
+
+	int64_t now = k_uptime_get();
+	if (now < next_sample_ms) {
+		return;
+	}
+	next_sample_ms = now + LOG_VBAT_PERIOD_MS;
+
+	if (!device_is_ready(vbat_dev)) {
+		return;
+	}
+
+	struct sensor_value voltage;
+	if (sensor_sample_fetch(vbat_dev) != 0 ||
+	    sensor_channel_get(vbat_dev, SENSOR_CHAN_VOLTAGE, &voltage) != 0) {
+		LOG_WRN("vbat read failed");
+		return;
+	}
+
+	struct datapoint dp = {
+		.timestamp_ns = k_ticks_to_ns_floor64(k_uptime_ticks()),
+		.type = AURORA_DATA_VBAT,
+		.channel_count = 1,
+		.channels = {voltage},
+	};
+	log_enqueue(&dp);
+}
+#else
+/* No battery-sense node in the devicetree — nothing to log. */
+void log_vbat_telemetry(void) {}
+#endif /* DT_HAS_CHOSEN(auxspace_vbat) */
 #endif
