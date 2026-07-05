@@ -73,6 +73,9 @@ static enum sm_state forced_target_state;
 /** @brief  Callback function to handle the user input for forced state transitions.*/
 static void transition_bypass_cb(const struct shell *sh, uint8_t *data, size_t len, void *user_data)
 {
+	if (len == 0 || data == NULL) return;
+	if (data[0] == '\0') return;
+
 	char ch = tolower((char)data[0]);
 
 	if (ch == 'y') {
