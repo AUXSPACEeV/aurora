@@ -129,6 +129,13 @@ enum sm_type sm_get_type(void);
  */
 void sm_get_inputs(struct sm_inputs *out);
 
+/**
+ * @brief Update the state machine with force. No further checks are done.
+ *
+ * @param transition_to State to transition.
+ */
+void sm_update_force(enum sm_state transition_to);
+
 /** @} */
 
 #endif /* APP_LIB_STATE_H_ */
