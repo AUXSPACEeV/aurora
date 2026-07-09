@@ -9,8 +9,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "aurora/lib/state/simple.h"
-#include "data.h"
 #include <string.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
@@ -224,8 +222,9 @@ static bool is_valid_transition(enum sm_state from, enum sm_state to)
 	}
 
 	switch (from) {
-	case SM_IDLE: return (to == SM_ARMED);
-	case SM_ARMED: return (to == SM_BOOST);
+	/* IDLE/ARMED may abort to ERROR when the flight log is offline. */
+	case SM_IDLE: return (to == SM_ARMED || to == SM_ERROR);
+	case SM_ARMED: return (to == SM_BOOST || to == SM_ERROR);
 	case SM_BOOST: return (to == SM_BURNOUT);
 	case SM_BURNOUT: return (to == SM_APOGEE);
 	case SM_APOGEE: return (to == SM_MAIN || to == SM_ERROR);
@@ -238,19 +237,54 @@ static bool is_valid_transition(enum sm_state from, enum sm_state to)
 }
 #endif /* CONFIG_AURORA_SIM_AUTOTEST */
 
+/* Re-signal interval while the state machine is held in SM_ERROR: the
+ * buzzer replays the error melody and the log line repeats, so the failure
+ * stays audible in the field without flooding the queue or the console.
+ */
+#define SM_ERROR_RESIGNAL_MS 5000
+
 /**
  * @brief Error handler for the state machine.
  *
+ * Pre-flight interlocks (flight log offline) hold SM_ERROR so the LEDs
+ * stay in the error pattern and the buzzer re-beeps periodically. An
+ * unmissable field indication with no console attached.  The operator
+ * acknowledges by disarming, which forces the machine back to IDLE.
+ * In-flight aborts (apogee/redundant timeout) keep the existing recover-
+ * to-IDLE behavior so recovery hardware safes itself.
+ *
+ * @param reason why the state machine entered SM_ERROR
  * @param args arguments passed from the state machine (unused here)
- * @retval 0 on completion
+ * @retval 0 to return to IDLE, negative errno to hold SM_ERROR
  */
-int state_machine_error_handler(void *args)
+int state_machine_error_handler(enum sm_error_reason reason, void *args)
 {
 	ARG_UNUSED(args);
 #if defined(CONFIG_AURORA_FAKE_SENSORS)
-	__ASSERT(false, "State machine reached ERROR in simulation");
+	__ASSERT(false, "State machine ERROR (%s) in simulation",
+		 sm_error_reason_str(reason));
 #endif /* CONFIG_AURORA_FAKE_SENSORS */
-	LOG_WRN("WTF is error handling? Just go back to IDLE");
+
+	if (reason == SM_ERR_LOG_OFFLINE) {
+		static int64_t last_signal = -SM_ERROR_RESIGNAL_MS;
+		int64_t now = k_uptime_get();
+
+		if ((now - last_signal) >= SM_ERROR_RESIGNAL_MS) {
+			LOG_ERR("Arming refused: flight log offline. "
+				"Disarm to acknowledge, reboot to retry");
+#if defined(CONFIG_AURORA_NOTIFY)
+			(void)notify_error();
+#endif /* CONFIG_AURORA_NOTIFY */
+			last_signal = now;
+		}
+		return -ENODEV;
+	}
+
+	LOG_ERR("State machine error: %s. Returning to IDLE",
+		sm_error_reason_str(reason));
+#if defined(CONFIG_AURORA_NOTIFY)
+	(void)notify_error();
+#endif /* CONFIG_AURORA_NOTIFY */
 	return 0;
 }
 
@@ -355,6 +389,10 @@ static void handle_pyro(enum sm_state state, enum sm_state *pyro_state, const st
 
 	switch (state) {
 	case SM_IDLE:
+	/* SM_ERROR is only ever held pre-flight (arming interlock); keep the
+	 * channels safe while the operator sorts out the error condition.
+	 */
+	case SM_ERROR:
 		PYRO_ACT(pyro_disarm, 0, "Disarmed", "disarm");
 		PYRO_ACT(pyro_disarm, 1, "Disarmed", "disarm");
 		break;
