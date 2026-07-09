@@ -458,7 +458,7 @@ int flight_log_disk_auto_format(void)
 	return 0;
 }
 
-#if defined(CONFIG_LOG_BACKEND_FS)
+#if defined(CONFIG_LOG_BACKEND_FS) && !defined(CONFIG_LOG_BACKEND_FS_AUTOSTART)
 /*
  * Bring up the file-system log backend, but only once the FAT volume is
  * actually mounted.  With CONFIG_LOG_BACKEND_FS_AUTOSTART=n the backend stays
@@ -499,10 +499,13 @@ static void flight_log_fs_backend_start(void)
 	if (backend == NULL) {
 		LOG_WRN("fs log backend: backend not found");
 		return;
+	} else if (log_backend_is_ready(backend) != 0) {
+		LOG_WRN("fs log backend: backend not ready.");
+		return;
 	}
 
 	log_backend_enable(backend, backend->cb->ctx, CONFIG_LOG_MAX_LEVEL);
-	LOG_INF("fs log backend: enabled on %s", CONFIG_LOG_BACKEND_FS_DIR);
+	LOG_INF("%s: enabled on %s (%d)", backend->name, CONFIG_LOG_BACKEND_FS_DIR, CONFIG_LOG_MAX_LEVEL);
 }
 #else
 static inline void flight_log_fs_backend_start(void) { }

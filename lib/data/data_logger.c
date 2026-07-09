@@ -417,18 +417,18 @@ void pick_convert_out_base(char *out, size_t out_sz)
 		char probe[DATA_LOGGER_PATH_MAX];
 		struct fs_dirent entry;
 
-		int n = snprintf(probe, sizeof(probe), "%s/flight_%d.%s", CONFIG_DATA_LOGGER_BASE_PATH, i, probe_ext);
+		int n = snprintf(probe, sizeof(probe), "%s/FLIGHT_%d.%s", CONFIG_DATA_LOGGER_BASE_PATH, i, probe_ext);
 		if (n < 0 || n >= (int)sizeof(probe)) {
 			break;
 		}
 		if (fs_stat(probe, &entry) == -ENOENT) {
-			(void)snprintf(out, out_sz, "%s/flight_%d", CONFIG_DATA_LOGGER_BASE_PATH, i);
+			(void)snprintf(out, out_sz, "%s/FLIGHT_%d", CONFIG_DATA_LOGGER_BASE_PATH, i);
 			return;
 		}
 	}
 
-	LOG_WRN("convert: out of /flight_N slots — overwriting flight_0");
-	(void)snprintf(out, out_sz, "%s/flight_0", CONFIG_DATA_LOGGER_BASE_PATH);
+	LOG_WRN("convert: out of /FLIGHT_N slots. Overwriting FLIGHT_0");
+	(void)snprintf(out, out_sz, "%s/FLIGHT_0", CONFIG_DATA_LOGGER_BASE_PATH);
 }
 
 void converter_task(void *, void *, void *)
@@ -451,9 +451,9 @@ void converter_task(void *, void *, void *)
 			int rc = data_logger_convert(&data_logger_csv_formatter, out_path);
 
 			if (rc != 0) {
-				LOG_ERR("CSV conversion → %s failed (%d)", out_path, rc);
+				LOG_ERR("CSV conversion => %s failed (%d)", out_path, rc);
 			} else {
-				LOG_INF("converted flight_log → %s", out_path);
+				LOG_INF("converted flight_log => %s", out_path);
 			}
 		}
 #endif /* CONFIG_DATA_LOGGER_CONVERT_CSV */
