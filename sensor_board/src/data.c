@@ -27,12 +27,21 @@ LOG_MODULE_DECLARE(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 K_THREAD_DEFINE(logger_thread, 2048, logger_task, NULL, NULL, NULL, 8, 0, 0);
 K_THREAD_DEFINE(converter_thread, 2048, converter_task, NULL, NULL, NULL, 9, 0, 0);
 
+/* Latched (until reboot) when opening the flight log at ARM time fails.
+ * Feeds log_flight_log_online() so the state machine drops back from ARMED
+ * to IDLE instead of sitting armed without a recording.  Deliberately never
+ * cleared: clearing it on disarm would let the unchanged inputs re-arm
+ * immediately and oscillate the pyro channels.
+ */
+static atomic_t flight_recording_failed = ATOMIC_INIT(0);
+
 static void log_begin_flight(void)
 {
 	if (k_sem_take(&convert_idle, K_MSEC(LOG_ARM_CONVERT_TIMEOUT_MS)) != 0) {
 		LOG_ERR("ARMED: prior conversion still running after %d ms — "
 				"flight will not be logged",
 			LOG_ARM_CONVERT_TIMEOUT_MS);
+		atomic_set(&flight_recording_failed, 1);
 #if defined(CONFIG_AURORA_NOTIFY)
 		notify_error();
 #endif
@@ -43,6 +52,7 @@ static void log_begin_flight(void)
 	memset(&sm_logger, 0, sizeof(sm_logger));
 	if (data_logger_init(&sm_logger, "flight", &data_logger_bin_formatter) != 0) {
 		LOG_ERR("data_logger_init failed");
+		atomic_set(&flight_recording_failed, 1);
 #if defined(CONFIG_AURORA_NOTIFY)
 		notify_error();
 #endif
@@ -51,6 +61,7 @@ static void log_begin_flight(void)
 	data_logger_set_default(&sm_logger);
 	if (data_logger_start(&sm_logger) != 0) {
 		LOG_ERR("data_logger_start failed");
+		atomic_set(&flight_recording_failed, 1);
 		(void)data_logger_close(&sm_logger);
 		data_logger_set_default(NULL);
 #if defined(CONFIG_AURORA_NOTIFY)
@@ -86,6 +97,22 @@ static void log_end_work_handler(struct k_work *work)
 	log_end_flight();
 }
 static K_WORK_DELAYABLE_DEFINE(log_end_work, log_end_work_handler);
+bool log_flight_log_online(void)
+{
+	/* An ARM-time open failure outranks the boot latch: the disk looked
+	 * fine at boot but the recorder could not be opened when it mattered.
+	 */
+	if (atomic_get(&flight_recording_failed)) {
+		return false;
+	}
+#if defined(CONFIG_DATA_LOGGER_DISK_AUTO_MKFS)
+	return flight_log_online();
+#else
+	/* No disk bring-up module.  Nothing to gate on at boot. */
+	return true;
+#endif
+}
+
 void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state)
 {
 	/* Flight-time logging lifecycle:

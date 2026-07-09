@@ -521,6 +521,7 @@ void state_machine_task(void *, void *, void *)
 
 		inputs = (struct sm_inputs){
 			.armed = armed,
+			.log_ready = log_flight_log_online(),
 			.acceleration = acceleration,
 			.accel_vert = accel_vert,
 			.altitude = altitude,

@@ -75,6 +75,7 @@ static inline void put_state_armed(struct sm_inputs *in)
 	zassert_equal(sm_get_state(), SM_IDLE, "State should be disarmed to IDLE");
 
 	in->armed = 1;
+	in->log_ready = 1;
 	set_elevation(in->orientation, simple_state_cfg.T_OA);
 	sm_update(in);
 	zassert_equal(sm_get_state(), SM_ARMED, "State should be ARMED");
@@ -193,6 +194,101 @@ ZTEST(simple_state_tests, test_state_idle)
 
 	/* test update orientation and arm */
 	put_state_armed(&inputs);
+}
+
+/**
+ * @brief Arming is inhibited while the flight log is offline.
+ *
+ * With arm and orientation both satisfied but log_ready = 0, the machine
+ * must stay in IDLE.  The vehicle must never fly (or fire pyros) a mission
+ * it cannot record.  Once log_ready goes high the same inputs arm normally.
+ */
+ZTEST(simple_state_tests, test_arm_inhibited_when_log_offline)
+{
+	struct sm_inputs inputs = {
+		.armed = 1,
+		.log_ready = 0,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
+		.acceleration = 0.0,
+		.velocity = 0.0,
+		.altitude = 0.0,
+	};
+
+	zassert_equal(sm_get_state(), SM_IDLE, "Precondition: should be IDLE");
+
+	/* Arm conditions met but logging offline: must not arm. */
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_IDLE,
+		      "Must stay IDLE while flight log is offline");
+
+	/* Repeated updates keep it inhibited (no flapping into ARMED). */
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_IDLE,
+		      "Must remain IDLE while flight log stays offline");
+
+	/* Logging comes online: the same inputs now arm. */
+	inputs.log_ready = 1;
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_ARMED,
+		      "Should arm once the flight log is online");
+}
+
+/**
+ * @brief A flight-log dropout while ARMED (pre-boost) falls back to IDLE.
+ *
+ * Covers the ARM-time failure path: the recorder is opened on the
+ * IDLE->ARMED transition, and if that open fails log_ready goes low on the
+ * next update.  Still on the pad, the machine must return to IDLE (safe,
+ * pyros disarmed) rather than sit armed without a recording.
+ */
+ZTEST(simple_state_tests, test_armed_falls_back_when_log_drops)
+{
+	struct sm_inputs inputs = {
+		.armed = 1,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
+		.acceleration = 0.0,
+		.velocity = 0.0,
+		.altitude = 0.0,
+	};
+
+	put_state_armed(&inputs);
+
+	inputs.log_ready = 0;
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_IDLE,
+		      "ARMED must fall back to IDLE when the flight log "
+		      "goes offline pre-boost");
+}
+
+/**
+ * @brief From BOOST onward a flight-log dropout must NOT abort the flight.
+ *
+ * Once airborne, losing the recorder is a data loss, not a flight abort:
+ * the state machine must keep sequencing recovery events regardless of
+ * log_ready.
+ */
+ZTEST(simple_state_tests, test_boost_ignores_log_dropout)
+{
+	struct sm_inputs inputs = {
+		.armed = 1,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
+		.acceleration = 0.0,
+		.velocity = 0.0,
+		.altitude = 0.0,
+	};
+
+	put_state_boost(&inputs);
+
+	inputs.log_ready = 0;
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_BOOST,
+		      "BOOST must not react to a flight-log dropout");
+
+	/* The normal BOOST -> BURNOUT transition still works. */
+	inputs.acceleration = simple_state_cfg.T_BB - 1.0;
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_BURNOUT,
+		      "Flight sequencing must continue with the log offline");
 }
 
 /**

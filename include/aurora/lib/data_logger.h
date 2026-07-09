@@ -175,6 +175,21 @@ int data_logger_init(struct data_logger *logger, const char *filename,
 		     const struct data_logger_formatter *fmt);
 
 /**
+ * @brief Report whether the raw flight-log disk came up at boot.
+ *
+ * Latched once by the flight-log-disk SYS_INIT bring-up (see
+ * flight_log_disk_auto_format.c).
+ * Consumed by the flight state machine as an arming precondition:
+ * the vehicle must not arm and therefore must not fly or fire pyros,
+ * if it cannot record the flight.
+ * Only defined when @c CONFIG_DATA_LOGGER_DISK_AUTO_MKFS is enabled.
+ *
+ * @retval true  The flight-log disk is reachable (disk_access OK at boot).
+ * @retval false The disk failed to initialise; arming should be inhibited.
+ */
+bool flight_log_online(void);
+
+/**
  * @brief Set the default logger used by @ref data_logger_log.
  *
  * @param logger  Initialised logger instance (NULL to clear).
