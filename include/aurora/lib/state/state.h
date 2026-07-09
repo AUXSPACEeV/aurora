@@ -42,15 +42,41 @@ enum sm_type {
  *----------------------------------------------------------*/
 
 /**
+ * @brief Reasons the state machine can enter @c SM_ERROR.
+ *
+ * Passed to the error callback so the application can decide per cause
+ * whether to recover (return 0 → back to IDLE) or hold the error state
+ * (non-zero, e.g. a pre-flight interlock the operator must acknowledge
+ * by disarming) and how to signal the operator (LED, buzzer, ...).
+ */
+enum sm_error_reason {
+	SM_ERR_UNKNOWN = 0,       /**< Unspecified error. */
+	SM_ERR_LOG_OFFLINE,       /**< Flight recorder unavailable while arming or armed. */
+	SM_ERR_APOGEE_TIMEOUT,    /**< No descent detected within TO_A. */
+	SM_ERR_REDUNDANT_TIMEOUT, /**< No landing detected within TO_R. */
+};
+
+/**
+ * @brief Return a human-readable name for the given error reason.
+ *
+ * @param reason Error reason value.
+ * @return Pointer to a static string, or "UNKNOWN" if invalid.
+ */
+const char *sm_error_reason_str(enum sm_error_reason reason);
+
+/**
  * @brief Callback invoked when the state machine encounters an error.
  *
  * The implementation can define specific recovery logic.
  *
- * @param args Pointer to an implementation-specific config structure.
+ * @param reason Why the state machine entered @c SM_ERROR.
+ * @param args   Pointer to an implementation-specific config structure.
  *
- * @return 0 if the error was mitigated, negative errno otherwise.
+ * @return 0 if the error was mitigated (state machine returns to IDLE),
+ *         negative errno to hold @c SM_ERROR (the callback is re-invoked
+ *         on every update until it mitigates or the system is disarmed).
  */
-typedef int (*sm_error_cb_t) (void *args);
+typedef int (*sm_error_cb_t) (enum sm_error_reason reason, void *args);
 
 /**
  * @brief Error handling configuration for the state machine.

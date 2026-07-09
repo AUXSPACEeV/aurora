@@ -61,9 +61,11 @@ static void simple_state_machine_mock_after(void *fixture)
 /** @brief Track error handler invocations for testing. */
 static int error_handler_call_count;
 static int mock_error_handler_rc;
-static int mock_error_handler(void *args)
+static enum sm_error_reason last_error_reason;
+static int mock_error_handler(enum sm_error_reason reason, void *args)
 {
 	error_handler_call_count++;
+	last_error_reason = reason;
 	return mock_error_handler_rc;
 }
 
@@ -197,14 +199,29 @@ ZTEST(simple_state_tests, test_state_idle)
 }
 
 /**
- * @brief Arming is inhibited while the flight log is offline.
+ * @brief An arm attempt with the flight log offline enters and holds ERROR.
  *
  * With arm and orientation both satisfied but log_ready = 0, the machine
- * must stay in IDLE.  The vehicle must never fly (or fire pyros) a mission
- * it cannot record.  Once log_ready goes high the same inputs arm normally.
+ * must go to SM_ERROR with reason SM_ERR_LOG_OFFLINE.  The vehicle must
+ * never fly (or fire pyros) a mission it cannot record, and the failure
+ * must be surfaced through the error callback (LED/buzzer in the app)
+ * rather than silently staying in IDLE.  While the callback reports the
+ * error as unmitigated the state holds; disarming releases it to IDLE,
+ * and once log_ready is high a fresh arm attempt succeeds.
  */
-ZTEST(simple_state_tests, test_arm_inhibited_when_log_offline)
+ZTEST(simple_state_tests, test_arm_with_log_offline_holds_error)
 {
+	struct sm_error_handling_args err_args = {
+		.cb = &mock_error_handler,
+		.args = NULL,
+	};
+
+	error_handler_call_count = 0;
+	mock_error_handler_rc = -EIO;
+	last_error_reason = SM_ERR_UNKNOWN;
+	sm_deinit();
+	sm_init(&simple_state_cfg, &err_args);
+
 	struct sm_inputs inputs = {
 		.armed = 1,
 		.log_ready = 0,
@@ -214,19 +231,30 @@ ZTEST(simple_state_tests, test_arm_inhibited_when_log_offline)
 		.altitude = 0.0,
 	};
 
-	zassert_equal(sm_get_state(), SM_IDLE, "Precondition: should be IDLE");
+	/* Arm conditions met but logging offline: must error, not arm. */
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_ERROR,
+		      "Arm attempt with flight log offline must enter ERROR");
+	zassert_equal(last_error_reason, SM_ERR_LOG_OFFLINE,
+		      "Error callback must receive SM_ERR_LOG_OFFLINE");
+	zassert_true(error_handler_call_count > 0,
+		     "Error callback must be invoked");
 
-	/* Arm conditions met but logging offline: must not arm. */
+	/* Holds ERROR while the condition persists (callback keeps failing),
+	 * so the LED error pattern stays visible in the field.
+	 */
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_ERROR,
+		      "Must hold ERROR while the flight log stays offline");
+
+	/* Operator acknowledges by disarming. */
+	inputs.armed = 0;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_IDLE,
-		      "Must stay IDLE while flight log is offline");
+		      "Disarming must release ERROR back to IDLE");
 
-	/* Repeated updates keep it inhibited (no flapping into ARMED). */
-	sm_update(&inputs);
-	zassert_equal(sm_get_state(), SM_IDLE,
-		      "Must remain IDLE while flight log stays offline");
-
-	/* Logging comes online: the same inputs now arm. */
+	/* Logging restored: a fresh arm attempt succeeds. */
+	inputs.armed = 1;
 	inputs.log_ready = 1;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_ARMED,
@@ -234,15 +262,27 @@ ZTEST(simple_state_tests, test_arm_inhibited_when_log_offline)
 }
 
 /**
- * @brief A flight-log dropout while ARMED (pre-boost) falls back to IDLE.
+ * @brief A flight-log dropout while ARMED (pre-boost) aborts to ERROR.
  *
  * Covers the ARM-time failure path: the recorder is opened on the
  * IDLE->ARMED transition, and if that open fails log_ready goes low on the
- * next update.  Still on the pad, the machine must return to IDLE (safe,
- * pyros disarmed) rather than sit armed without a recording.
+ * next update.  Still on the pad, the machine must abort through the error
+ * path (signalling the operator via the callback) rather than sit armed
+ * without a recording; disarming releases it to IDLE.
  */
-ZTEST(simple_state_tests, test_armed_falls_back_when_log_drops)
+ZTEST(simple_state_tests, test_armed_aborts_to_error_when_log_drops)
 {
+	struct sm_error_handling_args err_args = {
+		.cb = &mock_error_handler,
+		.args = NULL,
+	};
+
+	error_handler_call_count = 0;
+	mock_error_handler_rc = -EIO;
+	last_error_reason = SM_ERR_UNKNOWN;
+	sm_deinit();
+	sm_init(&simple_state_cfg, &err_args);
+
 	struct sm_inputs inputs = {
 		.armed = 1,
 		.orientation = ORIENT(simple_state_cfg.T_OA),
@@ -255,9 +295,16 @@ ZTEST(simple_state_tests, test_armed_falls_back_when_log_drops)
 
 	inputs.log_ready = 0;
 	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_ERROR,
+		      "ARMED must abort to ERROR when the flight log goes "
+		      "offline pre-boost");
+	zassert_equal(last_error_reason, SM_ERR_LOG_OFFLINE,
+		      "Error callback must receive SM_ERR_LOG_OFFLINE");
+
+	inputs.armed = 0;
+	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_IDLE,
-		      "ARMED must fall back to IDLE when the flight log "
-		      "goes offline pre-boost");
+		      "Disarming must release ERROR back to IDLE");
 }
 
 /**

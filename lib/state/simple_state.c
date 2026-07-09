@@ -69,18 +69,19 @@ static void stop_timers(void);
 /**
  * @brief Default error handler when no user callback is registered.
  *
+ * @param reason Why the state machine entered SM_ERROR.
  * @param args Unused opaque argument (always NULL).
  * @return Always returns -EIO.
  */
-static int fallback_sm_error_handler(void *args);
+static int fallback_sm_error_handler(enum sm_error_reason reason, void *args);
 
 /**
  * @brief Transition to SM_ERROR and invoke the error callback.
  *
- * Acquires @ref err_lock, sets state to SM_ERROR, and calls the
- * registered error callback (or the fallback).
+ * Acquires @ref err_lock, sets state to SM_ERROR, records @p reason and
+ * calls the registered error callback (or the fallback) with it.
  */
-static void sm_do_error_handling(void);
+static void sm_do_error_handling(enum sm_error_reason reason);
 
 /**
  * @brief Check if acceleration and altitude meet ARMED->BOOST thresholds.
@@ -179,19 +180,28 @@ static void stop_timers(void)
 	memset(running_timers, 0, sizeof(running_timers));
 }
 
-static int fallback_sm_error_handler(void *args)
+static int fallback_sm_error_handler(enum sm_error_reason reason, void *args)
 {
-	LOG_ERR("State Machine encountered an unrecoverable error");
+	ARG_UNUSED(args);
+	LOG_ERR("State Machine encountered an unrecoverable error (%s)",
+		sm_error_reason_str(reason));
 
 	return -EIO;
 }
 
-static void sm_do_error_handling(void)
+/* Why the machine is (or last was) in SM_ERROR.  Recorded by
+ * sm_do_error_handling() so re-invocations from the SM_ERROR state keep
+ * reporting the original cause to the callback.
+ */
+static enum sm_error_reason err_reason = SM_ERR_UNKNOWN;
+
+static void sm_do_error_handling(enum sm_error_reason reason)
 {
 	int ret;
 	k_spinlock_key_t key = k_spin_lock(&err_lock);
 
 	if (current_state != SM_ERROR) {
+		err_reason = reason;
 		SM_TRANSITION(SM_ERROR);
 	}
 
@@ -200,10 +210,11 @@ static void sm_do_error_handling(void)
 		goto out;
 	}
 
-	ret = err_hdl.cb(err_hdl.args);
+	ret = err_hdl.cb(err_reason, err_hdl.args);
 	if (ret == 0) {
 		SM_EVENT("error mitigated, returning to IDLE");
 		stop_timers();
+		err_reason = SM_ERR_UNKNOWN;
 		SM_TRANSITION(SM_IDLE);
 	} else {
 		LOG_ERR("State Machine error handler failed with code %d", ret);
@@ -232,6 +243,7 @@ void sm_init(const struct sm_thresholds *cfg,
 	th = *(struct sm_thresholds *)cfg;
 	init_timers();
 	current_state = SM_IDLE;
+	err_reason = SM_ERR_UNKNOWN;
 	SM_EVENT("state machine initialized");
 
 	if (sm_err_hdl != NULL) {
@@ -248,6 +260,7 @@ void sm_deinit(void)
 	stop_timers();
 	SM_EVENT("state machine reset");
 	current_state = SM_IDLE;
+	err_reason = SM_ERR_UNKNOWN;
 }
 
 /*-----------------------------------------------------------
@@ -266,10 +279,6 @@ static inline void _sm_update(const struct sm_inputs *in,
 			      double previous_altitude)
 {
 	static int n_oi;
-	/* Edge-latch so an "arm inhibited: flight log offline" audit event is
-	 * emitted once per arm attempt rather than on every update tick.
-	 */
-	static bool arm_inhibited;
 
 	/* go to IDLE if disarmed */
 	if (!in->armed && current_state != SM_IDLE) {
@@ -287,20 +296,18 @@ static inline void _sm_update(const struct sm_inputs *in,
 		n_oi = 0;
 		if (in->armed && sm_orientation_elevation_deg(in->orientation) >= th.T_OA) {
 			if (in->log_ready) {
-				arm_inhibited = false;
 				SM_TRANSITION(SM_ARMED);
-			} else if (!arm_inhibited) {
+			} else {
 				/* Arm conditions are met but the flight log is
 				 * offline.  Refuse to arm so the vehicle never
-				 * flies (or fires pyros) without recording; stay
-				 * in IDLE until logging is available.
+				 * flies (or fires pyros) without recording, and
+				 * surface it through the error path so the
+				 * operator gets an unmissable field indication
+				 * (LED/buzzer via the app error callback).
 				 */
-				arm_inhibited = true;
-				SM_EVENT("arm inhibited: flight log offline");
-				LOG_WRN("ARM inhibited: flight log offline");
+				SM_EVENT("arm refused: flight log offline");
+				sm_do_error_handling(SM_ERR_LOG_OFFLINE);
 			}
-		} else {
-			arm_inhibited = false;
 		}
 		break;
 
@@ -310,16 +317,17 @@ static inline void _sm_update(const struct sm_inputs *in,
 	case SM_ARMED:
 		/* The flight log went away after arming (e.g. the recorder
 		 * failed to open on the IDLE->ARMED transition).  Still on
-		 * the pad, so fall back to IDLE rather than fly unrecorded.
+		 * the pad, so abort through the error path rather than fly
+		 * unrecorded; the app error callback signals the operator
+		 * and decides whether to hold SM_ERROR or recover to IDLE.
 		 * Deliberately checked only here: from BOOST onward a log
 		 * dropout must never abort the flight or recovery logic.
 		 */
 		if (!in->log_ready) {
 			running_timers[TIMER_DT_AB] = 0;
 			k_timer_stop(&dt_ab);
-			SM_EVENT("disarmed: flight log offline");
-			LOG_WRN("Disarming: flight log offline");
-			SM_TRANSITION(SM_IDLE);
+			SM_EVENT("arm aborted: flight log offline");
+			sm_do_error_handling(SM_ERR_LOG_OFFLINE);
 			break;
 		}
 
@@ -407,7 +415,7 @@ static inline void _sm_update(const struct sm_inputs *in,
 			/* Timeout expired, abort to ERROR */
 			k_timer_stop(&to_a);
 			SM_EVENT("apogee timeout expired");
-			sm_do_error_handling();
+			sm_do_error_handling(SM_ERR_APOGEE_TIMEOUT);
 		}
 		break;
 
@@ -463,15 +471,15 @@ _check_timeout:
 			running_timers[TIMER_DT_L] = 0;
 			k_timer_stop(&to_r);
 			SM_EVENT("redundant timeout expired");
-			sm_do_error_handling();
+			sm_do_error_handling(SM_ERR_REDUNDANT_TIMEOUT);
 		}
 		break;
 	/*-----------------------------------------------------------
 	* ERROR state
 	*----------------------------------------------------------*/
 	case SM_ERROR:
-		/* Try to fix the error */
-		sm_do_error_handling();
+		/* Try to fix the error; re-report the original cause. */
+		sm_do_error_handling(err_reason);
 		break;
 
 	/*-----------------------------------------------------------
@@ -542,6 +550,18 @@ enum sm_type sm_get_type(void)
 void sm_get_inputs(struct sm_inputs *out)
 {
 	*out = last_inputs;
+}
+
+/* sm_error_reason_str – see state.h */
+const char *sm_error_reason_str(enum sm_error_reason reason)
+{
+	switch (reason) {
+	case SM_ERR_UNKNOWN:		return "UNKNOWN";
+	case SM_ERR_LOG_OFFLINE:	return "LOG_OFFLINE";
+	case SM_ERR_APOGEE_TIMEOUT:	return "APOGEE_TIMEOUT";
+	case SM_ERR_REDUNDANT_TIMEOUT:	return "REDUNDANT_TIMEOUT";
+	default:			return "UNKNOWN";
+	}
 }
 
 /* sm_state_str – see simple.h */
