@@ -9,6 +9,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "data.h"
+
 #include <string.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
