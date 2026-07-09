@@ -119,7 +119,7 @@ only be done when the board is disconnected from the battery.
   detected (e.g. it is still drifting under canopy in a tree). Check power
   and the data log before assuming a software issue.
 - **LED stays solid ON without blinking.** That's the ERROR pattern, not a
-  ready indicator. The board has hit an unrecoverable fault. Power down,
+  ready indicator. The board has hit an unrecoverable fault. Disarm, power down,
   pull the µSD card, and check the log before flying.
 - **LED never lights up at all.** The LED backend depends on the data
   logger; if the logger is disabled (or failed to mount the µSD card), the
