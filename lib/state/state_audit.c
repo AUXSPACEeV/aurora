@@ -34,6 +34,7 @@ LOG_MODULE_REGISTER(state_audit, CONFIG_STATE_MACHINE_LOG_LEVEL);
 #define AUDIT_WRITER_STACK 4096
 #define AUDIT_WRITER_PRIO  10
 #define MAX_F_RETRIES 3
+#define AUDOT_SEPARATOR_STR "---------------------------------------------------\n"
 
 /* Ring buffer state (queryable from the shell). All access is serialised
  * by ring_mutex — producers (sm_audit_transition / sm_audit_event) and
@@ -65,8 +66,8 @@ static int sm_audit_file_write_header(void)
 
 	wr = fs_write(&audit_file, header, strlen(header));
 	wr += fs_write(&audit_file,
-		       "---------------------------------------------------\n",
-		       50);
+		       AUDOT_SEPARATOR_STR,
+		       strlen(AUDOT_SEPARATOR_STR));
 	if (wr < 0) {
 		LOG_ERR("Could not write header to state machine audit file.");
 		return (int)wr;
@@ -86,7 +87,7 @@ static int sm_audit_file_create(void)
 
 	/* Build "<base_path>/audit.<i>" */
 	for (int i = 0; i <= CONFIG_AURORA_STATE_MACHINE_AUDIT_MAX_FILES; i++) {
-		rc = snprintf(full_path, sizeof(full_path), "%s/audit.%d",
+		rc = snprintf(full_path, sizeof(full_path), "%s/AUDIT.%d",
 			      CONFIG_AURORA_STATE_MACHINE_AUDIT_BASE_PATH, i);
 
 		if (rc < 0 || rc >= (int)sizeof(full_path))
@@ -97,7 +98,7 @@ static int sm_audit_file_create(void)
 
 		/* All files already exist */
 		if (i == CONFIG_AURORA_STATE_MACHINE_AUDIT_MAX_FILES) {
-			rc = snprintf(full_path, sizeof(full_path), "%s/audit.0",
+			rc = snprintf(full_path, sizeof(full_path), "%s/AUDIT.0",
 					CONFIG_AURORA_STATE_MACHINE_AUDIT_BASE_PATH);
 
 			if (rc < 0 || rc >= (int)sizeof(full_path))
