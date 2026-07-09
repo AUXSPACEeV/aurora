@@ -121,6 +121,7 @@ ZTEST(state_shell_tests, test_status_reflects_armed)
 {
 	struct sm_inputs in = {
 		.armed = 1,
+		.log_ready = 1,
 		.orientation = ORIENT(test_cfg.T_OA),
 	};
 
@@ -143,6 +144,7 @@ ZTEST(state_shell_tests, test_transition_to_idle)
 	int err;
 	struct sm_inputs in = {
 		.armed = 1,
+		.log_ready = 1,
 		.orientation = ORIENT(test_cfg.T_OA),
 	};
 
@@ -208,6 +210,7 @@ ZTEST(state_shell_tests, test_audit_records_transition)
 {
 	struct sm_inputs in = {
 		.armed = 1,
+		.log_ready = 1,
 		.orientation = ORIENT(test_cfg.T_OA),
 	};
 
@@ -238,6 +241,7 @@ ZTEST(state_shell_tests, test_audit_multiple_transitions)
 {
 	struct sm_inputs in = {
 		.armed = 1,
+		.log_ready = 1,
 		.orientation = ORIENT(test_cfg.T_OA),
 	};
 
@@ -267,6 +271,7 @@ ZTEST(state_shell_tests, test_audit_clear)
 	int err;
 	struct sm_inputs in = {
 		.armed = 1,
+		.log_ready = 1,
 		.orientation = ORIENT(test_cfg.T_OA),
 	};
 

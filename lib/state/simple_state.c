@@ -266,6 +266,10 @@ static inline void _sm_update(const struct sm_inputs *in,
 			      double previous_altitude)
 {
 	static int n_oi;
+	/* Edge-latch so an "arm inhibited: flight log offline" audit event is
+	 * emitted once per arm attempt rather than on every update tick.
+	 */
+	static bool arm_inhibited;
 
 	/* go to IDLE if disarmed */
 	if (!in->armed && current_state != SM_IDLE) {
@@ -282,7 +286,21 @@ static inline void _sm_update(const struct sm_inputs *in,
 	case SM_IDLE:
 		n_oi = 0;
 		if (in->armed && sm_orientation_elevation_deg(in->orientation) >= th.T_OA) {
-			SM_TRANSITION(SM_ARMED);
+			if (in->log_ready) {
+				arm_inhibited = false;
+				SM_TRANSITION(SM_ARMED);
+			} else if (!arm_inhibited) {
+				/* Arm conditions are met but the flight log is
+				 * offline.  Refuse to arm so the vehicle never
+				 * flies (or fires pyros) without recording; stay
+				 * in IDLE until logging is available.
+				 */
+				arm_inhibited = true;
+				SM_EVENT("arm inhibited: flight log offline");
+				LOG_WRN("ARM inhibited: flight log offline");
+			}
+		} else {
+			arm_inhibited = false;
 		}
 		break;
 
@@ -290,6 +308,21 @@ static inline void _sm_update(const struct sm_inputs *in,
 	* ARMED -> BOOST
 	*----------------------------------------------------------*/
 	case SM_ARMED:
+		/* The flight log went away after arming (e.g. the recorder
+		 * failed to open on the IDLE->ARMED transition).  Still on
+		 * the pad, so fall back to IDLE rather than fly unrecorded.
+		 * Deliberately checked only here: from BOOST onward a log
+		 * dropout must never abort the flight or recovery logic.
+		 */
+		if (!in->log_ready) {
+			running_timers[TIMER_DT_AB] = 0;
+			k_timer_stop(&dt_ab);
+			SM_EVENT("disarmed: flight log offline");
+			LOG_WRN("Disarming: flight log offline");
+			SM_TRANSITION(SM_IDLE);
+			break;
+		}
+
 		if (sm_orientation_elevation_deg(in->orientation) < th.T_OI) {
 			if (++n_oi < th.N_OI)
 				break;

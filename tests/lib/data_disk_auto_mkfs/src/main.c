@@ -11,7 +11,7 @@
  * FAT partition so that the raw region structurally lies outside any
  * filesystem.
  *
- * Two suites cover the two arms of that guard:
+ * Three suites cover the arms of that guard:
  *
  *  1. **disk_auto_mkfs_blank** — exercises the format-on-mismatch path.
  *     The simulator brings up a blank RAM disk, Zephyr's automount fails
@@ -23,9 +23,16 @@
  *  2. **disk_auto_mkfs_preserve** — exercises the preservation path.
  *     The test seeds the configured raw-region offset with the AURORA
  *     flight-frame magic and re-invokes the auto-format entry point
- *     directly to mimic a reboot from a populated card.  The guard must
- *     short-circuit on the magic, leave the raw bytes intact, and leave
- *     the FAT volume mounted.
+ *     directly to mimic a reboot from a populated card.  With the magic
+ *     present AND the FAT already mounted, the guard must short-circuit,
+ *     leave the raw bytes intact, and leave the FAT volume mounted.
+ *
+ *  3. **disk_auto_mkfs_corrupt** — regression test for a field failure
+ *     where a corrupt FAT plus a valid flight log left the card neither
+ *     reformatted nor mounted (the magic was wrongly treated as the sole
+ *     gate).  The test seeds the magic, destroys the FAT metadata, and
+ *     re-invokes: the guard must rebuild the FAT (restoring disk logging)
+ *     while the raw flight region survives untouched.
  *
  * Copyright (c) 2026 Auxspace e.V.
  *
@@ -56,6 +63,12 @@
  * use the SYS_INIT hook; tests call this directly to simulate a reboot.
  */
 extern int flight_log_disk_auto_format(void);
+
+/* fstab mount entry (same one the module manages) so the corrupt-FAT suite
+ * can unmount the volume before mangling its on-disk metadata.
+ */
+#define FS_NODE  DT_CHOSEN(auxspace_ffs)
+FS_FSTAB_DECLARE_ENTRY(FS_NODE);
 
 /* One-sector scratch buffer for raw disk_access_read/write probes. */
 static uint8_t scratch[512];
@@ -96,6 +109,9 @@ ZTEST(disk_auto_mkfs_blank, test_blank_disk_mounted_after_boot)
 		   " mounted");
 	zassert_true(vfs.f_blocks > 0,
 		     "FAT volume must report a non-zero block count");
+	zassert_true(flight_log_online(),
+		     "bring-up must latch the flight log online on a "
+		     "healthy disk (arming interlock)");
 }
 
 /**
@@ -178,4 +194,73 @@ ZTEST(disk_auto_mkfs_preserve, test_magic_survives_reentry)
 	zassert_ok(fs_statvfs(FS_MOUNT_POINT, &vfs),
 		   FS_MOUNT_POINT " must remain mounted across the "
 		   "preservation re-entry");
+}
+
+/* ========================================================================== */
+/*  Suite 3: corrupt FAT + flight data (rebuild FAT, preserve raw region)     */
+/* ========================================================================== */
+
+ZTEST_SUITE(disk_auto_mkfs_corrupt, NULL, NULL, NULL, NULL, NULL);
+
+/**
+ * @brief A corrupt/unmountable FAT that still carries a valid flight log
+ *        must be rebuilt: the raw region survives and the volume comes
+ *        back mounted and usable.
+ *
+ * Regression test for the field failure where a corrupt filesystem plus a
+ * recovered flight log left the card neither reformatted nor mounted, the
+ * flight-log magic was treated as the sole gate, so a broken FAT with data
+ * present short-circuited the guard and disk logging stayed dead.
+ *
+ * The test seeds the magic at the raw-region offset, unmounts the volume,
+ * then destroys the FAT metadata (the MBR at sector 0 and the partition-1
+ * boot sector at PART1_ALIGNED_LBA) so it can no longer be mounted.  It
+ * re-invokes the guard and asserts the magic survived and the FAT is
+ * mounted with a non-zero block count.
+ */
+ZTEST(disk_auto_mkfs_corrupt, test_corrupt_fat_with_flight_data_rebuilds)
+{
+	uint32_t sector_size = sector_size_bytes();
+	uint32_t off_sec = (uint32_t)(DISK_OFFSET_BYTES / sector_size);
+	struct fs_statvfs vfs;
+
+	/* Seed a valid flight log in the raw region. */
+	memset(scratch, 0, sector_size);
+	memcpy(scratch, AURORA_BIN_FRAME_MAGIC,
+	       sizeof(AURORA_BIN_FRAME_MAGIC) - 1);
+	zassert_ok(disk_access_write(DISK_NAME, scratch, off_sec, 1),
+		   "seeding the magic at sector %u must succeed", off_sec);
+
+	/* Take the volume down before mangling its on-disk metadata. */
+	if (fs_statvfs(FS_MOUNT_POINT, &vfs) == 0) {
+		zassert_ok(fs_unmount(&FS_FSTAB_ENTRY(FS_NODE)), NULL);
+	}
+
+	/* Destroy the FAT: wipe the MBR (sector 0) and the partition-1 boot
+	 * sector (PART1_ALIGNED_LBA = 2048, where fs_mkfs put the VBR for this
+	 * geometry) so f_mount can find no filesystem.
+	 */
+	memset(scratch, 0xA5, sector_size);
+	zassert_ok(disk_access_write(DISK_NAME, scratch, 0, 1),
+		   "wiping the MBR must succeed");
+	zassert_ok(disk_access_write(DISK_NAME, scratch, 2048, 1),
+		   "wiping the partition-1 boot sector must succeed");
+
+	/* Re-invoke: the guard must rebuild the FAT rather than preserve. */
+	zassert_ok(flight_log_disk_auto_format(),
+		   "auto-format must rebuild a corrupt FAT even with flight "
+		   "data present");
+
+	/* The recorded flight data must survive the rebuild untouched. */
+	memset(scratch, 0, sector_size);
+	zassert_ok(disk_access_read(DISK_NAME, scratch, off_sec, 1), NULL);
+	zassert_mem_equal(scratch, AURORA_BIN_FRAME_MAGIC,
+			  sizeof(AURORA_BIN_FRAME_MAGIC) - 1,
+			  "Flight magic must survive a corrupt-FAT rebuild");
+
+	/* Disk logging is restored: the volume is mounted and usable. */
+	zassert_ok(fs_statvfs(FS_MOUNT_POINT, &vfs),
+		   FS_MOUNT_POINT " must be mounted after the rebuild");
+	zassert_true(vfs.f_blocks > 0,
+		     "Rebuilt FAT volume must report a non-zero block count");
 }

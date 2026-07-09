@@ -107,15 +107,22 @@ static int sm_audit_file_create(void)
 		}
 	}
 
-	/* Ensure parent directory exists (fs_open creates files, not dirs). */
+	/* Ensure parent directory exists (fs_open creates files, not dirs).
+	 * Probe with fs_stat() first: the directory usually survives from a
+	 * previous boot, and calling fs_mkdir() anyway makes the fs subsystem
+	 * log a scary (but harmless) -EEXIST error on every boot.
+	 */
 	strncpy(dir, full_path, sizeof(dir) - 1);
 	dir[sizeof(dir) - 1] = '\0';
 	sep = strrchr(dir, '/');
 	if (sep != NULL && sep != dir) {
 		*sep = '\0';
-		rc = fs_mkdir(dir);
-		if (rc != 0 && rc != -EEXIST) {
-			LOG_WRN("failed to create audit dir %s (%d)", dir, rc);
+		if (fs_stat(dir, &entry) != 0) {
+			rc = fs_mkdir(dir);
+			if (rc != 0 && rc != -EEXIST) {
+				LOG_WRN("failed to create audit dir %s (%d)",
+					dir, rc);
+			}
 		}
 	}
 

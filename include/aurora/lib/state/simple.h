@@ -77,6 +77,7 @@ enum sm_state {
  */
 struct sm_inputs {
 	int armed;			/**< System armed status (non-zero = armed). */
+	int log_ready;			/**< Flight-log readiness (non-zero = logging available). Required, together with @ref armed, to leave IDLE for ARMED. */
 	double orientation[3];		/**< Current orientation reading (yaw, pitch, roll). */
 	double acceleration;		/**< Current acceleration reading (magnitude, m/s^2). */
 	double accel_vert;		/**< World-frame vertical acceleration (m/s^2, gravity-removed, positive up). */
