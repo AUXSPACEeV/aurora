@@ -21,6 +21,10 @@
 #include <aurora/lib/notify.h>
 #include <aurora/lib/state/state.h>
 
+#if defined(CONFIG_AURORA_PAD_LINK)
+#include <aurora/lib/pad_link.h>
+#endif /* CONFIG_AURORA_PAD_LINK */
+
 #if defined(CONFIG_DATA_LOGGER_BIN)
 LOG_MODULE_DECLARE(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 
@@ -191,3 +195,14 @@ void log_vbat_telemetry(void)
 void log_vbat_telemetry(void) {}
 #endif /* DT_HAS_CHOSEN(auxspace_vbat) */
 #endif
+
+#if defined(CONFIG_AURORA_PAD_LINK)
+
+void update_pad_link_data(void)
+{
+	struct sm_inputs sm_snap;
+
+	sm_get_inputs(&sm_snap);
+	pad_link_publish_sm(sm_get_state(), sm_get_type(), &sm_snap);
+}
+#endif /* CONFIG_AURORA_PAD_LINK */
