@@ -17,12 +17,43 @@
  * central silently decodes garbage.
  */
 
-/* Bit flags exposed via the boardcap (a0) characteristic.
- * PL_BOARDCAP_IMU  set → a2 (accel), a3 (gyro), a4 (6-DoF) are valid.
- * PL_BOARDCAP_BARO set → a1 (baro), a7 (inner_temp) are valid.
+/* Capability register (uint32, little-endian), exposed on characteristic a0.
+ *
+ * Byte 0 — IMU group
+ *   [2:0]  IMU type    enum pl_cap_imu_type
+ *   [3]    Accel       1 = accelerometer data valid (a2)
+ *   [4]    Gyro        1 = gyrometer data valid (a3)
+ *   [7:5]  reserved
+ *
+ * Byte 1 — Environmental group
+ *   [8]    Baro        1 = baro data valid (a1)
+ *   [9]    Inner temp  1 = inner_temp data valid (a7)
+ *   [10]   Motor temp  1 = motor_temp data valid (a8, planned)
+ *   [11]   Hull temp   1 = hull_temp data valid  (a9, planned)
+ *   [15:12] reserved
+ *
+ * Byte 2 — Positioning group
+ *   [16]   GPS/GNSS    1 = gps data valid (a6, planned)
+ *   [23:17] reserved
+ *
+ * Byte 3 — reserved
  */
-#define PL_BOARDCAP_IMU  (1U << 0)
-#define PL_BOARDCAP_BARO (1U << 1)
+enum pl_cap_imu_type {
+	PL_CAP_IMU_TYPE_NONE = 0x0,
+	PL_CAP_IMU_TYPE_6DOF = 0x1,
+	PL_CAP_IMU_TYPE_9DOF = 0x2,
+};
+#define PL_CAP_IMU_TYPE_MASK  (0x7u << 0)
+#define PL_CAP_IMU_TYPE(t)    (((uint32_t)(t)) << 0)
+#define PL_CAP_ACCEL          (1u << 3)
+#define PL_CAP_GYRO           (1u << 4)
+
+#define PL_CAP_BARO           (1u << 8)
+#define PL_CAP_TEMP_INNER     (1u << 9)
+#define PL_CAP_TEMP_MOTOR     (1u << 10)
+#define PL_CAP_TEMP_HULL      (1u << 11)
+
+#define PL_CAP_GPS            (1u << 16)
 
 /* Combine a Zephyr sensor_value into a single micro-unit int64.
  * physical = result / 1_000_000  (e.g. µ°C, µPa, µm/s², µrad/s)
