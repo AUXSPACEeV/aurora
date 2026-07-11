@@ -66,6 +66,7 @@
 #include <zephyr/sys/util.h>
 
 #include <aurora/lib/data_logger.h>
+#include <aurora/lib/disk_led.h>
 
 #include "bin_io.h"
 
@@ -201,6 +202,7 @@ static void bin_writer_fn(void *p1, void *p2, void *p3)
 						n_sec, rc);
 				} else {
 					g_bin_ctx.cur_sector_offset = sec + n_sec;
+					disk_led_activity();
 				}
 			}
 

@@ -482,6 +482,13 @@ void sm_update(const struct sm_inputs *inputs)
 #endif /* CONFIG_FILTER */
 }
 
+/* sm_update_force – see state.h */
+void sm_update_force(enum sm_state transition_to)
+{
+	SM_TRANSITION(transition_to);
+}
+
+
 /*-----------------------------------------------------------
  * Getter
  *----------------------------------------------------------*/

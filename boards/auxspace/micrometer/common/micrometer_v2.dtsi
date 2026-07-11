@@ -1,0 +1,111 @@
+/*
+ * Copyright (c) 2025-2026 Auxspace e.V.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * µMETER revision 2 hardware:
+ *   - Native SDHC SD card (espressif,esp32-sdhc slot, 4-bit) instead of the
+ *     rev.1 SPI-attached card.
+ *   - Updated barometer to the Bosch BMP581.
+ *   - Separate Remove Before Flight Pin.
+ *   - Battery Sense
+ *   - Extra Status LEDs
+ *   - USB-C
+ */
+
+/ {
+	chosen {
+		/* rev.2 exposes the console over the built-in USB-Serial-JTAG
+		 * instead of the hardware UART. */
+		zephyr,console = &usb_serial;
+		zephyr,shell-uart = &usb_serial;
+	};
+
+	vbatt: vbatt {
+		compatible = "voltage-divider";
+		io-channels = <&adc1 4>;
+		output-ohms = <4700>;	/* lower leg, to GND */
+		full-ohms = <12900>;	/* 8k2 (to VBat) + 4k7 (to GND) */
+		/* The ESP32 oneshot ADC does its own internal calibration and
+		 * rejects the voltage-divider's per-read sequence calibrate
+		 * (adc_read returns -ENOTSUP otherwise). */
+		skip-calibration;
+		status = "disabled";
+	};
+
+	status_leds: status-leds {
+		compatible = "gpio-leds";
+
+		sd_activity_led: led_sd {
+			gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
+			label = "SD Activity LED";
+		};
+	};
+};
+
+&pinctrl {
+	sdmmc_default: sdmmc_default {
+		group1 {
+			pinmux = <SDHC0_CLKOUT_GPIO6>,
+				 <SDHC0_CMD_GPIO5>,
+				 <SDHC0_DATA0_GPIO7>,
+				 <SDHC0_DATA1_GPIO41>,
+				 <SDHC0_DATA2_GPIO42>,
+				 <SDHC0_DATA3_GPIO4>;
+			bias-pull-up;
+		};
+	};
+
+	twai_default: twai_default {
+		group1 {
+			pinmux = <TWAI_RX_GPIO18>,
+				 <TWAI_TX_GPIO8>;
+		};
+	};
+};
+
+&adc1 {
+	channel@4 {
+		reg = <4>;
+		zephyr,gain = "ADC_GAIN_1_4";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+	};
+};
+
+&buttons {
+	button1: button_1 {
+		gpios = <&gpio1 6 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+		label = "RBF Button";
+		zephyr,code = <INPUT_KEY_0>;
+	};
+};
+
+&i2c0 {
+	bmp581_0: bmp581@47 {
+		compatible = "bosch,bmp581";
+		reg = <0x47>;
+		/* BMP581 INT is open-drain, active low. */
+		int-gpios = <&gpio0 10 GPIO_ACTIVE_LOW>;
+		status = "disabled";
+	};
+};
+
+&sdhc0 {
+	bus-width = <4>;
+	pinctrl-0 = <&sdmmc_default>;
+	pinctrl-names = "default";
+	max-bus-freq = <40000000>;
+	status = "disabled";
+
+	mmc0: mmc_0 {
+		compatible = "zephyr,sdmmc-disk";
+		disk-name = "MMC";
+		status = "disabled";
+	};
+};
+
+&usb_serial {
+	status = "okay";
+};

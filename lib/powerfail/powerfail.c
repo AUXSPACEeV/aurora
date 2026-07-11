@@ -38,6 +38,15 @@ static inline void emergency_recover_data_logger(struct data_logger *logger,
 }
 #endif /* CONFIG_DATA_LOGGER */
 
+/* Build-time dependency: AURORA_POWERFAIL needs the board/app to select the
+ * power-fail monitor input (a "gpios" property) via the 'auxspace,pfm' chosen
+ * node. */
+#if !DT_HAS_CHOSEN(auxspace_pfm)
+#error "CONFIG_AURORA_POWERFAIL requires DT chosen 'auxspace,pfm' to point at a node with a gpios property (the power-fail monitor input)."
+#endif
+BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_pfm), okay),
+	     "the 'auxspace,pfm' chosen node must have status \"okay\"");
+
 static const struct gpio_dt_spec pfail_pin =
     GPIO_DT_SPEC_GET(DT_CHOSEN(auxspace_pfm), gpios);
 

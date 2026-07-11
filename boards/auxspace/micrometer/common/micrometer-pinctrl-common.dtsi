@@ -110,11 +110,4 @@
 			output-enable;
 		};
 	};
-
-	twai_default: twai_default {
-		group1 {
-			pinmux = <TWAI_RX_GPIO19>,
-				 <TWAI_TX_GPIO20>;
-		};
-	};
 };

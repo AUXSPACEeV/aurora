@@ -1,5 +1,5 @@
-identifier: micrometer/esp32s3/procpu
-name: ESP32-S3 Micrometer
+identifier: micrometer@1/esp32s3/procpu
+name: ESP32-S3 Micrometer (v1 Rocinante)
 type: mcu
 arch: xtensa
 toolchain:

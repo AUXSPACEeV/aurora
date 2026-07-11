@@ -47,6 +47,7 @@ enum aurora_data {
 	AURORA_DATA_SM_KINEMATICS, /**< SM inputs: [0] accel, [1] accel_vert      */
 	AURORA_DATA_SM_POSE,       /**< SM Pose: [0] velocity, [1] altitude       */
 	AURORA_DATA_ORIENTATION,   /**< Orientation: [0] yaw, [1] pitch, [2] roll */
+	AURORA_DATA_VBAT,          /**< Battery: [0] voltage                      */
 	AURORA_DATA_COUNT,         /**< Sentinel — do not use as a type           */
 };
 

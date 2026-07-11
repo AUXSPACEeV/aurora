@@ -12,6 +12,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include <zephyr/shell/shell.h>
 
@@ -67,6 +68,31 @@ static int parse_state(const char *name, enum sm_state *out)
  * Commands
  *----------------------------------------------------------*/
 
+static enum sm_state forced_target_state;
+
+/** @brief  Callback function to handle the user input for forced state transitions.*/
+static void transition_bypass_cb(const struct shell *sh, uint8_t *data, size_t len, void *user_data)
+{
+	if (len == 0 || data == NULL) return;
+	if (data[0] == '\0') return;
+
+	char ch = tolower((char)data[0]);
+
+	if (ch == 'y') {
+		shell_print(sh, "Transitioning to state %s...", sm_state_str(forced_target_state));
+
+		sm_update_force(forced_target_state);
+
+	} else if (ch == 'n') {
+		shell_warn(sh, "Transition aborted by user.");
+	} else {
+		shell_warn(sh, "Invalid input. Please enter 'y' or 'n': ");
+		return;
+	}
+
+	shell_set_bypass(sh, NULL, NULL);
+}
+
 /** @brief Show state machine type and current state. */
 static int cmd_status(const struct shell *sh, size_t argc, char **argv)
 {
@@ -109,19 +135,21 @@ static int cmd_transition(const struct shell *sh, size_t argc, char **argv)
 		return 0;
 	}
 
-	/*
-	 * Re-initialize to IDLE then, if the target is not IDLE, we
-	 * cannot jump arbitrarily because the SM has no public setter.
-	 * Instead we deinit + init which lands us in IDLE.
-	 */
-	sm_deinit();
+	forced_target_state = target;
+
+	 if (target != SM_IDLE) {
+		shell_warn(sh, "Only transitions to IDLE are safe.");
+		shell_warn(sh, "State transitioning can result in pyro charges firing. Continue? (y/n)");
+
+		// Unblock the shell
+		shell_set_bypass(sh, transition_bypass_cb, NULL);
+		return 0;
+	 }
+
 	shell_print(sh, "%s -> %s (forced via shell)",
 		    sm_state_str(current), argv[1]);
+	sm_update_force(target);
 
-	if (target != SM_IDLE) {
-		shell_warn(sh, "Only transitions to IDLE are safe; "
-			   "state machine has been reset to IDLE");
-	}
 
 	return 0;
 }

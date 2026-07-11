@@ -9,14 +9,12 @@
 / {
 	chosen {
 		/* Auxspace specific */
-		auxspace,baro = &lps22hh0;
 		auxspace,imu = &lsm6dso320;
 		auxspace,mmc = &mmc0;
 		auxspace,pyro = &pyro0;
 		auxspace,ffs = &ffs0;
 		auxspace,buzzer = &buzzer0;
 		auxspace,led = &pwmleds;
-		auxspace,pfm = &button0;
 		auxspace,flight-log-disk = &flight_log_disk;
 	};
 
@@ -64,11 +62,6 @@
 	status = "okay";
 };
 
-&lps22hh0 {
-	status = "okay";
-	odr = <LPS22HH_DT_ODR_100HZ>;
-};
-
 &lsm6dso320 {
 	status = "okay";
 	accel-range = <LSM6DSO_DT_FS_16G>;
@@ -86,14 +79,6 @@
 };
 
 &pyro0 {
-	status = "okay";
-};
-
-&sdhc2 {
-	status = "okay";
-};
-
-&spi2 {
 	status = "okay";
 };
 
