@@ -76,41 +76,188 @@ central can read.
 128-bit UUIDs are used throughout. The service UUID lets a central
 filter scan results to "AURORA rockets only":
 
+All UUIDs share the base ``e8a591xx-7c0e-4b5b-9a4c-1f1b6f7c4d70``; the
+low byte ``xx`` identifies the characteristic.
+
 .. list-table::
    :header-rows: 1
-   :widths: 25 45 30
+   :widths: 25 10 35 30
 
    * - Name
-     - UUID
+     - UUID ``xx``
+     - Full UUID
      - Access
    * - Service
+     - ``00``
      - ``e8a59100-7c0e-4b5b-9a4c-1f1b6f7c4d70``
      - \-
    * - Board identifier
+     - ``01``
      - ``e8a59101-7c0e-4b5b-9a4c-1f1b6f7c4d70``
      - read
    * - SM state
+     - ``02``
      - ``e8a59102-7c0e-4b5b-9a4c-1f1b6f7c4d70``
      - read, notify
    * - Raw sensors
+     - ``03``
      - ``e8a59103-7c0e-4b5b-9a4c-1f1b6f7c4d70``
-     - read, notify
+     - read, notify *(deprecated)*
    * - Computed kinematics
+     - ``04``
      - ``e8a59104-7c0e-4b5b-9a4c-1f1b6f7c4d70``
      - read, notify
    * - SM type
+     - ``05``
      - ``e8a59105-7c0e-4b5b-9a4c-1f1b6f7c4d70``
      - read
+   * - Board capabilities
+     - ``a0``
+     - ``e8a591a0-7c0e-4b5b-9a4c-1f1b6f7c4d70``
+     - read
+   * - Barometer
+     - ``a1``
+     - ``e8a591a1-7c0e-4b5b-9a4c-1f1b6f7c4d70``
+     - read, notify
+   * - Accelerometer
+     - ``a2``
+     - ``e8a591a2-7c0e-4b5b-9a4c-1f1b6f7c4d70``
+     - read, notify
+   * - Gyrometer
+     - ``a3``
+     - ``e8a591a3-7c0e-4b5b-9a4c-1f1b6f7c4d70``
+     - read, notify
+   * - 6-DoF IMU
+     - ``a4``
+     - ``e8a591a4-7c0e-4b5b-9a4c-1f1b6f7c4d70``
+     - read, notify
+   * - 9-DoF IMU
+     - ``a5``
+     - ``e8a591a5-7c0e-4b5b-9a4c-1f1b6f7c4d70``
+     - planned
+   * - GPS/GNSS
+     - ``a6``
+     - ``e8a591a6-7c0e-4b5b-9a4c-1f1b6f7c4d70``
+     - planned
+   * - Inner temperature
+     - ``a7``
+     - ``e8a591a7-7c0e-4b5b-9a4c-1f1b6f7c4d70``
+     - read, notify
+   * - Motor temperature
+     - ``a8``
+     - ``e8a591a8-7c0e-4b5b-9a4c-1f1b6f7c4d70``
+     - planned
+   * - Hull temperature
+     - ``a9``
+     - ``e8a591a9-7c0e-4b5b-9a4c-1f1b6f7c4d70``
+     - planned
+
+"Planned" characteristics have UUID defines reserved in ``pad_link.c``
+but no GATT table entry yet; their corresponding bits in the boardcap
+register remain ``0`` until the sensor source is wired up.
 
 Read vs. notify
 ~~~~~~~~~~~~~~~
 
 Every characteristic supports *read*: the central asks once and gets the
-current value. The three live ones (state, raw sensors, computed) also
-support *notify*: the central writes "1" to the characteristic's CCC
-descriptor and then receives a push every time the rocket calls
-``pad_link_publish_sm()``. Notifications are cheaper than polling at the
-same rate and arrive immediately on each update.
+current value. The characteristics marked "read, notify" also support
+*notify*: the central writes "1" to the characteristic's CCC descriptor
+and then receives a push every time the rocket updates the snapshot.
+Notifications are cheaper than polling at the same rate and arrive
+immediately on each update.
+
+Board capabilities
+~~~~~~~~~~~~~~~~~~
+
+After connecting, read characteristic ``a0`` (boardcap) once. It is a
+``uint32_t`` little-endian register that describes which sensor
+characteristics carry valid data on this specific board. The value is
+determined at build time from the active Kconfig symbols
+(``CONFIG_IMU``, ``CONFIG_BARO``) and written by ``get_boardcap()``
+during pad-link initialisation.
+
+The register is split into four byte-sized groups:
+
+**Byte 0 — IMU group**
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 25 60
+
+   * - Bits
+     - Name
+     - Description
+   * - ``[2:0]``
+     - IMU type
+     - ``0`` = none, ``1`` = 6-DoF (accel + gyro), ``2`` = 9-DoF (accel + gyro + mag)
+   * - ``[3]``
+     - Accel
+     - 1 = accelerometer data valid (characteristic ``a2``)
+   * - ``[4]``
+     - Gyro
+     - 1 = gyrometer data valid (characteristic ``a3``)
+   * - ``[7:5]``
+     - —
+     - reserved
+
+**Byte 1 — Environmental group**
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 25 60
+
+   * - Bits
+     - Name
+     - Description
+   * - ``[8]``
+     - Baro
+     - 1 = barometer data valid (characteristic ``a1``)
+   * - ``[9]``
+     - Inner temp
+     - 1 = inner temperature data valid (characteristic ``a7``)
+   * - ``[10]``
+     - Motor temp
+     - 1 = motor temperature data valid (characteristic ``a8``, planned)
+   * - ``[11]``
+     - Hull temp
+     - 1 = hull temperature data valid (characteristic ``a9``, planned)
+   * - ``[15:12]``
+     - —
+     - reserved
+
+**Byte 2 — Positioning group**
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 25 60
+
+   * - Bits
+     - Name
+     - Description
+   * - ``[16]``
+     - GPS/GNSS
+     - 1 = GPS data valid (characteristic ``a6``, planned)
+   * - ``[23:17]``
+     - —
+     - reserved
+
+**Byte 3 — reserved**
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 25 60
+
+   * - Bits
+     - Name
+     - Description
+   * - ``[31:24]``
+     - —
+     - reserved
+
+The IMU type field uses the ``pl_cap_imu_type`` C enum defined in
+``lib/pad_link/pad_link_wire.h`` (``PL_CAP_IMU_TYPE_NONE``,
+``PL_CAP_IMU_TYPE_6DOF``, ``PL_CAP_IMU_TYPE_9DOF``). The Python
+example script mirrors these as ``CAP_IMU_TYPE_*`` constants.
 
 Characteristics in detail
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -224,6 +371,118 @@ more than the central needs for a status screen.
      - ``f32``
      - ``accel_vert`` (m/s², world-frame, gravity-removed)
 
+All sensor characteristics below use *micro-units*: divide the raw
+``int64_t`` value by 1 000 000 to recover the physical quantity.
+
+**Board capabilities** (``a0``): ``uint32_t`` LE, 4 bytes.
+See `Board capabilities`_ above.
+
+**Barometer** (``a1``): 20 bytes. Present when ``PL_CAP_BARO`` is set.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 15 15 55
+
+   * - Offset
+     - Size
+     - Type
+     - Field
+   * - 0
+     - 4
+     - ``u32``
+     - ``uptime_ms``
+   * - 4
+     - 8
+     - ``i64``
+     - ``temp_us`` (µ°C)
+   * - 12
+     - 8
+     - ``i64``
+     - ``press_us`` (µPa)
+
+**Accelerometer** (``a2``): 28 bytes. Present when ``PL_CAP_ACCEL`` is set.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 15 15 55
+
+   * - Offset
+     - Size
+     - Type
+     - Field
+   * - 0
+     - 4
+     - ``u32``
+     - ``uptime_ms``
+   * - 4
+     - 24
+     - ``i64[3]``
+     - ``accel_us`` x, y, z (µm/s²)
+
+**Gyrometer** (``a3``): 28 bytes. Present when ``PL_CAP_GYRO`` is set.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 15 15 55
+
+   * - Offset
+     - Size
+     - Type
+     - Field
+   * - 0
+     - 4
+     - ``u32``
+     - ``uptime_ms``
+   * - 4
+     - 24
+     - ``i64[3]``
+     - ``gyro_us`` x, y, z (µrad/s)
+
+**6-DoF IMU** (``a4``): 52 bytes. Present when IMU type ≥ 6-DoF.
+Combines ``a2`` and ``a3`` in one characteristic — subscribe to ``a4``
+*or* ``a2`` + ``a3``, not both.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 15 15 55
+
+   * - Offset
+     - Size
+     - Type
+     - Field
+   * - 0
+     - 4
+     - ``u32``
+     - ``uptime_ms``
+   * - 4
+     - 24
+     - ``i64[3]``
+     - ``accel_us`` x, y, z (µm/s²)
+   * - 28
+     - 24
+     - ``i64[3]``
+     - ``gyro_us`` x, y, z (µrad/s)
+
+**Inner temperature** (``a7``): 12 bytes. Present when ``PL_CAP_TEMP_INNER``
+is set. Sourced from the barometer sensor's die temperature.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 15 15 55
+
+   * - Offset
+     - Size
+     - Type
+     - Field
+   * - 0
+     - 4
+     - ``u32``
+     - ``uptime_ms``
+   * - 4
+     - 8
+     - ``i64``
+     - ``temp_us`` (µ°C)
+
 Rocket-side integration
 -----------------------
 
@@ -232,8 +491,8 @@ in ``main.c`` and one Kconfig:
 
 .. code-block:: c
 
+   /* main.c — one-time init */
    #include <aurora/lib/pad_link.h>
-   #include <aurora/lib/state/state.h>
 
    int main(void)
    {
@@ -243,13 +502,14 @@ in ``main.c`` and one Kconfig:
    }
 
    /* In the state-machine loop, right after sm_update(): */
-   struct sm_inputs sm_in;
-   sm_get_inputs(&sm_in);
-   pad_link_publish_sm(sm_get_state(), sm_get_type(), &sm_in);
+   update_pad_link_data();   /* defined in data.c, no-op without CONFIG_AURORA_PAD_LINK */
 
-That is the whole rocket-side contract. The raw-sensor characteristic
-fills itself in: the library subscribes to the IMU and baro zbus
-channels internally and snapshots every published sample.
+``update_pad_link_data()`` (in ``sensor_board/src/data.c``) collects the
+current state-machine snapshot and calls ``pad_link_publish_sm()``
+internally. The sensor characteristics fill themselves in automatically:
+the library subscribes to the IMU and baro ZBUS channels and snapshots
+every published sample. The boardcap register is computed once at startup
+from the active Kconfig symbols — no explicit call is needed.
 
 Kconfig
 -------
@@ -287,23 +547,33 @@ the same: scan, connect, discover, then read or subscribe.
 
 A runnable Python reference using `Bleak <https://bleak.readthedocs.io>`_
 ships in-tree as :doc:`/tools/pad_link_central_example`. It scans by
-service UUID, reads the board id and SM type, then either subscribes
-to notifications or polls reads on a timer:
+service UUID, reads the board id, SM type, and boardcap register, prints
+a capability summary, then subscribes to or polls only the sensor
+characteristics that are actually present on the board:
 
 .. code-block:: console
 
    $ pip install bleak
    $ python3 aurora/tools/pad_link_central_example.py
-   connected to sensor_board_v2_rp2040 (sm_type=0)
+   connected to sensor_board_v2_esp32s3 (sm_type=0)
+   capabilities:
+     IMU:        6-DoF (accel + gyro)
+     Barometer:  present
+     Inner temp: present
+     Motor temp: not present
+     Hull temp:  not present
+     GPS/GNSS:   not present
    state: IDLE
+   baro: temp=22.10°C  press=101325.00 Pa
+   imu6: a=[x=+0.000, y=+0.000, z=-9.810] m/s²  g=[x=+0.000, y=+0.000, z=+0.000] rad/s
    t=12345  alt=+0.1  v=+0.0  ypr=+0.3/-0.1/+0.0
    ...
 
 The mode is selectable from the command line:
 
-- ``--mode notify`` (default): subscribe to the SM-state and computed
-  characteristics. The rocket pushes a notification on every SM tick.
-  Lowest latency, highest radio traffic.
+- ``--mode notify`` (default): subscribe to state, computed kinematics,
+  and any sensor characteristics enabled by boardcap. The rocket pushes
+  a notification on every SM tick. Lowest latency, highest radio traffic.
 - ``--mode poll --interval 1.0``: skip notifications and ``read`` the
   characteristics on a timer. The central drives the cadence; the
   rocket never pushes. Use this for a low-rate status display where
