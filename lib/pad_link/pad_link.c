@@ -36,7 +36,9 @@ LOG_MODULE_REGISTER(pad_link, CONFIG_AURORA_PAD_LINK_LOG_LEVEL);
  *   xx = 00 service,    01 board,      02 sm_state,
  *        03 raw sensor, 04 computed,   05 sm_type
  *        a0 boardcap,   a1 baro,       a2 accel,
- *        a3 gyro,       a4 6-DoF IMU,  a7 inner_temp
+ *        a3 gyro,       a4 6-DoF IMU,  a5 9-DoF IMU (planned),
+ *        a6 GPS/GNSS (planned),        a7 inner_temp,
+ *        a8 motor_temp (planned),      a9 hull_temp (planned)
  */
 #define PL_UUID_SVC_VAL \
 	BT_UUID_128_ENCODE(0xe8a59100, 0x7c0e, 0x4b5b, 0x9a4c, 0x1f1b6f7c4d70)
@@ -63,6 +65,16 @@ LOG_MODULE_REGISTER(pad_link, CONFIG_AURORA_PAD_LINK_LOG_LEVEL);
 	BT_UUID_128_ENCODE(0xe8a591a4, 0x7c0e, 0x4b5b, 0x9a4c, 0x1f1b6f7c4d70)
 #define PL_UUID_INNER_TEMP_VAL \
 	BT_UUID_128_ENCODE(0xe8a591a7, 0x7c0e, 0x4b5b, 0x9a4c, 0x1f1b6f7c4d70)
+
+/* Planned — not yet implemented: */
+#define PL_UUID_IMU9_VAL \
+	BT_UUID_128_ENCODE(0xe8a591a5, 0x7c0e, 0x4b5b, 0x9a4c, 0x1f1b6f7c4d70)
+#define PL_UUID_GPS_VAL \
+	BT_UUID_128_ENCODE(0xe8a591a6, 0x7c0e, 0x4b5b, 0x9a4c, 0x1f1b6f7c4d70)
+#define PL_UUID_MOTOR_TEMP_VAL \
+	BT_UUID_128_ENCODE(0xe8a591a8, 0x7c0e, 0x4b5b, 0x9a4c, 0x1f1b6f7c4d70)
+#define PL_UUID_HULL_TEMP_VAL \
+	BT_UUID_128_ENCODE(0xe8a591a9, 0x7c0e, 0x4b5b, 0x9a4c, 0x1f1b6f7c4d70)
 
 static const struct bt_uuid_128 pl_uuid_svc =
 	BT_UUID_INIT_128(PL_UUID_SVC_VAL);
@@ -328,7 +340,11 @@ static void inner_temp_ccc_cfg(const struct bt_gatt_attr *attr, uint16_t value)
  *   [19] accel declaration        [20] accel value     [21]  accel CCC
  *   [22] gyro declaration         [23] gyro value      [24]  gyro CCC
  *   [25] imu6 declaration         [26] imu6 value      [27]  imu6 CCC
+ *   [ -] imu9 (planned, a5)       [ -] imu9 value      [ -]  imu9 CCC
+ *   [ -] gps  (planned, a6)       [ -] gps value       [ -]  gps CCC
  *   [28] inner_temp declaration   [29] inner_temp val  [30]  inner_temp CCC
+ *   [ -] motor_temp (planned, a8) [ -] motor_temp val  [ -]  motor_temp CCC
+ *   [ -] hull_temp  (planned, a9) [ -] hull_temp val   [ -]  hull_temp CCC
  */
 #define PL_ATTR_STATE_VALUE      6
 #define PL_ATTR_RAW_VALUE        9
@@ -406,12 +422,16 @@ BT_GATT_SERVICE_DEFINE(pad_link_svc,
 	BT_GATT_CCC(imu6_ccc_cfg,
 		BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
 
+	/* TODO: a5 imu9, a6 gps — add read handler, snap field and CCC when source exists. */
+
 	BT_GATT_CHARACTERISTIC(&pl_uuid_inner_temp.uuid,
 		BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
 		BT_GATT_PERM_READ,
 		read_inner_temp, NULL, NULL),
 	BT_GATT_CCC(inner_temp_ccc_cfg,
 		BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+
+	/* TODO: a8 motor_temp, a9 hull_temp — add read handler, snap field and CCC when source exists. */
 );
 
 /* ------------------------------------------------------------------ */
