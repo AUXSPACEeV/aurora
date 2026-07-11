@@ -49,8 +49,22 @@
 
 ZTEST(pad_link_format, test_boardcap_flags)
 {
-	zassert_equal(PL_BOARDCAP_IMU,  (1U << 0), "IMU flag");
-	zassert_equal(PL_BOARDCAP_BARO, (1U << 1), "BARO flag");
+	/* IMU group — byte 0 */
+	zassert_equal(PL_CAP_IMU_TYPE_NONE, 0x0u, "IMU type NONE");
+	zassert_equal(PL_CAP_IMU_TYPE_6DOF, 0x1u, "IMU type 6-DoF");
+	zassert_equal(PL_CAP_IMU_TYPE_9DOF, 0x2u, "IMU type 9-DoF");
+	zassert_equal(PL_CAP_IMU_TYPE_MASK, 0x7u, "IMU type mask");
+	zassert_equal(PL_CAP_ACCEL, (1u << 3), "accel flag");
+	zassert_equal(PL_CAP_GYRO,  (1u << 4), "gyro flag");
+
+	/* Environmental group — byte 1 */
+	zassert_equal(PL_CAP_BARO,       (1u << 8),  "baro flag");
+	zassert_equal(PL_CAP_TEMP_INNER, (1u << 9),  "inner temp flag");
+	zassert_equal(PL_CAP_TEMP_MOTOR, (1u << 10), "motor temp flag");
+	zassert_equal(PL_CAP_TEMP_HULL,  (1u << 11), "hull temp flag");
+
+	/* Positioning group — byte 2 */
+	zassert_equal(PL_CAP_GPS, (1u << 16), "GPS flag");
 }
 
 ZTEST(pad_link_format, test_baro_payload_layout)
@@ -306,8 +320,19 @@ ZTEST(pad_link_snap, test_boardcap_flags_set)
 	pad_link_test_get_snapshot(NULL, NULL, NULL, NULL,
 				   &cap, NULL, NULL, NULL, NULL, NULL);
 
-	zassert_true(cap & PL_BOARDCAP_IMU,  "IMU flag should be set");
-	zassert_true(cap & PL_BOARDCAP_BARO, "BARO flag should be set");
+	/* IMU group: 6-DoF type, accel and gyro present */
+	zassert_equal(cap & PL_CAP_IMU_TYPE_MASK,
+		      PL_CAP_IMU_TYPE(PL_CAP_IMU_TYPE_6DOF),
+		      "IMU type should be 6-DoF");
+	zassert_true(cap & PL_CAP_ACCEL, "accel flag should be set");
+	zassert_true(cap & PL_CAP_GYRO,  "gyro flag should be set");
+
+	/* Environmental group: baro and inner temp present */
+	zassert_true(cap & PL_CAP_BARO,       "baro flag should be set");
+	zassert_true(cap & PL_CAP_TEMP_INNER, "inner_temp flag should be set");
+
+	/* Positioning: no GPS source yet */
+	zassert_false(cap & PL_CAP_GPS, "GPS flag should not be set");
 }
 
 ZTEST(pad_link_snap, test_baro_publish_updates_snap_baro)
