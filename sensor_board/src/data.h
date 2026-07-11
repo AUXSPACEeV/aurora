@@ -18,15 +18,17 @@
 void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state);
 void log_flight_telemetry(void);
 void log_vbat_telemetry(void);
-void update_pad_link_data(void);
-
-
 #else
 static inline void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state) {}
 static inline void log_flight_telemetry(void) {}
 static inline void log_vbat_telemetry(void) {}
+#endif /* CONFIG_DATA_LOGGER_BIN */
+
+#if defined(CONFIG_AURORA_PAD_LINK)
+void update_pad_link_data(void);
+#else
 static inline void update_pad_link_data(void) {}
-#endif
+#endif /*CONFIG_AURORA_PAD_LINK*/
 
 /**
  * @brief Arming precondition: is flight-time data logging available?
@@ -43,6 +45,6 @@ static inline void update_pad_link_data(void) {}
 bool log_flight_log_online(void);
 #else
 static inline bool log_flight_log_online(void) { return true; }
-#endif
+#endif /* CONFIG_DATA_LOGGER_BIN */
 
-#endif
+#endif /* DATA_H */
