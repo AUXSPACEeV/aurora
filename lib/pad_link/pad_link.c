@@ -576,11 +576,13 @@ BT_CONN_CB_DEFINE(pad_link_conn_cb) = {
 static void get_boardcap(void)
 {
 	uint32_t cap = 0;
+
+	/* TODO: Adjust for more capabilities */
 #if defined(CONFIG_IMU)
-	cap |= PL_BOARDCAP_IMU;
+	cap |= PL_CAP_IMU_TYPE(PL_CAP_IMU_TYPE_6DOF) | PL_CAP_ACCEL | PL_CAP_GYRO;
 #endif
 #if defined(CONFIG_BARO)
-	cap |= PL_BOARDCAP_BARO;
+	cap |= PL_CAP_BARO | PL_CAP_TEMP_INNER;
 #endif
 	K_SPINLOCK(&snap.lock) {
 		snap.boardcap = cap;
