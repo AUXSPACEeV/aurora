@@ -89,8 +89,14 @@ static const struct sm_thresholds state_cfg = {
 LOG_MODULE_REGISTER(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 
 ZBUS_MSG_SUBSCRIBER_DEFINE(sm_sub);
+
+#if defined (CONFIG_IMU)
 ZBUS_CHAN_ADD_OBS(imu_data_chan, sm_sub, 1);
+#endif
+
+#if defined (CONFIG_BARO)
 ZBUS_CHAN_ADD_OBS(baro_data_chan, sm_sub, 1);
+#endif
 
 #if defined(CONFIG_AURORA_POWERFAIL)
 static void powerfail_assert(void)
@@ -529,18 +535,15 @@ void state_machine_task(void *, void *, void *)
 					&imu_ready,
 					&calibration_notified);
 				log_imu_data(&msg_buf.imu);
-#else
-				if (imu_sensor_value_to_orientation(&msg_buf.imu, 0.0, NULL, orientation) == 0
-					&& imu_sensor_value_to_acceleration(&msg_buf.imu, &acceleration) == 0) {
-					imu_ready = true;
-				}
 #endif
+#if defined(CONFIG_BARO)
 			} else if (data_chan == &baro_data_chan) {
 				log_baro_data(&msg_buf.baro);
 
 				if (baro_sensor_value_to_altitude(&msg_buf.baro.pressure, &altitude) == 0) {
 					baro_ready = true;
 				}
+#endif
 			}
 		} while (zbus_sub_wait_msg(&sm_sub, &data_chan, &msg_buf, K_NO_WAIT) == 0);
 
