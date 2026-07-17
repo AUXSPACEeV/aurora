@@ -171,10 +171,11 @@ Board capabilities
 
 After connecting, read characteristic ``a0`` (boardcap) once. It is a
 ``uint32_t`` little-endian register that describes which sensor
-characteristics carry valid data on this specific board. The value is
-determined at build time from the active Kconfig symbols
-(``CONFIG_IMU``, ``CONFIG_BARO``) and written by ``get_boardcap()``
-during pad-link initialisation.
+characteristics carry valid data on this specific board. The
+application declares the value during init via ``pad_link_set_caps()``,
+composing it from the ``PL_CAP_*`` flags in
+``include/aurora/lib/pad_link.h`` — which sensors a board carries is
+hardware knowledge the library does not guess at.
 
 The register is split into four byte-sized groups:
 
@@ -486,8 +487,8 @@ is set. Sourced from the barometer sensor's die temperature.
 Rocket-side integration
 -----------------------
 
-For the typical sensor-board application, the integration is two calls
-in ``main.c`` and one Kconfig:
+For the typical application, the integration is three calls and one
+Kconfig:
 
 .. code-block:: c
 
@@ -497,19 +498,28 @@ in ``main.c`` and one Kconfig:
    int main(void)
    {
        /* ... other init ... */
+
+       /* Declare this board's sensor fit (hardware knowledge the
+        * library does not guess at), then bring up the BLE stack.
+        */
+       pad_link_set_caps(PL_CAP_IMU_TYPE(PL_CAP_IMU_TYPE_6DOF) |
+                         PL_CAP_ACCEL | PL_CAP_GYRO |
+                         PL_CAP_BARO | PL_CAP_TEMP_INNER);
        (void)pad_link_init();   /* non-fatal if it fails */
        return 0;
    }
 
    /* In the state-machine loop, right after sm_update(): */
-   update_pad_link_data();   /* defined in data.c, no-op without CONFIG_AURORA_PAD_LINK */
+   struct sm_inputs sm_snap;
 
-``update_pad_link_data()`` (in ``sensor_board/src/data.c``) collects the
-current state-machine snapshot and calls ``pad_link_publish_sm()``
-internally. The sensor characteristics fill themselves in automatically:
-the library subscribes to the IMU and baro ZBUS channels and snapshots
-every published sample. The boardcap register is computed once at startup
-from the active Kconfig symbols — no explicit call is needed.
+   sm_get_inputs(&sm_snap);
+   pad_link_publish_sm(sm_get_state(), sm_get_type(), &sm_snap);
+
+``pad_link_publish_sm()`` updates the state and computed-kinematics
+characteristics and fires notifications for any subscribed central. The
+sensor characteristics fill themselves in automatically: the library
+subscribes to the IMU and baro ZBUS channels and snapshots every
+published sample.
 
 Kconfig
 -------

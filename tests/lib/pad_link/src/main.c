@@ -14,9 +14,8 @@
  * bt_enable() is intentionally never called: pad_link_publish_sm
  * early-exits when current_conn is NULL, so we exercise the
  * snapshot-update path without bringing up the BT host. Board
- * capability flags are only computed inside pad_link_init(), so the
- * boardcap test calls pad_link_test_trigger_boardcap() to run that
- * same logic directly.
+ * capability flags come from the application via pad_link_set_caps(),
+ * so the boardcap test calls it directly.
  *
  * Copyright (c) 2026 Auxspace e.V.
  *
@@ -313,8 +312,12 @@ ZTEST(pad_link_snap, test_publish_sm_null_inputs_is_noop)
 
 ZTEST(pad_link_snap, test_boardcap_flags_set)
 {
-	/* prj.conf enables both CONFIG_IMU and CONFIG_BARO. */
-	pad_link_test_trigger_boardcap();
+	/* The application declares its sensors: the library must
+	 * serve the value back unchanged through the snapshot.
+	 */
+	pad_link_set_caps(PL_CAP_IMU_TYPE(PL_CAP_IMU_TYPE_6DOF) |
+			  PL_CAP_ACCEL | PL_CAP_GYRO |
+			  PL_CAP_BARO | PL_CAP_TEMP_INNER);
 
 	uint32_t cap;
 	pad_link_test_get_snapshot(NULL, NULL, NULL, NULL,

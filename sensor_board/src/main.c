@@ -637,6 +637,21 @@ int main(void)
 #endif /* CONFIG_AURORA_TELEMETRY */
 
 #if defined(CONFIG_AURORA_PAD_LINK)
+	/* This app's sensor requirements: the IMU is measuring 6-DoF and the
+	 * baro doubles as an inner temperature sensor. Declared here
+	 * because it is hardware knowledge the pad-link library must not
+	 * hard code. Set before init so the boardcap register is valid
+	 * the moment a central can connect.
+	 */
+	uint32_t pl_caps = 0;
+#if defined(CONFIG_IMU)
+	pl_caps |= PL_CAP_IMU_TYPE(PL_CAP_IMU_TYPE_6DOF) |
+		   PL_CAP_ACCEL | PL_CAP_GYRO;
+#endif /* CONFIG_IMU */
+#if defined(CONFIG_BARO)
+	pl_caps |= PL_CAP_BARO | PL_CAP_TEMP_INNER;
+#endif /* CONFIG_BARO */
+	pad_link_set_caps(pl_caps);
 	(void)pad_link_init();
 #endif /* CONFIG_AURORA_PAD_LINK */
 

@@ -26,7 +26,7 @@ UUID_IMU6       = "e8a591a4-7c0e-4b5b-9a4c-1f1b6f7c4d70"
 UUID_INNER_TEMP = "e8a591a7-7c0e-4b5b-9a4c-1f1b6f7c4d70"
 
 # Capability register (boardcap characteristic, uint32 LE).
-# Mirrors pad_link_wire.h — keep in sync.
+# Mirrors include/aurora/lib/pad_link.h. Keep in sync.
 #
 # Byte 0 — IMU group
 CAP_IMU_TYPE_MASK = 0x7

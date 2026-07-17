@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <string.h>
+
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
@@ -116,9 +118,20 @@ static struct {
 	struct pl_baro_payload baro;
 	struct pl_accel_payload accel;
 	struct pl_gyro_payload gyro;
-	struct pl_imu6_payload imu6;
 	struct pl_inner_temp_payload inner_temp;
 } snap;
+
+/* The 6-DoF IMU payload (a4) carries the same data as accel (a2) +
+ * gyro (a3); compose it from those snapshots instead of maintaining a
+ * third copy. Caller must hold snap.lock. Both snapshots are stamped
+ * together in on_imu(), so accel's uptime is the payload's uptime.
+ */
+static void snap_compose_imu6(struct pl_imu6_payload *out)
+{
+	out->uptime_ms = snap.accel.uptime_ms;
+	memcpy(out->accel_us, snap.accel.accel_us, sizeof(out->accel_us));
+	memcpy(out->gyro_us, snap.gyro.gyro_us, sizeof(out->gyro_us));
+}
 
 static const char board_id[] = CONFIG_AURORA_PAD_LINK_BOARD_ID;
 
@@ -260,7 +273,7 @@ static ssize_t read_imu6(struct bt_conn *conn,
 {
 	struct pl_imu6_payload v;
 	K_SPINLOCK(&snap.lock) {
-		v = snap.imu6;
+		snap_compose_imu6(&v);
 	}
 	return bt_gatt_attr_read(conn, attr, buf, len, offset,
 				 &v, sizeof(v));
@@ -455,14 +468,9 @@ static void on_imu(const struct zbus_channel *chan)
 
 		snap.accel.uptime_ms = now;
 		snap.gyro.uptime_ms  = now;
-		snap.imu6.uptime_ms  = now;
 		for (int i = 0; i < 3; i++) {
-			int64_t accel_us = sv_to_i64(&d->accel[i]);
-			int64_t gyro_us  = sv_to_i64(&d->gyro[i]);
-			snap.accel.accel_us[i] = accel_us;
-			snap.gyro.gyro_us[i]   = gyro_us;
-			snap.imu6.accel_us[i]  = accel_us;
-			snap.imu6.gyro_us[i]   = gyro_us;
+			snap.accel.accel_us[i] = sv_to_i64(&d->accel[i]);
+			snap.gyro.gyro_us[i]   = sv_to_i64(&d->gyro[i]);
 		}
 	}
 }
@@ -573,25 +581,16 @@ BT_CONN_CB_DEFINE(pad_link_conn_cb) = {
 	.disconnected = disconnected,
 };
 
-static void get_boardcap(void)
-{
-	uint32_t cap = 0;
-
-	/* TODO: Adjust for more capabilities */
-#if defined(CONFIG_IMU)
-	cap |= PL_CAP_IMU_TYPE(PL_CAP_IMU_TYPE_6DOF) | PL_CAP_ACCEL | PL_CAP_GYRO;
-#endif
-#if defined(CONFIG_BARO)
-	cap |= PL_CAP_BARO | PL_CAP_TEMP_INNER;
-#endif
-	K_SPINLOCK(&snap.lock) {
-		snap.boardcap = cap;
-	}
-}
-
 /* ------------------------------------------------------------------ */
 /* Public API                                                          */
 /* ------------------------------------------------------------------ */
+
+void pad_link_set_caps(uint32_t caps)
+{
+	K_SPINLOCK(&snap.lock) {
+		snap.boardcap = caps;
+	}
+}
 
 int pad_link_init(void)
 {
@@ -600,8 +599,6 @@ int pad_link_init(void)
 		LOG_ERR("bt_enable failed (%d). Pad link disabled", err);
 		return err;
 	}
-
-	get_boardcap();
 
 	LOG_INF("BLE host up; board_id=\"%s\"", board_id);
 	adv_start();
@@ -681,9 +678,14 @@ void pad_link_publish_sm(enum sm_state state, enum sm_type type,
 		K_SPINLOCK(&snap.lock) {
 			raw = snap.raw;
 		}
-		(void)bt_gatt_notify(conn,
-				     &pad_link_svc.attrs[PL_ATTR_RAW_VALUE],
-				     &raw, sizeof(raw));
+		rc = bt_gatt_notify(conn,
+				    &pad_link_svc.attrs[PL_ATTR_RAW_VALUE],
+				    &raw, sizeof(raw));
+		if (rc != 0) {
+			LOG_WRN("notify raw rc=%d len=%u", rc, sizeof(raw));
+			notify_backoff_until_ms = now_ms + NOTIFY_BACKOFF_MS;
+			goto out;
+		}
 	}
 	if (baro_notify_enabled) {
 		struct pl_baro_payload baro;
@@ -730,7 +732,7 @@ void pad_link_publish_sm(enum sm_state state, enum sm_type type,
 	if (imu6_notify_enabled) {
 		struct pl_imu6_payload imu6;
 		K_SPINLOCK(&snap.lock) {
-			imu6 = snap.imu6;
+			snap_compose_imu6(&imu6);
 		}
 		rc = bt_gatt_notify(conn,
 				    &pad_link_svc.attrs[PL_ATTR_IMU6_VALUE],
@@ -746,9 +748,14 @@ void pad_link_publish_sm(enum sm_state state, enum sm_type type,
 		K_SPINLOCK(&snap.lock) {
 			inner_temp = snap.inner_temp;
 		}
-		(void)bt_gatt_notify(conn,
-				     &pad_link_svc.attrs[PL_ATTR_INNER_TEMP_VALUE],
-				     &inner_temp, sizeof(inner_temp));
+		rc = bt_gatt_notify(conn,
+				    &pad_link_svc.attrs[PL_ATTR_INNER_TEMP_VALUE],
+				    &inner_temp, sizeof(inner_temp));
+		if (rc != 0) {
+			LOG_WRN("notify inner_temp rc=%d", rc);
+			notify_backoff_until_ms = now_ms + NOTIFY_BACKOFF_MS;
+			goto out;
+		}
 	}
 
 out:
@@ -793,20 +800,11 @@ void pad_link_test_get_snapshot(uint8_t *sm_type,
 			*gyro = snap.gyro;
 		}
 		if (imu6) {
-			*imu6 = snap.imu6;
+			snap_compose_imu6(imu6);
 		}
 		if (inner_temp) {
 			*inner_temp = snap.inner_temp;
 		}
 	}
-}
-
-/* get_boardcap() normally only runs inside pad_link_init(), which this
- * suite never calls (see file header). Trigger it directly so the
- * Kconfig→flag mapping can be tested without bringing up the BT host.
- */
-void pad_link_test_trigger_boardcap(void)
-{
-	get_boardcap();
 }
 #endif
