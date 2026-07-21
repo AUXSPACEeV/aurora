@@ -4,8 +4,8 @@
  *
  * Drives the board's PWM-backed passive buzzer (via @c auxspace_buzzer chosen
  * node) to indicate boot, flight state-machine transitions, calibration
- * completion and error.  Registered at link time as a @ref notify_backend via
- * @ref NOTIFY_BACKEND_DEFINE.
+ * completion (flight-ready), flight-log completion and error.  Registered at
+ * link time as a @ref notify_backend via @ref NOTIFY_BACKEND_DEFINE.
  *
  * All tone sequences are blocking (they interleave @c pwm_set_dt with
  * @c k_sleep); to keep them off the caller's thread (typically the state
@@ -14,7 +14,7 @@
  * ordering of calls like @ref pwm_melody_stop so that important
  * sequencing (stop-melody-before-play-tone) is never reordered.
  * When the queue is full, newly posted events are dropped with a
- * warning — the worker drains the queue in order, providing natural
+ * warning. The worker drains the queue in order, providing natural
  * back-pressure / rate-limiting.
  *
  * Copyright (c) 2026, Auxspace e.V.
@@ -43,11 +43,25 @@ static const struct pwm_dt_spec buzzer =
 
 PWM_MELODY_CTX_DEFINE(melody_ctx, &buzzer, astronomia, 1024);
 
+/*
+ * Tone palette (Hz).  Spread across the audible range so every pattern is
+ * distinguishable by ear.  Patterns encode meaning through three axes:
+ * pitch register, beep count, and pitch direction (rising = good/ready,
+ * falling = stand-down/safe).  See doc/lib/notify.rst for the full table.
+ */
+#define TONE_LOW	700	/* boot blip                                  */
+#define TONE_MID	1400	/* generic / low end of chimes                */
+#define TONE_MIDHIGH	2100	/* arm / disarm                               */
+#define TONE_HIGH	2800	/* apogee / main                              */
+#define TONE_TOP	3500	/* redundant / log written                    */
+#define TONE_ALARM	4200	/* error                                      */
+
 /** @brief Buzzer event types. */
 enum buzzer_evt_type {
 	BUZZER_EVT_BOOT,
 	BUZZER_EVT_STATE_CHANGE,
 	BUZZER_EVT_CALIBRATION_COMPLETE,
+	BUZZER_EVT_LOG_WRITTEN,
 	BUZZER_EVT_ERROR,
 };
 
@@ -76,25 +90,67 @@ static int buzz(uint32_t period_ns, uint32_t duration_ms)
 	return pwm_set_dt(&buzzer, period_ns, 0);
 }
 
+/** @brief Play @p n identical @p freq beeps, @p on_ms on / @p gap_ms apart. */
+static void beep_n(int n, uint16_t freq, uint32_t on_ms, uint32_t gap_ms)
+{
+	for (int i = 0; i < n; i++) {
+		if (buzz(PWM_HZ(freq), on_ms)) {
+			return;
+		}
+		if (i + 1 < n) {
+			k_sleep(K_MSEC(gap_ms));
+		}
+	}
+}
+
 static void play_boot(void)
 {
-	(void)buzz(PWM_HZ(4000), 500);
+	/* Single low blip: power on. */
+	(void)buzz(PWM_HZ(TONE_LOW), 150);
 }
 
 static void play_calibration_complete(void)
 {
-	(void)buzz(PWM_HZ(1000), 500);
+	/* Ascending 3-note chime: calibration done, rocket flight-ready. */
+	static const uint16_t chime[] = { TONE_MID, TONE_MIDHIGH, TONE_HIGH };
+
+	for (int i = 0; i < (int)ARRAY_SIZE(chime); i++) {
+		if (buzz(PWM_HZ(chime[i]), 120)) {
+			return;
+		}
+	}
+}
+
+static void play_log_written(void)
+{
+	/* Low->high "ta-daa": flight record safely written to disk. */
+	if (buzz(PWM_HZ(TONE_MID), 120)) {
+		return;
+	}
+	k_sleep(K_MSEC(60));
+	(void)buzz(PWM_HZ(TONE_TOP), 280);
 }
 
 static void play_error(void)
 {
-	/* Three short high-pitched beeps. */
-	for (int i = 0; i < 3; i++) {
-		if (buzz(PWM_HZ(4000), 100)) {
-			return;
-		}
-		k_sleep(K_MSEC(100));
+	/* Five rapid alarm beeps: unrecoverable error, service required. */
+	beep_n(5, TONE_ALARM, 100, 100);
+}
+
+static void play_arm(void)
+{
+	/* Two firm mid-high beeps: armed, pyros live. */
+	beep_n(2, TONE_MIDHIGH, 180, 120);
+}
+
+static void play_disarm(void)
+{
+	/* Descending two-tone: stand down, safe. */
+	if (buzz(PWM_HZ(TONE_MIDHIGH), 150)) {
+		return;
 	}
+	k_sleep(K_MSEC(60));
+	(void)buzz(PWM_HZ(TONE_MID), 150);
 }
 
 static void play_state_change(enum sm_state next)
@@ -102,29 +158,33 @@ static void play_state_change(enum sm_state next)
 	pwm_melody_stop(&melody_ctx);
 
 	switch (next) {
-	case SM_ARMED:
-		(void)buzz(PWM_HZ(2000), 200);
-		break;
 	case SM_IDLE:
-		(void)buzz(PWM_HZ(500), 50);
+		play_disarm();
+		break;
+	case SM_ARMED:
+		play_arm();
 		break;
 	case SM_APOGEE:
-		(void)buzz(PWM_HZ(3000), 300);
+		/* Single long high tone: apogee, drogue event. */
+		(void)buzz(PWM_HZ(TONE_HIGH), 500);
 		break;
 	case SM_MAIN:
-		(void)buzz(PWM_HZ(2500), 300);
+		/* Two high beeps: main parachute deployment. */
+		beep_n(2, TONE_HIGH, 250, 150);
 		break;
 	case SM_REDUNDANT:
-		/* Two short mid-high beeps: backup deployment active. */
-		for (int i = 0; i < 2; i++) {
-			if (buzz(PWM_HZ(2500), 150)) {
-				return;
-			}
-			k_sleep(K_MSEC(100));
-		}
+		/* Three top-pitch beeps: backup deployment, clearly distinct
+		 * from the two-beep MAIN pattern.
+		 */
+		beep_n(3, TONE_TOP, 200, 150);
 		break;
 	case SM_LANDED:
 		(void)pwm_melody_start(&melody_ctx);
+		break;
+	case SM_BOOST:
+	case SM_BURNOUT:
+		/* Generic transition tick: short neutral blip. */
+		(void)buzz(PWM_HZ(TONE_MID), 90);
 		break;
 	default:
 		break;
@@ -151,6 +211,9 @@ static void buzzer_thread_fn(void *a, void *b, void *c)
 			break;
 		case BUZZER_EVT_CALIBRATION_COMPLETE:
 			play_calibration_complete();
+			break;
+		case BUZZER_EVT_LOG_WRITTEN:
+			play_log_written();
 			break;
 		case BUZZER_EVT_ERROR:
 			play_error();
@@ -219,11 +282,19 @@ static int buzzer_on_calibration_complete(void)
 	return enqueue(&evt);
 }
 
+static int buzzer_on_log_written(void)
+{
+	const struct buzzer_evt evt = { .type = BUZZER_EVT_LOG_WRITTEN };
+
+	return enqueue(&evt);
+}
+
 static const struct notify_backend_api buzzer_api = {
 	.init = buzzer_init,
 	.on_boot = buzzer_on_boot,
 	.on_state_change = buzzer_on_state_change,
 	.on_calibration_complete = buzzer_on_calibration_complete,
+	.on_log_written = buzzer_on_log_written,
 	.on_error = buzzer_on_error,
 };
 

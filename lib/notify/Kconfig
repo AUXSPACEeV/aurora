@@ -6,7 +6,8 @@ config AURORA_NOTIFY
 	help
 	  Enable the notification subsystem.  When enabled, registered
 	  backends (buzzer, RGB LED, ...) are called on boot, state-machine
-	  transitions, and error conditions.
+	  transitions, calibration completion (flight-ready), flight-log
+	  completion, and error conditions.
 
 if AURORA_NOTIFY
 

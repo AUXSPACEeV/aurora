@@ -4,8 +4,9 @@
  *
  * Drives the board's PWM-backed LED array (via @c auxspace_led chosen
  * node) to indicate boot, flight state-machine transitions, calibration
- * completion, error, and powerfail events.  Registered at link time as
- * a @ref notify_backend via @ref NOTIFY_BACKEND_DEFINE.
+ * completion (flight-ready), flight-log completion, error, and powerfail
+ * events.  Registered at link time as a @ref notify_backend via
+ * @ref NOTIFY_BACKEND_DEFINE.
  *
  * Copyright (c) 2026, Auxspace e.V.
  *
@@ -144,13 +145,43 @@ static void led_on_powerfail(int recover)
 		all_leds_off();
 }
 
-static int led_on_calibration_complete(void)
+/** @brief Emit @p n one-shot flashes, @p on_ms lit / @p off_ms dark. */
+static int flash_n(int n, uint32_t on_ms, uint32_t off_ms)
 {
 	int rc = all_leds_off();
-	rc |= all_leds_on(MAX_BRIGHTNESS);
-	k_sleep(K_MSEC(50));
-	rc |= all_leds_off();
+
+	for (int i = 0; i < n; i++) {
+		rc |= all_leds_on(MAX_BRIGHTNESS);
+		k_sleep(K_MSEC(on_ms));
+		rc |= all_leds_off();
+		if (i + 1 < n) {
+			k_sleep(K_MSEC(off_ms));
+		}
+	}
 	return rc;
+}
+
+static int led_on_calibration_complete(void)
+{
+	/* in powerfail mode */
+	if (recovered == 0)
+		return 0;
+
+	/* Double flash: calibration done, rocket flight-ready. */
+	return flash_n(2, 60, 60);
+}
+
+static int led_on_log_written(void)
+{
+	/* in powerfail mode */
+	if (recovered == 0)
+		return 0;
+
+	/* Runs on the converter thread (off the flight hot path), so the
+	 * short blocking flashes here are harmless. Triple quick flash:
+	 * flight log written to the filesystem.
+	 */
+	return flash_n(3, 80, 80);
 }
 
 static int led_on_state_change(enum sm_state prev, enum sm_state next)
@@ -161,16 +192,26 @@ static int led_on_state_change(enum sm_state prev, enum sm_state next)
 	if (recovered == 0)
 		return 0;
 
+	/* blink() is non-blocking (handed to the pwm-leds driver), so this
+	 * handler never stalls the state-machine task or delays pyro firing.
+	 */
 	switch (next) {
-	case SM_ARMED:
-		return blink(200, 200);
 	case SM_IDLE:
-		return blink(50, 450);
+		return blink(60, 940);	/* slow heartbeat: safe, disarmed     */
+	case SM_ARMED:
+		return blink(200, 200);	/* even blink: pyros live             */
+	case SM_APOGEE:
+		return blink(500, 500);	/* slow strong pulse                  */
+	case SM_MAIN:
+		return blink(250, 250);	/* medium pulse                       */
+	case SM_REDUNDANT:
+		return blink(80, 80);	/* fast flicker: backup deploy        */
 	case SM_LANDED:
-		return blink(400, 100);
+		return blink(700, 300);	/* slow recovery beacon               */
 	case SM_ERROR:
 		return led_on_error();
 	default:
+		/* BOOST/BURNOUT: dark ascent to save power.                  */
 		return all_leds_off();
 	}
 }
@@ -181,6 +222,7 @@ static const struct notify_backend_api led_api = {
 	.on_state_change = led_on_state_change,
 	.on_error = led_on_error,
 	.on_calibration_complete = led_on_calibration_complete,
+	.on_log_written = led_on_log_written,
 	.on_powerfail = led_on_powerfail,
 };
 

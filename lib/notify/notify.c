@@ -101,6 +101,29 @@ int notify_calibration_complete(void)
 	return rc;
 }
 
+int notify_log_written(void)
+{
+	int rc = 0;
+
+	STRUCT_SECTION_FOREACH(notify_backend, backend) {
+		if (!backend->api) {
+			LOG_ERR("Backend with NULL api pointer: %p", backend);
+			continue;
+		}
+		if (backend->api->on_log_written) {
+			int ret = backend->api->on_log_written();
+
+			if (ret) {
+				LOG_ERR("notify on_log_written failed (%d)", ret);
+				if (!rc) {
+					rc = ret;
+				}
+			}
+		}
+	}
+	return rc;
+}
+
 int notify_error(void)
 {
 	int rc = 0;

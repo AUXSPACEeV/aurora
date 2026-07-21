@@ -20,6 +20,9 @@
 #include <zephyr/fs/fs.h>
 
 #include <aurora/lib/data_logger.h>
+#if defined(CONFIG_AURORA_NOTIFY)
+#include <aurora/lib/notify.h>
+#endif
 
 LOG_MODULE_REGISTER(data_logger, CONFIG_DATA_LOGGER_LOG_LEVEL);
 
@@ -472,6 +475,11 @@ void converter_task(void *, void *, void *)
 			}
 		}
 #endif /* CONFIG_DATA_LOGGER_CONVERT_INFLUX */
+
+#if defined(CONFIG_AURORA_NOTIFY)
+		/* Flight log is now finalised on the filesystem */
+		(void)notify_log_written();
+#endif /* CONFIG_AURORA_NOTIFY */
 
 		k_sem_give(&convert_idle);
 	}
