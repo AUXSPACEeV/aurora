@@ -73,6 +73,17 @@ module = AURORA_WDT_RECOVERY
 module-str = AURORA_WDT_RECOVERY
 source "subsys/logging/Kconfig.template.log_config"
 
+config AURORA_WDT_RECOVERY_SHELL
+	bool "Shell commands for watchdog-recovery testing"
+	depends on SHELL
+	help
+	  Add the `wdtrec` shell command group for bring-up and debugging of the
+	  watchdog-recovery path: show the resolved reboot reason and the raw
+	  hardware reset cause reported by hwinfo, dump/lay down the retained
+	  record, raise the software watchdog marker on its own, and force a real
+	  hardware-watchdog reset. Intended for bench testing; leave disabled in
+	  flight builds.
+
 endif # AURORA_WDT_RECOVERY
 
 endif # AURORA_WATCHDOG

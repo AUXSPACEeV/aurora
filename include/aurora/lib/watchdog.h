@@ -94,6 +94,18 @@ int aurora_wdt_unregister(aurora_wdt_task_t task);
  */
 void aurora_wdt_reset_imminent(void);
 
+#if defined(CONFIG_AURORA_WDT_RECOVERY_SHELL)
+/**
+ * @brief Test hook: make the supervisor withhold the next hardware feed.
+ *
+ * Causes the monitor thread to behave as though a supervised task stalled,
+ * running the real @ref aurora_wdt_reset_imminent + hardware-reset path. For
+ * bring-up/debugging via the @c wdtrec shell only; compiled in exclusively with
+ * @c CONFIG_AURORA_WDT_RECOVERY_SHELL.
+ */
+void aurora_wdt_test_force_stall(void);
+#endif /* CONFIG_AURORA_WDT_RECOVERY_SHELL */
+
 /** @} */
 
 #endif /* APP_LIB_WATCHDOG_H_ */

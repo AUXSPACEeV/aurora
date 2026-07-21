@@ -12,6 +12,10 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/logging/log_ctrl.h>
 
+#if defined(CONFIG_AURORA_WDT_RECOVERY_SHELL)
+#include <zephyr/sys/atomic.h>
+#endif /* CONFIG_AURORA_WDT_RECOVERY_SHELL */
+
 LOG_MODULE_REGISTER(watchdog, CONFIG_AURORA_WATCHDOG_LOG_LEVEL);
 
 #define WDT_NODE DT_CHOSEN(auxspace_wdt)
@@ -44,6 +48,18 @@ static struct k_thread monitor_thread;
 __weak void aurora_wdt_reset_imminent(void)
 {
 }
+
+#if defined(CONFIG_AURORA_WDT_RECOVERY_SHELL)
+/* Debug/bring-up: when set, the monitor withholds the feed as if a task had
+ * stalled, so `wdtrec stall` can exercise the real reset path on demand.
+ */
+static atomic_t force_stall;
+
+void aurora_wdt_test_force_stall(void)
+{
+	atomic_set(&force_stall, 1);
+}
+#endif /* CONFIG_AURORA_WDT_RECOVERY_SHELL */
 
 /**
  * @brief Hardware watchdog pre-reset (interrupt) handler.
@@ -94,6 +110,12 @@ static void wdt_monitor(void *a, void *b, void *c)
 			}
 		}
 		k_spin_unlock(&lock, key);
+
+#if defined(CONFIG_AURORA_WDT_RECOVERY_SHELL)
+		if (culprit == NULL && atomic_get(&force_stall)) {
+			culprit = "shell-forced-stall";
+		}
+#endif /* CONFIG_AURORA_WDT_RECOVERY_SHELL */
 
 		if (culprit == NULL) {
 			/* All registered tasks healthy (or none yet): keep the
