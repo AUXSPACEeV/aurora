@@ -6,7 +6,7 @@
 #ifndef APP_LIB_NOTIFY_H_
 #define APP_LIB_NOTIFY_H_
 
-#include <aurora/lib/state/simple.h>
+#include <aurora/lib/state/state.h>
 
 /**
  * @defgroup lib_notify Notification library

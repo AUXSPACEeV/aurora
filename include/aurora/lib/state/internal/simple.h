@@ -3,6 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/*
+ * Backend types for the simple state machine.
+ *
+ * This is an INTERNAL header: it defines the implementation-specific types
+ * that the public API in <aurora/lib/state/state.h> is built on.  The state
+ * core routes it in for you.  Applications must include
+ * <aurora/lib/state/state.h> and never this file directly, so that no code
+ * binds itself to a particular backend.  Direct inclusion is rejected below.
+ */
+#ifndef AURORA_STATE_BACKEND_INTERNAL
+#error "Do not include <aurora/lib/state/internal/simple.h> directly; " \
+       "include <aurora/lib/state/state.h> instead."
+#endif /* AURORA_STATE_BACKEND_INTERNAL */
+
 #ifndef APP_LIB_STATE_SIMPLE_H_
 #define APP_LIB_STATE_SIMPLE_H_
 

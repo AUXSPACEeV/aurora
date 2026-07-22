@@ -12,7 +12,7 @@
 #include <stdbool.h>
 
 #include <aurora/lib/baro.h>
-#include <aurora/lib/state/simple.h>
+#include <aurora/lib/state/state.h>
 
 #if defined(CONFIG_DATA_LOGGER_BIN)
 void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state);
