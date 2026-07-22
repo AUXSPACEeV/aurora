@@ -6,7 +6,7 @@
 #ifndef APP_LIB_POWERFAIL_H_
 #define APP_LIB_POWERFAIL_H_
 
-#include <aurora/lib/state/simple.h>
+#include <aurora/lib/state/state.h>
 
 /**
  * @defgroup lib_powerfail Powerfail mitigation library

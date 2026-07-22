@@ -3,8 +3,11 @@
 
 zephyr_library()
 
+# Common state machine core (implementation-independent).
+zephyr_library_sources(state.c)
+
 if(CONFIG_SIMPLE_STATE)
-    zephyr_library_sources(simple_state.c)
+    zephyr_library_sources(simple.c)
 endif()
 
 if(CONFIG_AURORA_STATE_MACHINE_AUDIT)

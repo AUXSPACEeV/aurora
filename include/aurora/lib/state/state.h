@@ -14,11 +14,23 @@
  * @brief AURORA common state machine library for avionics.
  */
 
+/*
+ * The common API below is implemented once by the state core (state.c) and
+ * dispatches to the selected backend through direct calls.  Its signatures
+ * still reference backend-specific types (enum sm_state, struct sm_thresholds,
+ * struct sm_inputs), so the matching backend *types* header is routed in here
+ * by Kconfig.  Those headers live under internal/ and reject direct inclusion:
+ * this is the single, backend-agnostic entry point applications include.
+ * Each backend must define an sm_state enum that includes at least SM_IDLE and
+ * SM_ERROR, which the common error path relies on.
+ */
+#define AURORA_STATE_BACKEND_INTERNAL
 #if defined(CONFIG_SIMPLE_STATE)
-#include <aurora/lib/state/simple.h>
+#include <aurora/lib/state/internal/simple.h>
 #else
 #error "Unknown state machine type! Make sure CONFIG_AURORA_STATE_MACHINE_TYPE is set."
 #endif /* CONFIG_SIMPLE_STATE */
+#undef AURORA_STATE_BACKEND_INTERNAL
 
 /*-----------------------------------------------------------
  * State machine type
@@ -33,7 +45,7 @@
  * can decode it.
  */
 enum sm_type {
-    SM_TYPE_SIMPLE = 0,    /**< @ref aurora/lib/state/simple.h */
+    SM_TYPE_SIMPLE = 0,    /**< Simple backend (lib/state/simple.c). */
     /* SM_TYPE_TWO_STAGE = 1, ... */
 };
 
