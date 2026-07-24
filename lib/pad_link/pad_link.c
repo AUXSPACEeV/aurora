@@ -605,30 +605,16 @@ int pad_link_init(void)
 	return 0;
 }
 
-void pad_link_publish_sm(enum sm_state state, enum sm_type type,
-			 const struct sm_inputs *inputs)
+/* Runs on the system workqueue. That context is load-bearing: att.c only
+ * allocates the ATT buffer with K_NO_WAIT when the caller is the sysworkq
+ * thread (see bt_att_chan_create_pdu); from any other thread it uses
+ * K_FOREVER and blocks once the ATT pool is drained. Calling bt_gatt_notify
+ * straight from the state-machine thread is what wedged it. Here a drained
+ * pool just returns -ENOMEM and trips the back-off below.
+ */
+static void notify_work_handler(struct k_work *work)
 {
-	if (!inputs) {
-		return;
-	}
-
-	uint8_t s = (uint8_t)state;
-	uint8_t t = (uint8_t)type;
-	struct pl_computed_payload comp = {
-		.uptime_ms  = k_uptime_get_32(),
-		.altitude   = (float)inputs->altitude,
-		.velocity   = (float)inputs->velocity,
-		.yaw        = (float)inputs->orientation[0],
-		.pitch      = (float)inputs->orientation[1],
-		.roll       = (float)inputs->orientation[2],
-		.accel_vert = (float)inputs->accel_vert,
-	};
-
-	K_SPINLOCK(&snap.lock) {
-		snap.sm_type  = t;
-		snap.sm_state = s;
-		snap.comp     = comp;
-	}
+	ARG_UNUSED(work);
 
 	/* Take a real reference for the notify window so disconnect()
 	 * can't free the conn underneath us. Stop talking the moment any
@@ -654,6 +640,10 @@ void pad_link_publish_sm(enum sm_state state, enum sm_type type,
 
 	int rc;
 	if (sm_state_notify_enabled) {
+		uint8_t s;
+		K_SPINLOCK(&snap.lock) {
+			s = snap.sm_state;
+		}
 		rc = bt_gatt_notify(conn,
 				    &pad_link_svc.attrs[PL_ATTR_STATE_VALUE],
 				    &s, sizeof(s));
@@ -664,6 +654,10 @@ void pad_link_publish_sm(enum sm_state state, enum sm_type type,
 		}
 	}
 	if (comp_notify_enabled) {
+		struct pl_computed_payload comp;
+		K_SPINLOCK(&snap.lock) {
+			comp = snap.comp;
+		}
 		rc = bt_gatt_notify(conn,
 				    &pad_link_svc.attrs[PL_ATTR_COMP_VALUE],
 				    &comp, sizeof(comp));
@@ -760,6 +754,38 @@ void pad_link_publish_sm(enum sm_state state, enum sm_type type,
 
 out:
 	bt_conn_unref(conn);
+}
+static K_WORK_DEFINE(notify_work, notify_work_handler);
+
+void pad_link_publish_sm(enum sm_state state, enum sm_type type,
+			 const struct sm_inputs *inputs)
+{
+	if (!inputs) {
+		return;
+	}
+
+	struct pl_computed_payload comp = {
+		.uptime_ms  = k_uptime_get_32(),
+		.altitude   = (float)inputs->altitude,
+		.velocity   = (float)inputs->velocity,
+		.yaw        = (float)inputs->orientation[0],
+		.pitch      = (float)inputs->orientation[1],
+		.roll       = (float)inputs->orientation[2],
+		.accel_vert = (float)inputs->accel_vert,
+	};
+
+	K_SPINLOCK(&snap.lock) {
+		snap.sm_type  = (uint8_t)type;
+		snap.sm_state = (uint8_t)state;
+		snap.comp     = comp;
+	}
+
+	/* Hand the actual bt_gatt_notify() work to the system workqueue; see
+	 * notify_work_handler for why that context is required to stay
+	 * non-blocking. Re-submitting an already-pending item is a no-op, so
+	 * at the SM tick rate we coalesce to at most one in-flight pass.
+	 */
+	k_work_submit(&notify_work);
 }
 
 #if defined(CONFIG_ZTEST)
