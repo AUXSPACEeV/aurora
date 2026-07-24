@@ -4,6 +4,8 @@
 #
 #    pip-compile tools/requirements.in
 #
+bleak==3.0.2
+    # via -r tools/requirements.in
 build==1.4.3
     # via pip-tools
 click==8.3.2
@@ -12,6 +14,8 @@ contourpy==1.3.3
     # via matplotlib
 cycler==0.12.1
     # via matplotlib
+dbus-fast==5.0.22
+    # via bleak
 fonttools==4.62.1
     # via matplotlib
 kiwisolver==1.5.0
