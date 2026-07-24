@@ -18,6 +18,15 @@ It is meant as a *reference*, not a finished ground station. Use it to:
 - copy/paste pieces into a fuller UI (a Tk dashboard, a logger,
   the launchrail's own central).
 
+```{warning}
+On ESP32-S3 boards, running this script in `notify`-mode against the rocket
+can make the flight computer **freeze** after a few seconds to a few minutes
+of a live connection (you will stop seeing new values, and its USB console goes
+dead until you power-cycle it). This is a known, unresolved firmware bug,
+not a problem with your setup; see the warning in {doc}`/lib/pad_link`.
+Don't rely on this link during a countdown or flight.
+```
+
 ## Wire contract
 
 Mirrors
