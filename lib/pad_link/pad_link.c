@@ -159,6 +159,15 @@ static bool inner_temp_notify_enabled;
 #define NOTIFY_BACKOFF_MS 1000
 static int64_t notify_backoff_until_ms;
 
+/* Telemetry push rate cap. The SM loop ticks at the Sensor ODR (over 100 Hz)
+ * and each pass notifies several characteristics; far more than any BLE link
+ * can carry (a ~30 ms connection interval moves ~100-150 packets/s), so the
+ * ATT pool would sit permanently drained (-ENOMEM at every tick). The
+ * snapshot is still updated every tick (GATT reads stay fresh); only the
+ * notify push is throttled to this period.
+ */
+#define NOTIFY_MIN_INTERVAL_MS 100
+
 /* ------------------------------------------------------------------ */
 /* GATT read handlers                                                  */
 /* ------------------------------------------------------------------ */
@@ -519,34 +528,60 @@ static const struct bt_data sd[] = {
 	BT_DATA_BYTES(BT_DATA_UUID128_ALL, PL_UUID_SVC_VAL),
 };
 
-static void adv_start(void)
-{
-	int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1,
-				  ad, ARRAY_SIZE(ad),
-				  sd, ARRAY_SIZE(sd));
-	if (err == -EALREADY) {
-		return;
-	}
-	if (err) {
-		LOG_WRN("adv_start failed (%d)", err);
-		return;
-	}
-	LOG_INF("advertising as %s",
-		CONFIG_AURORA_PAD_LINK_DEVICE_NAME);
-}
+/* Advertising restarts on a work item. Right after a disconnect the
+ * controller may not have released the bt_conn yet (BT_MAX_CONN=1), so
+ * connectable bt_le_adv_start() can transiently fail with -ENOMEM until
+ * the slot frees. Retry by rescheduling the work, never by sleeping in
+ * the handler: this runs on the system workqueue and a k_sleep loop here
+ * would stall every other sysworkq user until advertising succeeds.
+ */
+#define ADV_RETRY_DELAY_MS 250
+#define ADV_RETRY_MAX      40
+
+static void adv_start_work_handler(struct k_work *work);
+static K_WORK_DELAYABLE_DEFINE(adv_start_work, adv_start_work_handler);
+static int adv_retries;
 
 static void adv_start_work_handler(struct k_work *work)
 {
 	ARG_UNUSED(work);
-	adv_start();
+
+	int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1,
+				  ad, ARRAY_SIZE(ad),
+				  sd, ARRAY_SIZE(sd));
+	if (err == 0 || err == -EALREADY) {
+		LOG_INF("advertising as %s",
+			CONFIG_AURORA_PAD_LINK_DEVICE_NAME);
+		adv_retries = 0;
+		return;
+	}
+
+	if (adv_retries++ < ADV_RETRY_MAX) {
+		LOG_DBG("adv_start busy (%d); retry %d/%d in %d ms",
+			err, adv_retries, ADV_RETRY_MAX, ADV_RETRY_DELAY_MS);
+		k_work_reschedule(&adv_start_work, K_MSEC(ADV_RETRY_DELAY_MS));
+		return;
+	}
+
+	LOG_WRN("adv_start failed (%d) after %d retries; advertiser is down",
+		err, ADV_RETRY_MAX);
+	adv_retries = 0;
 }
-static K_WORK_DEFINE(adv_start_work, adv_start_work_handler);
+
+/* Kick a (re)advertise attempt. Safe from any context; the actual
+ * bt_le_adv_start() runs later on the system workqueue.
+ */
+static void adv_start_schedule(void)
+{
+	adv_retries = 0;
+	k_work_reschedule(&adv_start_work, K_NO_WAIT);
+}
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
 	if (err) {
 		LOG_WRN("connect err=0x%02x. Restarting adv", err);
-		k_work_submit(&adv_start_work);
+		adv_start_schedule();
 		return;
 	}
 	if (!current_conn) {
@@ -573,7 +608,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	inner_temp_notify_enabled = false;
 	notify_backoff_until_ms  = 0;
 
-	k_work_submit(&adv_start_work);
+	adv_start_schedule();
 }
 
 BT_CONN_CB_DEFINE(pad_link_conn_cb) = {
@@ -601,7 +636,7 @@ int pad_link_init(void)
 	}
 
 	LOG_INF("BLE host up; board_id=\"%s\"", board_id);
-	adv_start();
+	adv_start_schedule();
 	return 0;
 }
 
@@ -779,6 +814,14 @@ void pad_link_publish_sm(enum sm_state state, enum sm_type type,
 		snap.sm_state = (uint8_t)state;
 		snap.comp     = comp;
 	}
+
+	/* Push cap for fast messages */
+	static int64_t next_notify_ms;
+	int64_t now = k_uptime_get();
+	if (now < next_notify_ms) {
+		return;
+	}
+	next_notify_ms = now + NOTIFY_MIN_INTERVAL_MS;
 
 	/* Hand the actual bt_gatt_notify() work to the system workqueue; see
 	 * notify_work_handler for why that context is required to stay
