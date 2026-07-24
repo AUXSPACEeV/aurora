@@ -17,6 +17,34 @@ ground station *scans* and *connects*, and then it reads or subscribes
 to a handful of *characteristics* (think: named variables on the
 device).
 
+.. warning::
+
+   **Experimental on ESP32-S3: it can freeze the flight computer.**
+
+   On the ESP32-S3 boards (``micrometer``), keeping a BLE connection open
+   and streaming live data on the notify path can, after anywhere from a
+   few seconds to a few minutes, make the whole flight computer
+   **freeze**: it stops responding to everything, including the USB console,
+   until you power-cycle it. Once in a while it crashes instead of freezing.
+
+   Some causes have already been fixed: a bug where the flight-control
+   loop could get stuck forever waiting on the Bluetooth stack, and a
+   flood of updates sent far faster than any BLE link can actually carry.
+   One freeze still remains, and its root cause is being tracked down on
+   a separate development branch.
+
+   Until that is fixed, treat the notify pad link as a **bench and setup
+   convenience, not something to trust during a countdown or flight**:
+
+   - Do **not** rely on the notifications while arming or launching.
+     For anything that matters, use polling mode, a USB cable or the
+     :doc:`telemetry` link instead.
+   - If a board locks up during testing, power-cycle it. It is almost
+     certainly the pad link, not the code you were working on.
+   - If you don't need Bluetooth for what you're doing, build with
+     ``CONFIG_AURORA_PAD_LINK=n`` to leave it out entirely and rule it
+     out as a cause.
+
 .. _pad-link-architecture-diagram:
 
 .. image:: /img/pad_link_architecture.drawio.svg
