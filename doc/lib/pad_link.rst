@@ -297,14 +297,17 @@ Characteristics in detail
 
 **SM type**: ``uint8_t``. Identifies *which* state machine
 implementation the firmware is running, so the central knows how to
-decode the SM-state byte. ``0`` is the simple 9-state SM
+decode the SM-state byte. ``0`` is the simple 10-state SM
 (see :doc:`state`); future implementations append new values. Read
 once after connecting.
 
 **SM state**: ``uint8_t``. Current flight state, as defined by the
 active SM implementation. With ``SM type = 0`` (simple), the byte maps
 to ``IDLE, ARMED, BOOST, BURNOUT, APOGEE, MAIN, REDUNDANT, LANDED,
-ERROR``.
+ERROR, CALIBRATING``. ``CALIBRATING`` is ordinal 9, appended after
+``ERROR`` rather than in its logical position between ``IDLE`` and
+``ARMED`` — this ordinal table is append-only (see the decoder
+warning in ``tools/rec_zephyr.py``), so existing values never move.
 
 **Raw sensors**: packed, little-endian struct. Most recent samples
 from the IMU and barometer in their native Zephyr ``sensor_value``

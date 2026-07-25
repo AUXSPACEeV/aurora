@@ -49,6 +49,7 @@ static const struct state_entry state_table[] = {
 	{ "REDUNDANT",	SM_REDUNDANT },
 	{ "LANDED",	SM_LANDED },
 	{ "ERROR",	SM_ERROR },
+	{ "CALIBRATING", SM_CALIBRATING },
 };
 
 #define STATE_TABLE_SIZE ARRAY_SIZE(state_table)

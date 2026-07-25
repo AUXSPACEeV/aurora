@@ -29,11 +29,13 @@ conditions (LED in a noisy crowd, buzzer once the rocket is out of sight).
 
 - **Boot sound**: short jingle the moment the board is powered on. If you
   don't hear this, the board is not running.
-- **Calibration-in-progress sound**: plays while the board is collecting
-  reference samples after you arm it. The rocket *must stay still* during
-  this phase.
-- **Calibration-finished sound**: a single confirmation tone. The board is
-  now ready for launch.
+- **Calibration-started beep**: a lower, shorter beep when the board
+  enters the ``CALIBRATING`` state after you arm it. The rocket *must
+  stay still* while ``CALIBRATING`` is active — pyros are not yet live.
+- **Calibration-finished tone, then arming beep**: once calibration
+  converges the board immediately plays a confirmation tone followed by
+  a higher, longer beep as it moves into ``ARMED`` — that second beep is
+  your "pyros are now live" cue.
 - **Landed song**: a longer tune that loops after touchdown and keeps going
   until you disarm or power down. This is your recovery beacon and shall help
   you find the rocket in a corn-field or a difficult place.
@@ -44,8 +46,11 @@ conditions (LED in a noisy crowd, buzzer once the rocket is out of sight).
   jingle and confirms the board has come up.
 - **IDLE**: short, sparse pulses (about twice a second). The rocket is
   disarmed and safe to handle.
-- **ARMED**: even, steady blink. Pyros are live. If you see this from the
-  launchpad walk-back, the board is ready.
+- **CALIBRATING**: fast, even blink. Armed and accumulating IMU bias.
+  Pyros are **not** yet live.
+- **ARMED**: even, steady blink (slower than ``CALIBRATING``). Calibration
+  is done and pyros are live. If you see this from the launchpad walk-back,
+  the board is ready.
 - **In-flight (BOOST through REDUNDANT)**: LED stays dark. This is
   intentional. It saves battery and avoids optical noise during flight.
 - **LANDED**: long pulses (mostly ON, brief OFF). Pairs with the landed song
@@ -83,16 +88,25 @@ Check the board's own page under {doc}`/boards/index` for the physical detail.
 4. **Connect the igniters.** Only do this with the board powered on but
    still disarmed, following your range's safety procedure.
 5. **Arm the board.** Trigger the arming mechanism (the exact action is
-   board-specific). The board moves into the calibration phase and starts
-   playing the calibration-in-progress sound.
+   board-specific). The board moves into the ``CALIBRATING`` state (fast
+   LED blink) and plays the calibration-started beep. Pyros are not yet
+   live in this state.
 6. **Hold still.** Don't bump the rail, don't walk into the rocket, don't
-   re-aim. Calibration only converges when the IMU is genuinely stationary.
+   re-aim. If the board detects motion during ``CALIBRATING`` it discards
+   the in-progress window and restarts automatically from the next still
+   sample — no need to disarm and re-arm for a single bump, though
+   sustained shaking (a gusty rail) will keep resetting the window and
+   delay completion. Calibration also finishes early on its own once the
+   estimate stops improving, rather than always waiting for a fixed
+   duration.
 7. **Wait for the ready tone.** Once you hear the calibration-finished
-   sound and see the LED switch to the even ARMED blink, the board is armed
-   and waiting for liftoff. You can now clear the pad.
+   tone followed by the higher arming beep, and see the LED switch to the
+   slower, even ``ARMED`` blink, the board has finished calibrating,
+   pyros are now live, and it's waiting for liftoff. You can now clear
+   the pad.
 8. **Need to abort or re-aim?** Disarm the board. It will return to IDLE.
    You can re-arm as many times as you like. The state machine just cycles
-   back into calibration each time, which is by design. There is no
+   back into ``CALIBRATING`` each time, which is by design. There is no
    "wasted" arming attempt.
 9. **Launch.** The state machine takes over from here: BOOST, BURNOUT,
    APOGEE (drogue parachute deployment), descent, MAIN, REDUNDANT and finally
@@ -111,8 +125,13 @@ only be done when the board is disconnected from the battery.
 
 ### Things that commonly go wrong
 
-- **Calibration never finishes.** The rocket is moving, wind on a tall
-  rail is a common culprit. Disarm, wait for the rail to settle, re-arm.
+- **Calibration takes a long time / never finishes.** The board
+  automatically restarts the calibration window whenever it detects
+  motion, so persistent wind or vibration on a tall rail can keep it
+  resetting indefinitely. It will always finish eventually (there's a
+  sample-count safety ceiling), but a long stall is a sign the rail
+  isn't stable enough yet. Disarm, wait for the rail to settle, and
+  re-arm if it's taking too long for your launch window.
 - **Board disarms by itself.** The rail is tilted past the disarm angle
   threshold (see [Configuration](#configuration) below). Either re-aim the
   rail or relax the threshold for the campaign.

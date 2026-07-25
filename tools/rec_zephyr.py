@@ -71,7 +71,8 @@ SM_TYPE_SIMPLE = 0
 # SM_TYPE_TWO_STAGE = 1
 SM_STATE_TABLES = {
     SM_TYPE_SIMPLE: ("IDLE", "ARMED", "BOOST", "BURNOUT",
-                     "APOGEE", "MAIN", "REDUNDANT", "LANDED", "ERROR"),
+                     "APOGEE", "MAIN", "REDUNDANT", "LANDED", "ERROR",
+                     "CALIBRATING"),
 }
 SM_TYPE_NAMES = {SM_TYPE_SIMPLE: "simple"}
 

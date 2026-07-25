@@ -32,7 +32,7 @@
  */
 enum sm_state {
 	SM_IDLE = 0,	/**< System idle and unarmed, awaiting arm conditions. */
-	SM_ARMED,		/**< Monitoring acceleration and altitude for liftoff start. */
+	SM_ARMED,		/**< Calibrated, pyros live, monitoring for liftoff start. */
 	SM_BOOST,		/**< Acceleration confirmed. */
 	SM_BURNOUT,		/**< Motor burnout. */
 	SM_APOGEE,		/**< Apogee detected. */
@@ -40,6 +40,16 @@ enum sm_state {
 	SM_REDUNDANT,	/**< Recovery devices are or should be deployed. */
 	SM_LANDED,		/**< Rocket is confirmed landed. */
 	SM_ERROR,		/**< State machine error occurred. */
+	/*
+	 * Appended rather than inserted after SM_IDLE: enum sm_state is
+	 * serialized as a raw uint8_t ordinal over HC-12 telemetry
+	 * (lib/telemetry/hc12/hc12.c) and BLE pad-link
+	 * (lib/pad_link/pad_link.c), and the in-repo ground-station
+	 * decoders (tools/rec_zephyr.py, tools/pad_link_central_example.py)
+	 * carry an explicit "append-only, never renumber" contract on this
+	 * table. Renumbering would silently break older/other decoders.
+	 */
+	SM_CALIBRATING,	/**< Armed; accumulating IMU bias before pyros go live. */
 };
 
 /**
@@ -91,7 +101,8 @@ enum sm_state {
  */
 struct sm_inputs {
 	int armed;			/**< System armed status (non-zero = armed). */
-	int log_ready;			/**< Flight-log readiness (non-zero = logging available). Required, together with @ref armed, to leave IDLE for ARMED. */
+	int log_ready;			/**< Flight-log readiness (non-zero = logging available). Required, together with @ref armed, to leave IDLE for CALIBRATING. */
+	int calibrated;			/**< Non-zero once attitude calibration has finished for this arm cycle. Required to leave CALIBRATING for ARMED. */
 	double orientation[3];		/**< Current orientation reading (yaw, pitch, roll). */
 	double acceleration;		/**< Current acceleration reading (magnitude, m/s^2). */
 	double accel_vert;		/**< World-frame vertical acceleration (m/s^2, gravity-removed, positive up). */
