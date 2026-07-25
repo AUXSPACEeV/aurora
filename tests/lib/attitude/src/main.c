@@ -208,3 +208,174 @@ ZTEST(attitude_tests, test_finish_without_samples_returns_enodata)
 	zassert_equal(attitude_calibrate_finish(&att), -ENODATA,
 		      "finish with zero samples must fail");
 }
+
+ZTEST(attitude_tests, test_converged_false_before_min_samples)
+{
+	double accel[3] = {0.0, 0.0, 9.81};
+	double gyro[3]  = {0.0, 0.0, 0.0};
+
+	zassert_equal(attitude_calibrate_converged(&att), 0,
+		      "no samples yet: not converged");
+
+	for (int i = 0; i < CONFIG_IMU_CALIBRATION_SAMPLES - 1; i++) {
+		attitude_calibrate_sample(&att, accel, gyro);
+	}
+	zassert_equal(attitude_calibrate_converged(&att), 0,
+		      "below the minimum sample count: not converged");
+}
+
+ZTEST(attitude_tests, test_converged_true_once_stationary_mean_settles)
+{
+	/* Perfectly stationary input: the running mean never moves between
+	 * checkpoints, so calibration should converge right after the
+	 * minimum sample count plus one checkpoint interval.
+	 */
+	double accel[3] = {0.0, 0.0, 9.81};
+	double gyro[3]  = {0.0, 0.0, 0.0};
+	/* +20 mirrors CAL_CONVERGENCE_CHECK_INTERVAL, an internal constant
+	 * in attitude.c (not exposed via Kconfig).
+	 */
+	int n = CONFIG_IMU_CALIBRATION_SAMPLES + 20;
+
+	for (int i = 0; i < n; i++) {
+		attitude_calibrate_sample(&att, accel, gyro);
+	}
+
+	zassert_equal(attitude_calibrate_converged(&att), 1,
+		      "stationary input should converge quickly");
+	zassert_equal(attitude_calibrate_finish(&att), 0, "finish ok");
+}
+
+ZTEST(attitude_tests, test_converged_true_at_max_samples_ceiling_even_if_noisy)
+{
+	/* Even if the running mean never settles (cal_converged left
+	 * false), hitting the sample-count ceiling must still report ready,
+	 * so calibration always terminates in bounded time. Set the
+	 * post-loop state directly rather than hunting for a gyro signal
+	 * that both stays under the restart threshold and never satisfies
+	 * the mean-agreement check for 1000 samples straight (the two
+	 * constraints leave essentially no numerically robust margin apart
+	 * from the internal logic already covered by the "settles" test).
+	 * The *5 mirrors CAL_MAX_SAMPLES_MULTIPLIER, an internal constant
+	 * in attitude.c (not exposed via Kconfig).
+	 */
+	att.cal_samples = CONFIG_IMU_CALIBRATION_SAMPLES * 5;
+	att.cal_converged = 0;
+
+	zassert_equal(attitude_calibrate_converged(&att), 1,
+		      "max-sample ceiling must force convergence");
+}
+
+ZTEST(attitude_tests, test_motion_restarts_calibration_window)
+{
+	/* A gyro reading above the restart threshold discards the
+	 * accumulator instead of polluting the bias estimate.
+	 */
+	double accel[3] = {0.0, 0.0, 9.81};
+	double still[3] = {0.0, 0.0, 0.0};
+	double deg2rad = M_PI / 180.0;
+	double bump[3] = {
+		((double)CONFIG_IMU_CALIBRATION_RESTART_DEVIATION_DEG + 1.0) * deg2rad,
+		0.0, 0.0,
+	};
+
+	for (int i = 0; i < 50; i++) {
+		attitude_calibrate_sample(&att, accel, still);
+	}
+	zassert_equal(att.cal_samples, 50, "samples accumulated before the bump");
+
+	attitude_calibrate_sample(&att, accel, bump);
+	zassert_equal(att.cal_samples, 0,
+		      "motion above threshold must discard the accumulator");
+
+	/* Calibration still converges cleanly to a zero bias once the
+	 * rocket is stationary again for the rest of the window.
+	 */
+	for (int i = 0; i < CONFIG_IMU_CALIBRATION_SAMPLES + 20; i++) {
+		attitude_calibrate_sample(&att, accel, still);
+	}
+	zassert_equal(attitude_calibrate_converged(&att), 1,
+		      "should converge after the restart once stable again");
+	zassert_equal(attitude_calibrate_finish(&att), 0, "finish ok");
+	zassert_near(att.gyro_bias[0], 0.0, FLOAT_TOL,
+		     "bump samples must not leak into the final bias");
+}
+
+ZTEST(attitude_tests, test_sub_threshold_motion_does_not_restart)
+{
+	double accel[3] = {0.0, 0.0, 9.81};
+	double deg2rad = M_PI / 180.0;
+	double wobble[3] = {
+		((double)CONFIG_IMU_CALIBRATION_RESTART_DEVIATION_DEG - 1.0) * deg2rad,
+		0.0, 0.0,
+	};
+
+	for (int i = 0; i < 50; i++) {
+		attitude_calibrate_sample(&att, accel, wobble);
+	}
+
+	zassert_equal(att.cal_samples, 50,
+		      "sub-threshold gyro reading must not restart the window");
+}
+
+ZTEST(attitude_tests, test_tilt_restarts_calibration_window)
+{
+	/* An accelerometer reading whose direction has rotated more than
+	 * the restart threshold away from the window's starting direction
+	 * discards the accumulator too, even with zero gyro rate (a static
+	 * re-aim/bump rather than an in-motion one).
+	 */
+	double still_gyro[3] = {0.0, 0.0, 0.0};
+	double rest[3] = {0.0, 0.0, 9.81};
+	double deg2rad = M_PI / 180.0;
+	double tilt_deg = (double)CONFIG_IMU_CALIBRATION_RESTART_DEVIATION_DEG + 1.0;
+	double tilted[3] = {
+		9.81 * sin(tilt_deg * deg2rad),
+		0.0,
+		9.81 * cos(tilt_deg * deg2rad),
+	};
+
+	for (int i = 0; i < 50; i++) {
+		attitude_calibrate_sample(&att, rest, still_gyro);
+	}
+	zassert_equal(att.cal_samples, 50, "samples accumulated before the tilt");
+
+	attitude_calibrate_sample(&att, tilted, still_gyro);
+	zassert_equal(att.cal_samples, 0,
+		      "tilt above threshold must discard the accumulator");
+
+	/* Calibration still converges cleanly at the new orientation. */
+	for (int i = 0; i < CONFIG_IMU_CALIBRATION_SAMPLES + 20; i++) {
+		attitude_calibrate_sample(&att, tilted, still_gyro);
+	}
+	zassert_equal(attitude_calibrate_converged(&att), 1,
+		      "should converge after the tilt restart once stable again");
+	zassert_equal(attitude_calibrate_finish(&att), 0, "finish ok");
+}
+
+ZTEST(attitude_tests, test_sub_threshold_tilt_does_not_restart)
+{
+	double still_gyro[3] = {0.0, 0.0, 0.0};
+	double rest[3] = {0.0, 0.0, 9.81};
+	double deg2rad = M_PI / 180.0;
+	double tilt_deg = (double)CONFIG_IMU_CALIBRATION_RESTART_DEVIATION_DEG - 1.0;
+	double tilted[3] = {
+		9.81 * sin(tilt_deg * deg2rad),
+		0.0,
+		9.81 * cos(tilt_deg * deg2rad),
+	};
+
+	attitude_calibrate_sample(&att, rest, still_gyro);
+	for (int i = 0; i < 50; i++) {
+		attitude_calibrate_sample(&att, tilted, still_gyro);
+	}
+
+	zassert_equal(att.cal_samples, 51,
+		      "sub-threshold tilt must not restart the window");
+}
+
+ZTEST(attitude_tests, test_converged_null_pointer_rejected)
+{
+	zassert_equal(attitude_calibrate_converged(NULL), -EINVAL,
+		      "converged NULL rejected");
+}

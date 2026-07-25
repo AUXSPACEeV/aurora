@@ -171,13 +171,13 @@ void sm_backend_step(const struct sm_inputs *in, double previous_altitude)
 	{
 
 	/*-----------------------------------------------------------
-	* IDLE -> ARMED
+	* IDLE -> CALIBRATING
 	*----------------------------------------------------------*/
 	case SM_IDLE:
 		n_oi = 0;
 		if (in->armed && sm_orientation_elevation_deg(in->orientation) >= th.T_OA) {
 			if (in->log_ready) {
-				sm_transition(SM_ARMED);
+				sm_transition(SM_CALIBRATING);
 			} else {
 				/* Arm conditions are met but the flight log is
 				 * offline.  Refuse to arm so the vehicle never
@@ -189,6 +189,38 @@ void sm_backend_step(const struct sm_inputs *in, double previous_altitude)
 				sm_event("arm refused: flight log offline");
 				sm_do_error_handling(SM_ERR_LOG_OFFLINE);
 			}
+		}
+		break;
+
+	/*-----------------------------------------------------------
+	* CALIBRATING -> ARMED
+	*----------------------------------------------------------*/
+	case SM_CALIBRATING:
+		/* Mirrors ARMED's log-offline abort and orientation-based
+		 * disarm below: the vehicle is just as exposed while
+		 * calibrating as it is once fully armed.
+		 */
+		if (!in->log_ready) {
+			sm_event("calibration aborted: flight log offline");
+			sm_do_error_handling(SM_ERR_LOG_OFFLINE);
+			break;
+		}
+
+		if (sm_orientation_elevation_deg(in->orientation) < th.T_OI) {
+			if (++n_oi < th.N_OI)
+				break;
+
+			/* Go back to IDLE if orientation is bad */
+			sm_event("orientation below threshold");
+			sm_transition(SM_IDLE);
+			break;
+		}
+		n_oi = 0;
+
+		/* Pyros only go live once calibration has actually finished. */
+		if (in->calibrated) {
+			sm_event("attitude calibration complete");
+			sm_transition(SM_ARMED);
 		}
 		break;
 
@@ -395,6 +427,7 @@ const char *sm_state_str(enum sm_state state)
 	case SM_REDUNDANT:	return "REDUNDANT";
 	case SM_LANDED:		return "LANDED";
 	case SM_ERROR:		return "ERROR";
+	case SM_CALIBRATING:	return "CALIBRATING";
 	default:		return "UNKNOWN";
 	}
 }

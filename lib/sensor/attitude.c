@@ -13,6 +13,7 @@
 
 #include <errno.h>
 #include <math.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include <zephyr/kernel.h>
@@ -21,6 +22,19 @@
 #include <aurora/lib/attitude.h>
 
 LOG_MODULE_REGISTER(attitude, CONFIG_AURORA_SENSORS_LOG_LEVEL);
+
+#ifndef M_PI
+#define M_PI ((double)3.1415926535)
+#endif
+
+/* Internal tuning constants for the convergence/safety-ceiling logic.
+ * Not exposed via Kconfig: neither is something an operator needs to
+ * tune per campaign, unlike CONFIG_IMU_CALIBRATION_SAMPLES (how long,
+ * minimum) or CONFIG_IMU_CALIBRATION_RESTART_DEVIATION_DEG (how
+ * twitchy is the pad).
+ */
+#define CAL_CONVERGENCE_CHECK_INTERVAL 20
+#define CAL_MAX_SAMPLES_MULTIPLIER 5
 
 static inline void vec3_zero(double v[3])
 {
@@ -56,6 +70,25 @@ int attitude_init(struct attitude *att)
 	return 0;
 }
 
+/* Discard the calibration accumulator and restart the window from the
+ * next sample. Shared by both the gyro-rate and accelerometer-tilt
+ * restart triggers in attitude_calibrate_sample().
+ */
+static void cal_restart(struct attitude *att, const char *reason)
+{
+	if (att->cal_samples > 0) {
+		LOG_INF("Calibration restarted: %s (%d samples discarded)",
+			reason, att->cal_samples);
+	}
+	att->cal_samples = 0;
+	vec3_zero(att->cal_accel_sum);
+	vec3_zero(att->cal_gyro_sum);
+	vec3_zero(att->cal_accel_ref);
+	att->cal_checkpoint_samples = 0;
+	vec3_zero(att->cal_checkpoint_gyro_mean);
+	att->cal_converged = 0;
+}
+
 /* attitude_calibrate_sample – see attitude.h */
 int attitude_calibrate_sample(struct attitude *att,
 			      const double accel[ATTITUDE_NUM_AXES],
@@ -67,13 +100,108 @@ int attitude_calibrate_sample(struct attitude *att,
 	if (att->calibrated)
 		return -EALREADY;
 
+	const double deg2rad = M_PI / 180.0;
+	const double restart_thresh_rad =
+		(double)CONFIG_IMU_CALIBRATION_RESTART_DEVIATION_DEG * deg2rad;
+
+	/* Trigger 1: instantaneous gyro rate. */
+	if (vec3_norm(gyro) > restart_thresh_rad) {
+		cal_restart(att, "gyro rate");
+		return 0;
+	}
+
+	/* Trigger 2: accelerometer direction tilted away from the window's
+	 * reference direction (recorded below from the window's first
+	 * sample). Skipped on a degenerate (near-zero) accel reading.
+	 */
+	const double accel_norm = vec3_norm(accel);
+	double accel_dir[ATTITUDE_NUM_AXES] = {0};
+	const bool have_accel_dir = accel_norm > 1e-6;
+
+	if (have_accel_dir) {
+		for (int i = 0; i < ATTITUDE_NUM_AXES; i++) {
+			accel_dir[i] = accel[i] / accel_norm;
+		}
+	}
+
+	if (have_accel_dir && att->cal_samples > 0) {
+		double dot = accel_dir[0] * att->cal_accel_ref[0] +
+			     accel_dir[1] * att->cal_accel_ref[1] +
+			     accel_dir[2] * att->cal_accel_ref[2];
+
+		if (dot > 1.0)
+			dot = 1.0;
+		if (dot < -1.0)
+			dot = -1.0;
+
+		if (acos(dot) > restart_thresh_rad) {
+			cal_restart(att, "accelerometer tilt");
+			return 0;
+		}
+	}
+
+	if (att->cal_samples == 0 && have_accel_dir) {
+		memcpy(att->cal_accel_ref, accel_dir, sizeof(accel_dir));
+	}
+
 	for (int i = 0; i < ATTITUDE_NUM_AXES; i++) {
 		att->cal_accel_sum[i] += accel[i];
 		att->cal_gyro_sum[i] += gyro[i];
 	}
 	att->cal_samples++;
 
+	/* Checkpoint the running gyro-bias mean every CHECK_INTERVAL samples
+	 * once the minimum window has elapsed, and compare against the
+	 * previous checkpoint to detect convergence (see
+	 * attitude_calibrate_converged()).
+	 */
+	if (att->cal_samples >= CONFIG_IMU_CALIBRATION_SAMPLES &&
+	    (att->cal_samples - att->cal_checkpoint_samples) >=
+		    CAL_CONVERGENCE_CHECK_INTERVAL) {
+		double mean[ATTITUDE_NUM_AXES];
+
+		for (int i = 0; i < ATTITUDE_NUM_AXES; i++) {
+			mean[i] = att->cal_gyro_sum[i] / (double)att->cal_samples;
+		}
+
+		if (att->cal_checkpoint_samples > 0) {
+			double delta[ATTITUDE_NUM_AXES];
+
+			for (int i = 0; i < ATTITUDE_NUM_AXES; i++) {
+				delta[i] = mean[i] - att->cal_checkpoint_gyro_mean[i];
+			}
+
+			/* Convergence threshold derives from the same
+			 * motion-sensitivity dial as the restart triggers
+			 * above, scaled down by 100x (default 5 deg/s ->
+			 * 0.05 deg/s).
+			 */
+			const double conv_thresh_rad_s =
+				restart_thresh_rad / 100.0;
+
+			att->cal_converged = (vec3_norm(delta) < conv_thresh_rad_s) ? 1 : 0;
+		}
+
+		memcpy(att->cal_checkpoint_gyro_mean, mean, sizeof(mean));
+		att->cal_checkpoint_samples = att->cal_samples;
+	}
+
 	return 0;
+}
+
+/* attitude_calibrate_converged – see attitude.h */
+int attitude_calibrate_converged(const struct attitude *att)
+{
+	if (att == NULL)
+		return -EINVAL;
+
+	if (att->cal_samples < CONFIG_IMU_CALIBRATION_SAMPLES)
+		return 0;
+
+	if (att->cal_samples >= CONFIG_IMU_CALIBRATION_SAMPLES * CAL_MAX_SAMPLES_MULTIPLIER)
+		return 1;
+
+	return att->cal_converged ? 1 : 0;
 }
 
 /* attitude_calibrate_finish – see attitude.h */

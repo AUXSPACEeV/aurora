@@ -12,7 +12,7 @@ Simple State Machine
 --------------------
 
 The simple state machine
-implementation defines a 9-state flight sequence driven by sensor thresholds.
+implementation defines a 10-state flight sequence driven by sensor thresholds.
 
 .. _simple-state-machine-diagram:
 
@@ -101,7 +101,8 @@ Enabling ``CONFIG_AURORA_STATE_MACHINE_SHELL`` registers the
        Requires ``CONFIG_AURORA_STATE_MACHINE_AUDIT``.
 
 Valid state names for ``transition`` are ``IDLE``, ``ARMED``, ``BOOST``,
-``BURNOUT``, ``APOGEE``, ``MAIN``, ``REDUNDANT``, ``LANDED`` and ``ERROR``.
+``BURNOUT``, ``APOGEE``, ``MAIN``, ``REDUNDANT``, ``LANDED``, ``ERROR``
+and ``CALIBRATING``.
 
 .. warning::
    ``state_machine transition`` bypasses normal flight logic and resets the

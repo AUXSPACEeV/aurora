@@ -17,13 +17,26 @@
  * Intended flow:
  *
  *   1. @ref attitude_init() at boot.
- *   2. While the rocket is stationary (e.g. in SM_ARMED), call
+ *   2. While the rocket is stationary (e.g. in SM_CALIBRATING), call
  *      @ref attitude_calibrate_sample() each IMU update to accumulate
- *      accelerometer/gyroscope bias and gravity magnitude.
- *   3. After enough samples, @ref attitude_calibrate_finish() seals the
- *      biases and seeds the body-frame gravity unit vector from the
- *      mounting-axis Kconfig (@c CONFIG_IMU_UP_AXIS_*).
- *   4. During flight, @ref attitude_update() integrates gyro into the
+ *      accelerometer/gyroscope bias and gravity magnitude. Two
+ *      independent checks treat a sample as motion and discard the
+ *      accumulator, restarting the window from the next sample, so a
+ *      bump or re-aim mid-window can't silently corrupt the bias
+ *      estimate: the gyroscope magnitude exceeding
+ *      @c CONFIG_IMU_CALIBRATION_RESTART_DEVIATION_DEG (deg/s), or the
+ *      accelerometer direction tilting more than that same value (read
+ *      as degrees) away from the direction recorded at the start of the
+ *      window.
+ *   3. Poll @ref attitude_calibrate_converged() each update once
+ *      accumulating; it reports ready once the running gyro-bias mean
+ *      has stopped meaningfully changing between checkpoints, or once a
+ *      fixed multiple of @c CONFIG_IMU_CALIBRATION_SAMPLES is reached as
+ *      a safety ceiling, rather than waiting for a fixed sample count.
+ *   4. @ref attitude_calibrate_finish() seals the biases and seeds the
+ *      body-frame gravity unit vector from the mounting-axis Kconfig
+ *      (@c CONFIG_IMU_UP_AXIS_*).
+ *   5. During flight, @ref attitude_update() integrates gyro into the
  *      gravity vector and returns the gravity-removed world-frame
  *      vertical acceleration.
  */
@@ -50,6 +63,17 @@ struct attitude {
 	double cal_accel_sum[ATTITUDE_NUM_AXES];
 	/** Running sum of gyroscope samples during calibration. */
 	double cal_gyro_sum[ATTITUDE_NUM_AXES];
+
+	/** Running gyro-bias mean at the last convergence checkpoint. */
+	double cal_checkpoint_gyro_mean[ATTITUDE_NUM_AXES];
+	/** cal_samples value at the last convergence checkpoint, 0 = none yet. */
+	int cal_checkpoint_samples;
+	/** Non-zero once two consecutive checkpoints agreed within threshold. */
+	int cal_converged;
+	/** Normalized accelerometer direction at the start of the current
+	 *  calibration window, used to detect tilt deviation.
+	 */
+	double cal_accel_ref[ATTITUDE_NUM_AXES];
 
 	/** Non-zero once attitude_calibrate_finish() has been called. */
 	int calibrated;
@@ -85,6 +109,23 @@ int attitude_init(struct attitude *att);
 int attitude_calibrate_sample(struct attitude *att,
 			      const double accel[ATTITUDE_NUM_AXES],
 			      const double gyro[ATTITUDE_NUM_AXES]);
+
+/**
+ * @brief Query whether the calibration accumulator is ready to finish.
+ *
+ * True once the running gyro-bias mean has stopped changing meaningfully
+ * between convergence checkpoints, or once a fixed multiple of
+ * @c CONFIG_IMU_CALIBRATION_SAMPLES samples have been accumulated
+ * (a safety ceiling), whichever comes first. Always false before
+ * @c CONFIG_IMU_CALIBRATION_SAMPLES samples have been accumulated.
+ *
+ * @param att Pointer to tracker state.
+ *
+ * @retval 1 if ready to call @ref attitude_calibrate_finish().
+ * @retval 0 if not yet ready.
+ * @retval -EINVAL if @p att is NULL.
+ */
+int attitude_calibrate_converged(const struct attitude *att);
 
 /**
  * @brief Finalize calibration and seed the body-frame gravity vector.

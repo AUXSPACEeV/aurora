@@ -120,9 +120,10 @@ bool log_flight_log_online(void)
 void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state)
 {
 	/* Flight-time logging lifecycle:
-	 *  - IDLE→ARMED:  open a fresh binary log (cancel any
+	 *  - IDLE→CALIBRATING: open a fresh binary log (cancel any
 	 *                 still-pending deferred close from a
-	 *                 previous flight first).
+	 *                 previous flight first), so the calibration
+	 *                 phase itself is captured too.
 	 *  - ARMED→BOOST: hand the formatter a BOOST event so
 	 *                 the circular ring freezes forward.
 	 *  - →LANDED:     hand a LANDED event and schedule the
@@ -131,7 +132,7 @@ void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_s
 	 *  - →IDLE/ERROR: close immediately (no pad); cancel
 	 *                 any pending deferred close.
 	 */
-	if (prev_state == SM_IDLE && state == SM_ARMED) {
+	if (prev_state == SM_IDLE && state == SM_CALIBRATING) {
 		(void)k_work_cancel_delayable(&log_end_work);
 		log_begin_flight();
 	} else if (prev_state == SM_ARMED && state == SM_BOOST) {
