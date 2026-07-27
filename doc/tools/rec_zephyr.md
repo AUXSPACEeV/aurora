@@ -1,5 +1,7 @@
 # rec_zephyr.py
 
+**Source:** [`tools/rec_zephyr.py`](https://github.com/AUXSPACEeV/aurora/blob/main/tools/rec_zephyr.py)
+
 MicroPython-based ground station for receiving AURORA telemetry over an
 HC-12 radio link during bench tests.
 

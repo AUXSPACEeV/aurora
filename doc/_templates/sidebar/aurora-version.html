@@ -1,0 +1,38 @@
+{#- "Releases" dropdown pinned to the bottom of the sidebar, modelled on the
+    Zephyr docs' version flyout.  Native <details> disclosure (no JavaScript):
+    the summary toggles a menu that opens upward and is split into sections:
+      * "Aurora Release Versions" - "latest" plus every tag in `aurora_releases`
+        (maintained in conf.py), each linking to its GitHub release page, and a
+        muted "all" link to the full releases listing.
+      * "Downloads" - a link to the PDF build of these docs (aurora_pdf_path,
+        resolved relative to the site root via pathto(); the docs deploy must
+        place the simplepdf output there).
+    It sits after sidebar/scroll-end.html (see html_sidebars in conf.py) so it
+    stays fixed at the bottom. -#}
+<div class="sidebar-releases">
+  <details class="sidebar-releases-details">
+    <summary class="sidebar-releases-summary">
+      <svg class="sidebar-releases-icon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M1 7.775V2.75C1 1.784 1.784 1 2.75 1h5.025c.464 0 .91.184 1.238.513l6.25 6.25a1.75 1.75 0 0 1 0 2.474l-5.026 5.026a1.75 1.75 0 0 1-2.474 0l-6.25-6.25A1.752 1.752 0 0 1 1 7.775Zm1.5 0c0 .066.026.13.073.177l6.25 6.25a.25.25 0 0 0 .354 0l5.025-5.025a.25.25 0 0 0 0-.354l-6.25-6.25a.25.25 0 0 0-.177-.073H2.75a.25.25 0 0 0-.25.25ZM6 5a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z"/></svg>
+      <span class="sidebar-releases-label">{{ _('Releases') }}</span>
+      <svg class="sidebar-releases-caret" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"/></svg>
+    </summary>
+    <div class="sidebar-releases-menu">
+      <div class="sidebar-releases-section">
+        <span class="sidebar-releases-heading">{{ _('Aurora Release Versions') }}</span>
+        <div class="sidebar-releases-items">
+          <a class="sidebar-releases-item" href="{{ aurora_releases_url }}/latest">{{ _('latest') }}</a>
+          {%- for release_tag in aurora_releases %}
+          <a class="sidebar-releases-item" href="{{ aurora_releases_tag_base }}/{{ release_tag }}">{{ release_tag }}</a>
+          {%- endfor %}
+          <a class="sidebar-releases-item sidebar-releases-item--muted" href="{{ aurora_releases_url }}">{{ _('all') }}</a>
+        </div>
+      </div>
+      <div class="sidebar-releases-section">
+        <span class="sidebar-releases-heading">{{ _('Downloads') }}</span>
+        <div class="sidebar-releases-items">
+          <a class="sidebar-releases-item" href="{{ pathto(aurora_pdf_path, 1) }}">{{ _('PDF') }}</a>
+        </div>
+      </div>
+    </div>
+  </details>
+</div>

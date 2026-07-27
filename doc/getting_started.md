@@ -6,6 +6,11 @@ In the [AURORA git repository's README](https://github.com/AUXSPACEeV/aurora)
 and the {external+zephyr:ref}`getting_started` guide from `zephyr` is everything
 you need to install first.
 
+```{note}
+Tagged builds are published on the
+[GitHub releases page](https://github.com/AUXSPACEeV/aurora/releases/latest).
+```
+
 AURORA is built inside a `west` workspace.
 The directory layout is:
 

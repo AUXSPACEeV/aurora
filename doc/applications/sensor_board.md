@@ -1,5 +1,7 @@
 # Sensor Board
 
+**Source:** [`sensor_board`](https://github.com/AUXSPACEeV/aurora/tree/main/sensor_board)
+
 The sensor board application is a simple flight computer for model rocketry.
 
 AURORA is built to run on multiple interconnected PCBs that communicate over CAN

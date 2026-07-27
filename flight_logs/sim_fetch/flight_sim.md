@@ -1,5 +1,7 @@
 # Flight Simulation
 
+**Source:** [`flight_logs/sim_fetch`](https://github.com/AUXSPACEeV/aurora/tree/main/flight_logs/sim_fetch)
+
 ## Info
 
 - AURORA Version: `0.2.1`

@@ -1,5 +1,7 @@
 # MULTIMETER Flight Logs
 
+**Source:** [`flight_logs/multimeter`](https://github.com/AUXSPACEeV/aurora/tree/main/flight_logs/multimeter)
+
 The M.E.T.A. rocket has its purpose in testing the avionics system for the
 MULTIMETER project.
 Here are the test flights of M.E.T.A. archived and open for everyone to see:

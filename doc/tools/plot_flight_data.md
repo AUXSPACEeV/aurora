@@ -1,5 +1,7 @@
 # plot_flight_data.py
 
+**Source:** [`tools/plot_flight_data.py`](https://github.com/AUXSPACEeV/aurora/blob/main/tools/plot_flight_data.py)
+
 Plot AURORA flight data — recorded telemetry from the flight computer
 or simulated streams produced by
 [`sim_flight_kalman.py`](sim_flight_kalman.md).

@@ -1,5 +1,7 @@
 # pad_link_central_example.py
 
+**Source:** [`tools/pad_link_central_example.py`](https://github.com/AUXSPACEeV/aurora/blob/main/tools/pad_link_central_example.py)
+
 Minimal BLE central for the AURORA pad-link.
 
 This script is the smallest thing that talks to a rocket running
