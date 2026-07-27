@@ -1,5 +1,7 @@
 # sim_fetch.py
 
+**Source:** [`tools/sim_fetch.py`](https://github.com/AUXSPACEeV/aurora/blob/main/tools/sim_fetch.py)
+
 Extract a file from a running `native_sim` Zephyr instance.
 
 ## Background

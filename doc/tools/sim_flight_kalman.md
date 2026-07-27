@@ -1,5 +1,7 @@
 # sim_flight_kalman.py
 
+**Source:** [`tools/sim_flight_kalman.py`](https://github.com/AUXSPACEeV/aurora/blob/main/tools/sim_flight_kalman.py)
+
 Run a synthetic rocket flight through a Python mirror of the AURORA
 Kalman filter and plot the result.
 

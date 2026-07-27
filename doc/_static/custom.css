@@ -140,6 +140,147 @@ article .sidebar.board-overview {
     }
 }
 
+/* --- "Open on GitHub" link in the per-page top bar -------------------------
+ * Our _templates/components/view-this-page.html override renders a labelled
+ * GitHub link into Furo's .content-icon-container (the floated top-right action
+ * row that also holds the theme toggle and ToC icon), mirroring the "Open on
+ * GitHub" link in the Zephyr docs' top bar.  The container is shrink-to-fit
+ * (float:right), so the link simply sits at the left of that cluster. */
+.content-icon-container .open-on-github {
+    display: flex;
+    align-items: center;
+}
+
+.content-icon-container .open-on-github a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    font-size: var(--font-size--small);
+    white-space: nowrap;
+}
+
+.content-icon-container .open-on-github svg {
+    width: 1.15em;
+    height: 1.15em;
+}
+
+/* Hide the text label on narrow content so only the GitHub mark shows. */
+@media (max-width: 46em) {
+    .content-icon-container .open-on-github .open-on-github-label {
+        display: none;
+    }
+}
+
+/* --- "Releases" dropdown pinned to the bottom of the sidebar ---------------
+ * Rendered by _templates/sidebar/aurora-version.html, placed after
+ * sidebar/scroll-end.html so it sits below the scrolling nav, mirroring the
+ * version selector in the Zephyr docs.  A native <details> disclosure whose
+ * menu opens *upward* (bottom: 100%) so it overlays the nav instead of
+ * overflowing past the bottom of the viewport. */
+.sidebar-releases {
+    position: relative;
+    flex-shrink: 0;
+    border-top: 1px solid var(--color-sidebar-background-border);
+    background: var(--color-sidebar-background);
+}
+
+/* Summary = the always-visible button row. */
+.sidebar-releases-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    color: var(--color-sidebar-link-text);
+    font-size: var(--sidebar-item-font-size, 0.9em);
+    user-select: none;
+    list-style: none;            /* hide the default disclosure triangle */
+}
+
+.sidebar-releases-summary::-webkit-details-marker {
+    display: none;               /* hide it in WebKit/Blink too */
+}
+
+.sidebar-releases-summary:hover {
+    color: var(--color-sidebar-link-text--top-level);
+    background: var(--color-sidebar-item-background--hover);
+}
+
+.sidebar-releases-icon {
+    width: 1.1em;
+    height: 1.1em;
+    flex-shrink: 0;
+}
+
+.sidebar-releases-label {
+    font-weight: 600;
+}
+
+.sidebar-releases-caret {
+    width: 0.9em;
+    height: 0.9em;
+    margin-left: auto;
+    opacity: 0.7;
+    transition: transform 0.15s ease;
+}
+
+.sidebar-releases-details[open] .sidebar-releases-caret {
+    transform: rotate(180deg);
+}
+
+/* The version/downloads menu, opening upward over the navigation.  Split into
+ * labelled sections (like the Zephyr flyout), each holding a wrapping row of
+ * links. */
+.sidebar-releases-menu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    z-index: 10;
+    margin: 0 0.5rem 0.25rem;
+    padding: 0.6rem 0.85rem;
+    border: 1px solid var(--color-sidebar-background-border);
+    border-radius: 0.3rem;
+    background: var(--color-sidebar-background);
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.18);
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.sidebar-releases-section + .sidebar-releases-section {
+    margin-top: 0.7rem;
+}
+
+.sidebar-releases-heading {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: var(--color-brand-primary);
+    font-weight: 600;
+    font-size: 0.78em;
+}
+
+.sidebar-releases-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.8rem;
+}
+
+.sidebar-releases-item {
+    color: var(--color-sidebar-link-text);
+    text-decoration: none;
+    font-size: var(--sidebar-item-font-size, 0.9em);
+    white-space: nowrap;
+}
+
+.sidebar-releases-item:hover {
+    color: var(--color-brand-content);
+    text-decoration: underline;
+}
+
+.sidebar-releases-item--muted {
+    opacity: 0.7;
+}
+
 /* Bridge Zephyr board.css CSS variable names to Furo's equivalents so that
  * zephyr:board-supported-hw and zephyr:board-supported-runners render
  * correctly under the Furo theme. */

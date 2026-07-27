@@ -1,5 +1,7 @@
 # sweep_apogee.py
 
+**Source:** [`tools/sweep_apogee.py`](https://github.com/AUXSPACEeV/aurora/blob/main/tools/sweep_apogee.py)
+
 Grid-search Kalman filter tuning parameters against recorded flights.
 
 ## What it does

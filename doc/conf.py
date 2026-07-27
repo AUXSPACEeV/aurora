@@ -4,6 +4,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -182,6 +183,84 @@ gh_link_prefixes = {
     ".*": "doc",
 }
 
+# -- Repo / release links in the Furo chrome ---------------------------------
+# Two additions modelled on the Zephyr docs chrome:
+#   1. An "Open on GitHub" link in the per-page top bar.  Furo renders
+#      components/view-this-page.html into the content-icon-container when
+#      "view" is listed in top_of_page_buttons (see html_theme_options above);
+#      _templates/components/view-this-page.html overrides it to render a
+#      labelled GitHub link using the per-page URL computed by
+#      _add_aurora_github_url() below.
+#   2. A "Releases" entry pinned to the bottom of the sidebar, rendered by
+#      _templates/sidebar/aurora-version.html and wired in via html_sidebars.
+#
+# source_repository/branch are required so that basic-ng's view component
+# considers a view link "available" (which gates the link_available block our
+# override fills); the URL itself is recomputed per page to also cover board
+# doc pages reached through the doc/boards/ symlink.
+html_theme_options["source_repository"] = gh_link_base_url + "/"
+html_theme_options["source_branch"]     = gh_link_version
+html_theme_options["source_directory"]  = "doc/"
+
+# Consumed by _templates/sidebar/aurora-version.html.  The release list is
+# maintained by hand -- add each new release tag to the TOP (newest first); the
+# sidebar dropdown turns every entry into a link to its GitHub release page
+# ({gh_link_base_url}/releases/tag/<tag>).
+_AURORA_RELEASES = [
+    "v0.4.2",
+    "v0.3.2",
+]
+html_context = {
+    "aurora_releases": _AURORA_RELEASES,
+    "aurora_releases_url": gh_link_base_url + "/releases",
+    "aurora_releases_tag_base": gh_link_base_url + "/releases/tag",
+    # Site-root-relative path to the PDF build of the docs (produced by
+    # `make simplepdf` / sphinx-simplepdf, see simplepdf_file_name).  The HTML
+    # build does not generate it, so the docs deploy must copy the simplepdf
+    # output to this location; the sidebar "Downloads > PDF" link resolves it
+    # relative to each page via pathto().
+    "aurora_pdf_path": simplepdf_file_name,
+}
+
+# Pin the "Releases" entry to the bottom of the sidebar by appending it after
+# sidebar/scroll-end.html: everything after the scroll container is rendered
+# outside the scroll area, so it sticks to the bottom.  Setting html_sidebars
+# replaces Furo's defaults wholesale, so the default sections (copied from
+# Furo's theme.conf) must be repeated here.
+html_sidebars = {
+    "**": [
+        "sidebar/brand.html",
+        "sidebar/search.html",
+        "sidebar/scroll-start.html",
+        "sidebar/navigation.html",
+        "sidebar/ethical-ads.html",
+        "sidebar/scroll-end.html",
+        "sidebar/aurora-version.html",
+        "sidebar/variant-selector.html",
+    ]
+}
+
+
+def _add_aurora_github_url(app, pagename, templatename, context, doctree):
+    """Expose a correct per-page GitHub "blob" URL as ``aurora_github_url``.
+
+    basic-ng's built-in view link assumes every page lives under doc/, but
+    board doc pages are reached through the doc/boards -> ../boards symlink and
+    live at boards/... in the repo (mirroring gh_link_prefixes).  Compute the
+    URL here so the top-bar "Open on GitHub" link resolves for both.
+    """
+    try:
+        src_rel = os.path.relpath(app.env.doc2path(pagename), app.srcdir)
+    except Exception:
+        context["aurora_github_url"] = gh_link_base_url
+        return
+    src_rel = src_rel.replace(os.sep, "/")
+    # boards/* map to the repo root; everything else lives under doc/.
+    repo_path = src_rel if src_rel.startswith("boards/") else "doc/" + src_rel
+    context["aurora_github_url"] = (
+        f"{gh_link_base_url}/blob/{gh_link_version}/{repo_path}"
+    )
+
 # -- Zephyr domain tweaks ----------------------------------------------------
 # gen_boards_catalog.guess_image makes board image paths relative to ZEPHYR_BASE,
 # which fails for Aurora's own boards that live outside the Zephyr tree.
@@ -353,6 +432,24 @@ import zephyr.domain as _zd
 from docutils import nodes as _nodes
 _zd.BINDING_TYPE_TO_DOCUTILS_NODE["pyro"] = _nodes.Text("Pyrotechnic Ignition")
 
+# gh_utils.gh_link_get_url() builds the URL by joining
+# base/mode/version/prefix/doc-path with "/".  Aurora's board pages resolve to
+# an *empty* gh_link prefix (see gh_link_prefixes), so the join leaves a "//" in
+# the path (e.g. .../blob/<ver>//boards/...), which breaks the board GitHub
+# links (the "Browse board sources" button etc.).  Wrap the function -- the name
+# the domain module actually calls -- to collapse duplicate slashes in the path
+# while preserving the scheme's "//".
+_orig_gh_link_get_url = _zd.gh_link_get_url
+
+def _gh_link_get_url_clean(app, pagename, mode="blob"):
+    url = _orig_gh_link_get_url(app, pagename, mode)
+    if not url:
+        return url
+    scheme, sep, rest = url.partition("://")
+    return scheme + sep + re.sub(r"/{2,}", "/", rest)
+
+_zd.gh_link_get_url = _gh_link_get_url_clean
+
 # Board status registry: board_id -> (display_name, status_string)
 # Extend this dict when new boards are added or maintenance status changes.
 _AURORA_BOARD_STATUS = {
@@ -373,6 +470,26 @@ def _convert_board_node_with_status(self):
         docname = self.document.settings.env.docname
     except AttributeError:
         docname = ""
+
+    # Rewrite the "Browse board sources" button (added by ConvertBoardNode) to a
+    # clean directory URL.  Upstream builds href="{gh_link}/../..", which points
+    # a blob URL at the board's doc file and then walks up two levels with
+    # "/../.." -- a path only the browser normalises, and only after GitHub
+    # redirects blob->tree.  Point it straight at the board directory instead.
+    env = self.document.settings.env
+    try:
+        src_rel = os.path.relpath(env.doc2path(docname), env.srcdir).replace(os.sep, "/")
+    except Exception:
+        src_rel = ""
+    board_dir = "/".join(src_rel.split("/")[:-2])  # strip the "/doc/<page>" tail
+    if board_dir:
+        clean_url = f"{gh_link_base_url}/tree/{gh_link_version}/{board_dir}"
+        for raw in self.document.traverse(_nodes.raw):
+            if "board-github-link" not in raw.astext():
+                continue
+            fixed = re.sub(r'href="[^"]*"', f'href="{clean_url}"', raw.astext(), count=1)
+            raw.replace_self(_nodes.raw("", fixed, format="html"))
+            break
 
     status_text = next(
         (status for board_id, (_, status) in _AURORA_BOARD_STATUS.items()
@@ -449,6 +566,7 @@ def _on_doctree_resolved(app, doctree, docname):
 
 def setup(app):
     app.connect("doctree-resolved", _on_doctree_resolved)
+    app.connect("html-page-context", _add_aurora_github_url)
 
 # -- Zephyr domain board features --------------------------------------------
 # Run CMake-only twister pass for Aurora's boards so that board-supported-hw

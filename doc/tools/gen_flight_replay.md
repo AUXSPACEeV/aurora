@@ -1,5 +1,7 @@
 # gen_flight_replay.py
 
+**Source:** [`tools/gen_flight_replay.py`](https://github.com/AUXSPACEeV/aurora/blob/main/tools/gen_flight_replay.py)
+
 Convert a recorded AURORA flight CSV into a generated C source file that
 embeds the samples as constant arrays. The generated file is compiled into
 the firmware and consumed by the **replay backend** of `fake_sensors`, so

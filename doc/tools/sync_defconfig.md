@@ -1,5 +1,7 @@
 # sync_defconfig.py
 
+**Source:** [`tools/sync_defconfig.py`](https://github.com/AUXSPACEeV/aurora/blob/main/tools/sync_defconfig.py)
+
 Merge the Zephyr-generated `defconfig` into a board-specific `.conf`.
 
 ## What it does
