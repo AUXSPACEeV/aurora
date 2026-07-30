@@ -141,7 +141,9 @@ void imu_task(void *, void *, void *)
 
 	if (imu_init(imu0)) {
 		LOG_ERR("IMU not ready!");
-		return;
+		while (1) {
+			k_sleep(K_FOREVER);
+		}
 	}
 	imu_active = true;
 

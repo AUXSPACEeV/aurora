@@ -127,6 +127,10 @@ int imu_poll(const struct device *dev)
 /* imu_init – see imu.h */
 int imu_init(const struct device *dev)
 {
+	if (dev == NULL) {
+		LOG_ERR("IMU (NULL): device not ready");
+		return -ENODEV;
+	}
 	if (!device_is_ready(dev)) {
 		LOG_ERR("%s: device not ready", dev->name);
 		return -ENODEV;
