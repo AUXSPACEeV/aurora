@@ -230,9 +230,8 @@ static bool is_valid_transition(enum sm_state from, enum sm_state to)
 	}
 
 	switch (from) {
-	/* IDLE/CALIBRATING/ARMED may abort to ERROR when the flight log is offline. */
-	case SM_IDLE: return (to == SM_CALIBRATING || to == SM_ERROR);
-	case SM_CALIBRATING: return (to == SM_ARMED || to == SM_ERROR);
+	/* IDLE/ARMED may abort to ERROR when the flight log is offline. */
+	case SM_IDLE: return (to == SM_ARMED || to == SM_ERROR);
 	case SM_ARMED: return (to == SM_BOOST || to == SM_ERROR);
 	case SM_BOOST: return (to == SM_BURNOUT);
 	case SM_BURNOUT: return (to == SM_APOGEE);
@@ -302,7 +301,7 @@ int state_machine_error_handler(enum sm_error_reason reason, void *args)
  *
  * Calculates delta-time since the last sample, converts raw sensor data to double precision,
  * and updates the attitude estimation filter. Handles sensor calibration tracking while the
- * system is in the CALIBRATING state, and computes vertical acceleration once calibrated.
+ * system is in the IDLE state, and computes vertical acceleration once calibrated.
  *
  * @param[in,out] last_imu_ns         Pointer to the timestamp of the last processed IMU sample.
  * @param[in,out] attitude_state      Pointer to the internal attitude estimation filter state.
@@ -345,7 +344,7 @@ static void handle_imu(int64_t *last_imu_ns, struct attitude *attitude_state, st
 	};
 
 	if (!attitude_is_calibrated(attitude_state)) {
-		if (sm_get_state() == SM_CALIBRATING) {
+		if (sm_get_state() == SM_IDLE) {
 			attitude_calibrate_sample(attitude_state, accel_b, gyro_b);
 			if (attitude_calibrate_converged(attitude_state)) {
 				if (attitude_calibrate_finish(attitude_state) == 0) {
@@ -397,16 +396,14 @@ static void handle_pyro(enum sm_state state, enum sm_state *pyro_state, const st
 	} while (0)
 
 	switch (state) {
+	/* Calibration runs in the background while IDLE, but pyros must not
+	 * go live until SM_ARMED; SM_ERROR is only ever held pre-flight
+	 * (arming interlock). Keep the channels safe in both, explicit
+	 * rather than relying on the default no-op case, for auditability
+	 * of this flight-critical switch.
+	 */
 	case SM_IDLE:
-	/* SM_ERROR is only ever held pre-flight (arming interlock); keep the
-	 * channels safe while the operator sorts out the error condition.
-	 */
 	case SM_ERROR:
-	/* Calibration hasn't finished yet; pyros must not go live until
-	 * SM_ARMED. Explicit rather than relying on the default no-op case,
-	 * for auditability of this flight-critical switch.
-	 */
-	case SM_CALIBRATING:
 		PYRO_ACT(pyro_disarm, 0, "Disarmed", "disarm");
 		PYRO_ACT(pyro_disarm, 1, "Disarmed", "disarm");
 		break;
@@ -479,8 +476,8 @@ void state_machine_task(void *, void *, void *)
 	double orientation[] = {0.0, 0.0, 0.0};
 	bool baro_ready = false;
 	bool imu_ready = false;
-	/* No-IMU builds have nothing to calibrate, so treat CALIBRATING as an
-	 * instant pass-through; CONFIG_IMU builds override this below from
+	/* No-IMU builds have nothing to calibrate, so treat calibration as
+	 * instantly satisfied; CONFIG_IMU builds override this below from
 	 * the real attitude tracker each iteration.
 	 */
 	bool calibrated = true;

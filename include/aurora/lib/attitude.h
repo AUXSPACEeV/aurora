@@ -17,17 +17,21 @@
  * Intended flow:
  *
  *   1. @ref attitude_init() at boot.
- *   2. While the rocket is stationary (e.g. in SM_CALIBRATING), call
+ *   2. While the rocket is stationary (e.g. in SM_IDLE), call
  *      @ref attitude_calibrate_sample() each IMU update to accumulate
- *      accelerometer/gyroscope bias and gravity magnitude. Two
- *      independent checks treat a sample as motion and discard the
- *      accumulator, restarting the window from the next sample, so a
- *      bump or re-aim mid-window can't silently corrupt the bias
- *      estimate: the gyroscope magnitude exceeding
- *      @c CONFIG_IMU_CALIBRATION_RESTART_DEVIATION_DEG (deg/s), or the
+ *      accelerometer/gyroscope bias and gravity magnitude. Three
+ *      independent checks treat a sample as motion/mis-orientation and
+ *      discard the accumulator, restarting the window from the next
+ *      sample, so a bump, re-aim mid-window, or attempt that never held
+ *      the right orientation in the first place can't silently corrupt
+ *      the bias estimate: the gyroscope magnitude exceeding
+ *      @c CONFIG_IMU_CALIBRATION_RESTART_DEVIATION_DEG (deg/s); the
  *      accelerometer direction tilting more than that same value (read
  *      as degrees) away from the direction recorded at the start of the
- *      window.
+ *      window; or the accelerometer direction tilting more than that
+ *      value away from the configured mounting axis
+ *      (@c CONFIG_IMU_UP_AXIS_*) at all, regardless of the window's own
+ *      start.
  *   3. Poll @ref attitude_calibrate_converged() each update once
  *      accumulating; it reports ready once the running gyro-bias mean
  *      has stopped meaningfully changing between checkpoints, or once a

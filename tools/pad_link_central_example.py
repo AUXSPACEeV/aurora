@@ -45,8 +45,7 @@ CAP_GPS           = (1 << 16)
 
 SM_STATES = {
     0: ("IDLE", "ARMED", "BOOST", "BURNOUT",
-        "APOGEE", "MAIN", "REDUNDANT", "LANDED", "ERROR",
-        "CALIBRATING"),
+        "APOGEE", "MAIN", "REDUNDANT", "LANDED", "ERROR"),
 }
 
 # matches CONFIG_AURORA_PAD_LINK_DEVICE_NAME

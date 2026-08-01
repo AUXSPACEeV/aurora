@@ -171,14 +171,12 @@ void sm_backend_step(const struct sm_inputs *in, double previous_altitude)
 	{
 
 	/*-----------------------------------------------------------
-	* IDLE -> CALIBRATING
+	* IDLE -> ARMED
 	*----------------------------------------------------------*/
 	case SM_IDLE:
 		n_oi = 0;
 		if (in->armed && sm_orientation_elevation_deg(in->orientation) >= th.T_OA) {
-			if (in->log_ready) {
-				sm_transition(SM_CALIBRATING);
-			} else {
+			if (!in->log_ready) {
 				/* Arm conditions are met but the flight log is
 				 * offline.  Refuse to arm so the vehicle never
 				 * flies (or fires pyros) without recording, and
@@ -188,39 +186,16 @@ void sm_backend_step(const struct sm_inputs *in, double previous_altitude)
 				 */
 				sm_event("arm refused: flight log offline");
 				sm_do_error_handling(SM_ERR_LOG_OFFLINE);
+			} else if (in->calibrated) {
+				/* Pyros only go live once calibration has
+				 * actually finished. Calibration itself runs
+				 * continuously while IDLE (see main.c); this
+				 * just waits for it.
+				 */
+				sm_event("attitude calibration complete, arming");
+				sm_transition(SM_ARMED);
 			}
-		}
-		break;
-
-	/*-----------------------------------------------------------
-	* CALIBRATING -> ARMED
-	*----------------------------------------------------------*/
-	case SM_CALIBRATING:
-		/* Mirrors ARMED's log-offline abort and orientation-based
-		 * disarm below: the vehicle is just as exposed while
-		 * calibrating as it is once fully armed.
-		 */
-		if (!in->log_ready) {
-			sm_event("calibration aborted: flight log offline");
-			sm_do_error_handling(SM_ERR_LOG_OFFLINE);
-			break;
-		}
-
-		if (sm_orientation_elevation_deg(in->orientation) < th.T_OI) {
-			if (++n_oi < th.N_OI)
-				break;
-
-			/* Go back to IDLE if orientation is bad */
-			sm_event("orientation below threshold");
-			sm_transition(SM_IDLE);
-			break;
-		}
-		n_oi = 0;
-
-		/* Pyros only go live once calibration has actually finished. */
-		if (in->calibrated) {
-			sm_event("attitude calibration complete");
-			sm_transition(SM_ARMED);
+			/* else: arm conditions met, waiting on calibration. */
 		}
 		break;
 
@@ -427,7 +402,6 @@ const char *sm_state_str(enum sm_state state)
 	case SM_REDUNDANT:	return "REDUNDANT";
 	case SM_LANDED:		return "LANDED";
 	case SM_ERROR:		return "ERROR";
-	case SM_CALIBRATING:	return "CALIBRATING";
 	default:		return "UNKNOWN";
 	}
 }
