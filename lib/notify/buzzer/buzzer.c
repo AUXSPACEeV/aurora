@@ -102,12 +102,6 @@ static void play_state_change(enum sm_state next)
 	pwm_melody_stop(&melody_ctx);
 
 	switch (next) {
-	case SM_CALIBRATING:
-		/* Lower/shorter than the ARMED beep below so the two are
-		 * clearly distinguishable by ear.
-		 */
-		(void)buzz(PWM_HZ(1200), 150);
-		break;
 	case SM_ARMED:
 		(void)buzz(PWM_HZ(2000), 200);
 		break;

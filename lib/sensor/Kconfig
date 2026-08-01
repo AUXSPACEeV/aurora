@@ -80,7 +80,7 @@ config IMU_CALIBRATION_SAMPLES
 	range 10 10000
 	help
 	  Minimum number of IMU samples to average while the rocket is
-	  stationary in SM_CALIBRATING for accelerometer/gyroscope bias
+	  stationary in SM_IDLE for accelerometer/gyroscope bias
 	  estimation and gravity magnitude measurement, before the running
 	  estimate is even checked for convergence. Calibration finishes
 	  early once the estimate stops improving, or once a fixed multiple
@@ -95,12 +95,16 @@ config IMU_CALIBRATION_RESTART_DEVIATION_DEG
 	range 1 90
 	help
 	  Motion-sensitivity threshold for restarting an in-progress
-	  calibration window, used two ways:
+	  calibration window, used three ways:
 	    - Gyroscope: instantaneous magnitude threshold in degrees/second.
 	    - Accelerometer: tilt-deviation threshold in degrees, measured
 	      from the accelerometer direction recorded at the start of the
 	      current window.
-	  Exceeding either threshold during SM_CALIBRATING discards the
+	    - Accelerometer: absolute tilt-deviation threshold in degrees,
+	      measured from the configured mounting axis (CONFIG_IMU_UP_AXIS_*)
+	      rather than the window's own start -- catches an attempt that
+	      never held the correct orientation in the first place.
+	  Exceeding any threshold while stationary in SM_IDLE discards the
 	  in-progress calibration accumulator and restarts the window from
 	  the next sample, so a bump or re-aim mid-window doesn't silently
 	  corrupt the bias estimate. Tuned to tolerate ordinary pad sway/wind

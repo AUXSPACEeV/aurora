@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram name="Seite-1" id="P-Jyiq4s8svYYyWxIgrf">
-        <mxGraphModel dx="301" dy="403" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1269" background="none" math="0" shadow="0">
+        <mxGraphModel dx="749" dy="543" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1269" background="none" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -17,12 +17,14 @@
                         <mxPoint x="36" as="offset"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="3qnBTR5j4vfztX5206rh-6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;convertToSvg=1;labelBackgroundColor=none;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" source="3qnBTR5j4vfztX5206rh-4" target="aurora-cal-1" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
+                <mxCell id="3qnBTR5j4vfztX5206rh-6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;convertToSvg=1;labelBackgroundColor=none;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" source="3qnBTR5j4vfztX5206rh-4" target="3qnBTR5j4vfztX5206rh-5" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="414" y="230" as="targetPoint"/>
+                    </mxGeometry>
                 </mxCell>
-                <mxCell id="3qnBTR5j4vfztX5206rh-7" value="ARM" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;convertToSvg=1;fontColor=#0066CC;fontStyle=1" parent="3qnBTR5j4vfztX5206rh-6" connectable="0" vertex="1">
+                <mxCell id="3qnBTR5j4vfztX5206rh-7" value="ARM&amp;nbsp;&lt;div&gt;&lt;font style=&quot;color: rgb(0, 102, 204);&quot;&gt;&amp;amp; CALIBRATE&lt;/font&gt;&lt;/div&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;convertToSvg=1;fontColor=#0066CC;fontStyle=1" parent="3qnBTR5j4vfztX5206rh-6" connectable="0" vertex="1">
                     <mxGeometry x="-0.1714" y="2" relative="1" as="geometry">
-                        <mxPoint x="13" as="offset"/>
+                        <mxPoint x="40" as="offset"/>
                     </mxGeometry>
                 </mxCell>
                 <mxCell id="3qnBTR5j4vfztX5206rh-4" value="IDLE" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;convertToSvg=1;labelBackgroundColor=none;" parent="1" vertex="1">
@@ -159,30 +161,6 @@
                 </mxCell>
                 <mxCell id="8pTv7L6jPDKsL7LCpB7b-1" value="ERROR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;convertToSvg=1;labelBackgroundColor=none;" parent="1" vertex="1">
                     <mxGeometry x="120" y="1001.72" width="84" height="40" as="geometry"/>
-                </mxCell>
-                <mxCell id="aurora-cal-1" value="CALIBRATING" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;convertToSvg=1;labelBackgroundColor=none;" parent="1" vertex="1">
-                    <mxGeometry x="362" y="230" width="104" height="40" as="geometry"/>
-                </mxCell>
-                <mxCell id="aurora-cal-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;convertToSvg=1;labelBackgroundColor=none;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" source="aurora-cal-1" target="3qnBTR5j4vfztX5206rh-5" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="aurora-cal-3" value="Calibrated" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;convertToSvg=1;fontColor=#0066CC;fontStyle=1" parent="aurora-cal-2" connectable="0" vertex="1">
-                    <mxGeometry x="-0.1" relative="1" as="geometry">
-                        <mxPoint x="36" as="offset"/>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="aurora-cal-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;convertToSvg=1;labelBackgroundColor=none;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" source="aurora-cal-1" target="3qnBTR5j4vfztX5206rh-4" edge="1">
-                    <mxGeometry relative="1" as="geometry">
-                        <Array as="points">
-                            <mxPoint x="234" y="250"/>
-                            <mxPoint x="234" y="150"/>
-                        </Array>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="aurora-cal-5" value="DISARM" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=none;convertToSvg=1;fontColor=#0066CC;fontStyle=1" parent="aurora-cal-4" connectable="0" vertex="1">
-                    <mxGeometry x="0.0033" y="1" relative="1" as="geometry">
-                        <mxPoint x="-31" y="-4" as="offset"/>
-                    </mxGeometry>
                 </mxCell>
             </root>
         </mxGraphModel>

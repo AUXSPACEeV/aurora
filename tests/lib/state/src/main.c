@@ -81,9 +81,6 @@ static inline void put_state_armed(struct sm_inputs *in)
 	in->calibrated = 1;
 	set_elevation(in->orientation, simple_state_cfg.T_OA);
 	sm_update(in);
-	zassert_equal(sm_get_state(), SM_CALIBRATING, "State should be CALIBRATING");
-
-	sm_update(in);
 	zassert_equal(sm_get_state(), SM_ARMED, "State should be ARMED");
 }
 
@@ -262,12 +259,8 @@ ZTEST(simple_state_tests, test_arm_with_log_offline_holds_error)
 	inputs.log_ready = 1;
 	inputs.calibrated = 1;
 	sm_update(&inputs);
-	zassert_equal(sm_get_state(), SM_CALIBRATING,
-		      "Should start calibrating once the flight log is online");
-
-	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_ARMED,
-		      "Should arm once calibration completes");
+		      "Should arm once the flight log is back online and calibrated");
 }
 
 /**
@@ -348,15 +341,17 @@ ZTEST(simple_state_tests, test_boost_ignores_log_dropout)
 }
 
 /**
- * @brief A flight-log dropout while CALIBRATING aborts to ERROR.
+ * @brief A flight-log dropout while IDLE is waiting on calibration aborts
+ *        to ERROR.
  *
- * Mirrors test_armed_aborts_to_error_when_log_drops, but for the new
- * pre-arm CALIBRATING sub-phase: the vehicle is just as exposed while
- * calibrating as it is once fully armed, so a log dropout there must
- * also abort through the error path rather than silently keep
- * accumulating an unrecorded calibration window.
+ * Mirrors test_armed_aborts_to_error_when_log_drops, but for the window
+ * where arm conditions are otherwise met and the machine is waiting on
+ * attitude calibration to finish (still SM_IDLE, since calibration runs
+ * in the background there): the vehicle is just as exposed during that
+ * wait as it is once fully armed, so a log dropout must also abort
+ * through the error path rather than silently keep waiting.
  */
-ZTEST(simple_state_tests, test_calibrating_aborts_to_error_when_log_drops)
+ZTEST(simple_state_tests, test_idle_aborts_to_error_when_log_drops_while_waiting_for_calibration)
 {
 	struct sm_error_handling_args err_args = {
 		.cb = &mock_error_handler,
@@ -376,15 +371,16 @@ ZTEST(simple_state_tests, test_calibrating_aborts_to_error_when_log_drops)
 		.acceleration = 0.0,
 		.velocity = 0.0,
 		.altitude = 0.0,
+		/* .calibrated left 0: arm conditions met, still waiting. */
 	};
 
 	sm_update(&inputs);
-	zassert_equal(sm_get_state(), SM_CALIBRATING, "Should enter CALIBRATING");
+	zassert_equal(sm_get_state(), SM_IDLE, "Should stay IDLE, waiting on calibration");
 
 	inputs.log_ready = 0;
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_ERROR,
-		      "CALIBRATING must abort to ERROR when the flight log goes offline");
+		      "Must abort to ERROR when the flight log goes offline while waiting to arm");
 	zassert_equal(last_error_reason, SM_ERR_LOG_OFFLINE,
 		      "Error callback must receive SM_ERR_LOG_OFFLINE");
 
@@ -395,36 +391,14 @@ ZTEST(simple_state_tests, test_calibrating_aborts_to_error_when_log_drops)
 }
 
 /**
- * @brief Tilting past the disarm angle while CALIBRATING returns to IDLE.
- */
-ZTEST(simple_state_tests, test_calibrating_disarms_on_tilt)
-{
-	struct sm_inputs inputs = {
-		.armed = 1,
-		.log_ready = 1,
-		.orientation = ORIENT(simple_state_cfg.T_OA),
-		.acceleration = 0.0,
-		.velocity = 0.0,
-		.altitude = 0.0,
-	};
-
-	sm_update(&inputs);
-	zassert_equal(sm_get_state(), SM_CALIBRATING, "Should enter CALIBRATING");
-
-	set_elevation(inputs.orientation, simple_state_cfg.T_OI - 1.0);
-	sm_update(&inputs);
-	zassert_equal(sm_get_state(), SM_IDLE,
-		      "Tilting past the disarm angle while calibrating must return to IDLE");
-}
-
-/**
- * @brief CALIBRATING only advances to ARMED once in->calibrated is set.
+ * @brief IDLE only advances to ARMED once in->calibrated is set.
  *
  * Pyros must not go live until attitude calibration has actually
- * finished, so the state machine must stay in CALIBRATING across
- * repeated updates until the caller reports calibrated = 1.
+ * finished, so the state machine must stay in IDLE across repeated
+ * updates -- even with arm conditions otherwise met -- until the
+ * caller reports calibrated = 1.
  */
-ZTEST(simple_state_tests, test_calibrating_waits_for_calibrated_flag)
+ZTEST(simple_state_tests, test_idle_waits_for_calibrated_flag)
 {
 	struct sm_inputs inputs = {
 		.armed = 1,
@@ -436,11 +410,12 @@ ZTEST(simple_state_tests, test_calibrating_waits_for_calibrated_flag)
 	};
 
 	sm_update(&inputs);
-	zassert_equal(sm_get_state(), SM_CALIBRATING, "Should enter CALIBRATING");
+	zassert_equal(sm_get_state(), SM_IDLE,
+		      "Must stay IDLE until calibrated becomes true");
 
 	sm_update(&inputs);
-	zassert_equal(sm_get_state(), SM_CALIBRATING,
-		      "Must stay in CALIBRATING until calibrated becomes true");
+	zassert_equal(sm_get_state(), SM_IDLE,
+		      "Must stay IDLE until calibrated becomes true");
 
 	inputs.calibrated = 1;
 	sm_update(&inputs);

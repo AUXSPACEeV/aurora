@@ -164,8 +164,6 @@ static int led_on_state_change(enum sm_state prev, enum sm_state next)
 	switch (next) {
 	case SM_ARMED:
 		return blink(200, 200);
-	case SM_CALIBRATING:
-		return blink(100, 100);
 	case SM_IDLE:
 		return blink(50, 450);
 	case SM_LANDED:

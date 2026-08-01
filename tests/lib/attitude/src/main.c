@@ -344,12 +344,21 @@ ZTEST(attitude_tests, test_tilt_restarts_calibration_window)
 	zassert_equal(att.cal_samples, 0,
 		      "tilt above threshold must discard the accumulator");
 
-	/* Calibration still converges cleanly at the new orientation. */
+	/* Held at the tilted orientation, it must not accumulate at all: it
+	 * is also out of tolerance against the mounting axis, not just the
+	 * window's own start (see test_held_out_of_mounting_axis_tolerance_
+	 * never_accumulates for that check in isolation). Calibration only
+	 * converges once returned to the mounting-axis orientation.
+	 */
+	attitude_calibrate_sample(&att, tilted, still_gyro);
+	zassert_equal(att.cal_samples, 0,
+		      "held out of mounting-axis tolerance must still not accumulate");
+
 	for (int i = 0; i < CONFIG_IMU_CALIBRATION_SAMPLES + 20; i++) {
-		attitude_calibrate_sample(&att, tilted, still_gyro);
+		attitude_calibrate_sample(&att, rest, still_gyro);
 	}
 	zassert_equal(attitude_calibrate_converged(&att), 1,
-		      "should converge after the tilt restart once stable again");
+		      "should converge after the tilt restart once back within tolerance");
 	zassert_equal(attitude_calibrate_finish(&att), 0, "finish ok");
 }
 
@@ -378,4 +387,55 @@ ZTEST(attitude_tests, test_converged_null_pointer_rejected)
 {
 	zassert_equal(attitude_calibrate_converged(NULL), -EINVAL,
 		      "converged NULL rejected");
+}
+
+ZTEST(attitude_tests, test_held_out_of_mounting_axis_tolerance_never_accumulates)
+{
+	/* Unlike test_tilt_restarts_calibration_window (relative to the
+	 * window's own start, so it only fires from the second sample
+	 * onward), a sample tilted away from the configured mounting axis
+	 * (g_b) from the very first sample must never be allowed to
+	 * accumulate at all -- there is no "window start" to compare
+	 * against yet, so only the absolute mounting-axis check catches
+	 * this.
+	 */
+	double still_gyro[3] = {0.0, 0.0, 0.0};
+	double deg2rad = M_PI / 180.0;
+	double tilt_deg = (double)CONFIG_IMU_CALIBRATION_RESTART_DEVIATION_DEG + 1.0;
+	double tilted[3] = {
+		9.81 * sin(tilt_deg * deg2rad),
+		0.0,
+		9.81 * cos(tilt_deg * deg2rad),
+	};
+
+	for (int i = 0; i < 50; i++) {
+		attitude_calibrate_sample(&att, tilted, still_gyro);
+		zassert_equal(att.cal_samples, 0,
+			      "held out of mounting-axis tolerance must never accumulate");
+	}
+}
+
+ZTEST(attitude_tests, test_recovers_and_converges_once_within_mounting_axis_tolerance)
+{
+	double still_gyro[3] = {0.0, 0.0, 0.0};
+	double rest[3] = {0.0, 0.0, 9.81};
+	double deg2rad = M_PI / 180.0;
+	double tilt_deg = (double)CONFIG_IMU_CALIBRATION_RESTART_DEVIATION_DEG + 1.0;
+	double tilted[3] = {
+		9.81 * sin(tilt_deg * deg2rad),
+		0.0,
+		9.81 * cos(tilt_deg * deg2rad),
+	};
+
+	for (int i = 0; i < 50; i++) {
+		attitude_calibrate_sample(&att, tilted, still_gyro);
+	}
+	zassert_equal(att.cal_samples, 0, "should still be held at zero while out of tolerance");
+
+	for (int i = 0; i < CONFIG_IMU_CALIBRATION_SAMPLES + 20; i++) {
+		attitude_calibrate_sample(&att, rest, still_gyro);
+	}
+	zassert_equal(attitude_calibrate_converged(&att), 1,
+		      "should converge once held within the mounting-axis tolerance");
+	zassert_equal(attitude_calibrate_finish(&att), 0, "finish ok");
 }

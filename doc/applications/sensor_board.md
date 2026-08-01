@@ -29,9 +29,8 @@ conditions (LED in a noisy crowd, buzzer once the rocket is out of sight).
 
 - **Boot sound**: short jingle the moment the board is powered on. If you
   don't hear this, the board is not running.
-- **Calibration-started beep**: a lower, shorter beep when the board
-  enters the ``CALIBRATING`` state after you arm it. The rocket *must
-  stay still* while ``CALIBRATING`` is active — pyros are not yet live.
+- **Calibration complete tone**: a single confirmation tone once IMU bias calibration finishes (it runs in the background during ``IDLE``).
+  Pyros are **not** yet live until the ``ARMED`` beep below.
 - **Calibration-finished tone, then arming beep**: once calibration
   converges the board immediately plays a confirmation tone followed by
   a higher, longer beep as it moves into ``ARMED`` — that second beep is
@@ -46,8 +45,7 @@ conditions (LED in a noisy crowd, buzzer once the rocket is out of sight).
   jingle and confirms the board has come up.
 - **IDLE**: short, sparse pulses (about twice a second). The rocket is
   disarmed and safe to handle.
-- **CALIBRATING**: fast, even blink. Armed and accumulating IMU bias.
-  Pyros are **not** yet live.
+- **(No separate CALIBRATING state)**: IMU bias calibration runs in the background while the board remains in ``IDLE``; pyros are **not** yet live.
 - **ARMED**: even, steady blink (slower than ``CALIBRATING``). Calibration
   is done and pyros are live. If you see this from the launchpad walk-back,
   the board is ready.
@@ -92,7 +90,7 @@ Check the board's own page under {doc}`/boards/index` for the physical detail.
    LED blink) and plays the calibration-started beep. Pyros are not yet
    live in this state.
 6. **Hold still.** Don't bump the rail, don't walk into the rocket, don't
-   re-aim. If the board detects motion during ``CALIBRATING`` it discards
+   re-aim. If the board detects motion during calibration (still ``IDLE``) it discards
    the in-progress window and restarts automatically from the next still
    sample — no need to disarm and re-arm for a single bump, though
    sustained shaking (a gusty rail) will keep resetting the window and
@@ -106,7 +104,7 @@ Check the board's own page under {doc}`/boards/index` for the physical detail.
    the pad.
 8. **Need to abort or re-aim?** Disarm the board. It will return to IDLE.
    You can re-arm as many times as you like. The state machine just cycles
-   back into ``CALIBRATING`` each time, which is by design. There is no
+   back into ``IDLE`` each time, waiting on calibration if needed, which is by design. There is no
    "wasted" arming attempt.
 9. **Launch.** The state machine takes over from here: BOOST, BURNOUT,
    APOGEE (drogue parachute deployment), descent, MAIN, REDUNDANT and finally

@@ -74,10 +74,8 @@ node in lockstep (same pattern on all LEDs). Brightness is 100%
      - IMU calibration finished, rocket ready to arm.
    * - State → ``IDLE``
      - Blink 50 ms ON / 450 ms OFF (short pulse, ~2 Hz)
-     - Safe, disarmed. Awaiting arm command.
-   * - State → ``CALIBRATING``
-     - Blink 100 ms ON / 100 ms OFF (fast, ~5 Hz)
-     - Armed; accumulating IMU bias. Pyros are **not** yet live.
+     - Safe, disarmed. IMU bias calibration runs in the background here;
+       pyros are **not** yet live.
    * - State → ``ARMED``
      - Blink 200 ms ON / 200 ms OFF (even, ~2.5 Hz)
      - Calibrated and awaiting launch detection. **Pyros live.**
@@ -126,18 +124,17 @@ currently playing melody before issuing the new pattern.
      - System powered up.
    * - Calibration complete
      - 1000 Hz tone for 500 ms
-     - IMU calibration finished, rocket ready to arm. Coincides with the
-       ``CALIBRATING`` → ``ARMED`` transition, immediately followed by
-       the ``ARMED`` beep below.
+     - IMU calibration finished (runs in the background during ``IDLE``),
+       rocket ready to arm. When arming is requested and calibration is
+       already done, this is immediately followed by the ``ARMED`` beep
+       below.
    * - State → ``IDLE``
      - 500 Hz tone for 50 ms (low, short chirp)
      - Safe, disarmed.
-   * - State → ``CALIBRATING``
-     - 1200 Hz tone for 150 ms (lower, shorter beep)
-     - Armed; accumulating IMU bias. Pyros are **not** yet live.
    * - State → ``ARMED``
-     - 2000 Hz tone for 200 ms (mid, clear beep — higher/longer than
-       ``CALIBRATING``'s so the two are distinguishable by ear)
+     - 2000 Hz tone for 200 ms (mid, clear beep — higher/longer than the
+       "Calibration complete" tone above so the two are distinguishable
+       by ear)
      - Calibrated. **Pyros live.**
    * - State → ``APOGEE``
      - 3000 Hz tone for 300 ms (high, longer beep)
@@ -181,9 +178,6 @@ Quick Reference
    * - ``IDLE``
      - Short blink (50 / 450 ms)
      - 500 Hz · 50 ms
-   * - ``CALIBRATING``
-     - Fast blink (100 / 100 ms)
-     - 1200 Hz · 150 ms
    * - ``ARMED``
      - Even blink (200 / 200 ms)
      - 2000 Hz · 200 ms

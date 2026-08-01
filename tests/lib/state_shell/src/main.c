@@ -127,8 +127,6 @@ ZTEST(state_shell_tests, test_status_reflects_armed)
 	};
 
 	sm_update(&in);
-	zassert_equal(sm_get_state(), SM_CALIBRATING, "Precondition: should be CALIBRATING");
-	sm_update(&in);
 	zassert_equal(sm_get_state(), SM_ARMED, "Precondition: should be ARMED");
 
 	execute_and_check("state_machine status", "ARMED");
@@ -153,8 +151,6 @@ ZTEST(state_shell_tests, test_transition_to_idle)
 	};
 
 	/* Move to ARMED first */
-	sm_update(&in);
-	zassert_equal(sm_get_state(), SM_CALIBRATING, "Precondition: should be CALIBRATING");
 	sm_update(&in);
 	zassert_equal(sm_get_state(), SM_ARMED, "Precondition: should be ARMED");
 
@@ -197,19 +193,19 @@ ZTEST(state_shell_tests, test_transition_same_state)
 }
 
 /**
- * @brief Test that "state_machine transition CALIBRATING" is recognized.
+ * @brief Test that "state_machine transition CALIBRATING" is rejected.
  *
- * The command deinitializes and reinitializes the machine, landing it
- * in IDLE regardless of the requested target (ground-testing only, see
- * doc/lib/state.rst) — this just verifies CALIBRATING parses as a
- * valid state name rather than being rejected as unknown.
+ * CALIBRATING is no longer a valid state name (calibration now runs
+ * within IDLE, gated by the calibrated input flag rather than a
+ * dedicated state) -- the shell must reject it as unknown, same as any
+ * other bogus state name.
  */
-ZTEST(state_shell_tests, test_transition_calibrating_recognized)
+ZTEST(state_shell_tests, test_transition_calibrating_rejected)
 {
 	int err;
 
 	err = shell_execute_cmd(sh, "state_machine transition CALIBRATING");
-	zassert_ok(err, "transition command failed (err %d)", err);
+	zassert_not_equal(err, 0, "CALIBRATING should no longer be a valid state name");
 }
 
 /*-----------------------------------------------------------
@@ -237,9 +233,7 @@ ZTEST(state_shell_tests, test_audit_records_transition)
 		.orientation = ORIENT(test_cfg.T_OA),
 	};
 
-	/* Trigger IDLE -> CALIBRATING -> ARMED transitions */
-	sm_update(&in);
-	zassert_equal(sm_get_state(), SM_CALIBRATING, "Precondition: should be CALIBRATING");
+	/* Trigger IDLE -> ARMED transition */
 	sm_update(&in);
 	zassert_equal(sm_get_state(), SM_ARMED, "Precondition: should be ARMED");
 	zassert_true(sm_audit_count() > 0, "Should have audit entries");
@@ -271,9 +265,7 @@ ZTEST(state_shell_tests, test_audit_multiple_transitions)
 		.orientation = ORIENT(test_cfg.T_OA),
 	};
 
-	/* IDLE -> CALIBRATING -> ARMED */
-	sm_update(&in);
-	zassert_equal(sm_get_state(), SM_CALIBRATING, "Should be CALIBRATING");
+	/* IDLE -> ARMED */
 	sm_update(&in);
 	zassert_equal(sm_get_state(), SM_ARMED, "Should be ARMED");
 
@@ -300,6 +292,7 @@ ZTEST(state_shell_tests, test_audit_clear)
 	struct sm_inputs in = {
 		.armed = 1,
 		.log_ready = 1,
+		.calibrated = 1,
 		.orientation = ORIENT(test_cfg.T_OA),
 	};
 

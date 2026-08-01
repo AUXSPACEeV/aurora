@@ -124,6 +124,30 @@ int attitude_calibrate_sample(struct attitude *att,
 		}
 	}
 
+	/* Trigger 3: accelerometer direction tilted away from the
+	 * configured mounting axis (g_b, seeded in attitude_init() from
+	 * CONFIG_IMU_UP_AXIS_*). Absolute, unlike trigger 2 below (which is
+	 * relative to the window's own start): catches a calibration
+	 * attempt that never held the correct orientation in the first
+	 * place, which trigger 2 alone would miss since it has nothing to
+	 * compare against until a second sample arrives.
+	 */
+	if (have_accel_dir) {
+		double dot_up = -(accel_dir[0] * att->g_b[0] +
+				   accel_dir[1] * att->g_b[1] +
+				   accel_dir[2] * att->g_b[2]);
+
+		if (dot_up > 1.0)
+			dot_up = 1.0;
+		if (dot_up < -1.0)
+			dot_up = -1.0;
+
+		if (acos(dot_up) > restart_thresh_rad) {
+			cal_restart(att, "held out of tolerance");
+			return 0;
+		}
+	}
+
 	if (have_accel_dir && att->cal_samples > 0) {
 		double dot = accel_dir[0] * att->cal_accel_ref[0] +
 			     accel_dir[1] * att->cal_accel_ref[1] +
