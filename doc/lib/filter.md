@@ -64,31 +64,12 @@ The filter and its hypsometric pipeline are covered by a ztest suite under
 Noise parameters are integer-scaled by 1000 in Kconfig.
 The actual float value is `CONFIG_FILTER_*_MILLISCALE / 1000.0`.
 
-```{eval-rst}
-.. list-table::
-   :header-rows: 1
-   :widths: auto
-
-   * - Option
-     - Default
-     - Description
-   * - ``CONFIG_FILTER_Q_ALT_MILLISCALE``
-     - 100
-     - Process noise for altitude state (Q_alt).
-       Increase if altitude estimate lags behind reality.
-   * - ``CONFIG_FILTER_Q_VEL_MILLISCALE``
-     - 500
-     - Process noise for velocity state (Q_vel).
-       Increase for more aggressive response during boost.
-   * - ``CONFIG_FILTER_R_MILLISCALE``
-     - 4000
-     - Measurement noise variance (R). Higher values trust the barometer less.
-   * - ``CONFIG_FILTER_APOGEE_DEBOUNCE_SAMPLES``
-     - 3
-     - Consecutive ``filter_detect_apogee()`` calls for which all apogee
-       criteria (:math:`v \leq 0`, no new peak, coast-band acceleration)
-       must hold before apogee is latched. Not milliscaled.
-```
+| Option | Default | Description |
+| --- | --- | --- |
+| `CONFIG_FILTER_Q_ALT_MILLISCALE` | 100 | Process noise for altitude state (Q_alt). Increase if altitude estimate lags behind reality. |
+| `CONFIG_FILTER_Q_VEL_MILLISCALE` | 500 | Process noise for velocity state (Q_vel). Increase for more aggressive response during boost. |
+| `CONFIG_FILTER_R_MILLISCALE` | 4000 | Measurement noise variance (R). Higher values trust the barometer less. |
+| `CONFIG_FILTER_APOGEE_DEBOUNCE_SAMPLES` | 3 | Consecutive `filter_detect_apogee()` calls for which all apogee criteria ($v \leq 0$, no new peak, coast-band acceleration) must hold before apogee is latched. Not milliscaled. |
 
 ## API-Reference
 
