@@ -933,3 +933,67 @@ ZTEST(simple_state_tests, test_armed_boost_timer_reset)
 	sm_update(&inputs);
 	zassert_equal(sm_get_state(), SM_BOOST, "State should now be BOOST");
 }
+
+/**
+ * @brief Test sm_inflight() classification per state
+ *
+ * BOOST through REDUNDANT are the in-flight states.  The pad states
+ * (IDLE, ARMED), LANDED and ERROR must all report "not in flight".
+ */
+ZTEST(simple_state_tests, test_inflight_classification)
+{
+	static const struct {
+		enum sm_state state;
+		bool inflight;
+	} cases[] = {
+		{ SM_IDLE,	false },
+		{ SM_ARMED,	false },
+		{ SM_BOOST,	true  },
+		{ SM_BURNOUT,	true  },
+		{ SM_APOGEE,	true  },
+		{ SM_MAIN,	true  },
+		{ SM_REDUNDANT,	true  },
+		{ SM_LANDED,	false },
+		{ SM_ERROR,	false },
+	};
+
+	zassert_false(sm_inflight(), "Freshly initialized SM should not be in flight");
+
+	for (size_t i = 0; i < ARRAY_SIZE(cases); i++) {
+		sm_update_force(cases[i].state);
+		zassert_equal(sm_inflight(), cases[i].inflight,
+			      "sm_inflight() wrong for %s",
+			      sm_state_str(cases[i].state));
+	}
+}
+
+/**
+ * @brief Test sm_inflight() over a full flight sequence
+ *
+ * Same classification as test_inflight_classification, but reached
+ * through the real transitions rather than forced states.
+ */
+ZTEST(simple_state_tests, test_inflight_over_flight_sequence)
+{
+	struct sm_inputs inputs = {
+		.armed = 0,
+		.orientation = ORIENT(0),
+		.acceleration = 0.0,
+		.velocity = 0.0,
+		.altitude = 0.0,
+	};
+
+	put_state_armed(&inputs);
+	zassert_false(sm_inflight(), "ARMED is still on the pad");
+
+	put_state_redundant(&inputs);
+	zassert_true(sm_inflight(), "REDUNDANT is in flight");
+
+	/* Landing: velocity below T_L asserted for DT_L */
+	inputs.velocity = simple_state_cfg.T_L - 1.0;
+	sm_update(&inputs);
+	k_sleep(K_MSEC(simple_state_cfg.DT_L));
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_LANDED, "State should be LANDED");
+	zassert_false(sm_inflight(), "LANDED is no longer in flight");
+}

@@ -219,10 +219,17 @@ void sm_update(const struct sm_inputs *inputs)
 	struct sm_inputs in = *inputs;
 
 #if defined(CONFIG_AURORA_STATE_MACHINE_RBF)
-	/* The mechanical interlock is the authority on arming: whatever the
-	 * caller put in .armed is overridden by the pin.
-	 */
-	in.armed = sm_rbf_armed() ? 1 : 0;
+	if (sm_inflight()) {
+		/* When the rocket is in the air, disarming isn't possible
+		 * anymore.
+		 */
+		in.armed = 1;
+	} else {
+		/* The mechanical interlock is the authority on arming: whatever
+		 * the caller put in .armed is overridden by the pin.
+		 */
+		in.armed = sm_rbf_armed() ? 1 : 0;
+	}
 #endif /* CONFIG_AURORA_STATE_MACHINE_RBF */
 
 #if defined(CONFIG_FILTER)
