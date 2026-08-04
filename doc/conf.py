@@ -70,6 +70,8 @@ source_suffix = {
 myst_enable_extensions = [
     'colon_fence',
     'fieldlist',
+    'dollarmath',
+    'amsmath'
 ]
 myst_heading_anchors = 3
 

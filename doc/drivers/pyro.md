@@ -1,13 +1,12 @@
-Pyro Drivers
-============
+# Pyro Drivers
 
 The pyrotechnic ignition driver class provides a hardware-agnostic API for
 arming, triggering, and sensing pyro channels.
-There is also a ``pyro-shell`` integration for interactive pyro testing.
+There is also a `pyro-shell` integration for interactive pyro testing.
 
-Configuration
--------------
+## Configuration
 
+```{eval-rst}
 .. list-table::
    :header-rows: 1
    :widths: auto
@@ -21,15 +20,16 @@ Configuration
    * - ``PYRO_SHELL``
      - n
      - Activate the shell integration for pyro drivers.
+```
 
-Shell Commands
---------------
+## Shell Commands
 
-Enabling ``CONFIG_PYRO_SHELL`` registers the ``pyro`` command group for
+Enabling `CONFIG_PYRO_SHELL` registers the `pyro` command group for
 interactive bring-up, bench testing and ground-checkouts of pyro channels.
 All channel commands take a devicetree device name and a numeric channel
 index.
 
+```{eval-rst}
 .. list-table::
    :header-rows: 1
    :widths: auto
@@ -54,20 +54,23 @@ index.
      - Read the sense-ADC of a channel (mV).
    * - ``pyro cap <device> <channel>``
      - Read the firing-capacitor voltage of a channel (mV).
+```
 
-.. warning::
-   ``pyro trigger`` will fire a live pyrotechnic channel. Only use this
-   command with igniters disconnected or in an explicitly safe test
-   configuration.
+:::{warning}
+`pyro trigger` will fire a live pyrotechnic channel. Only use this
+command with igniters disconnected or in an explicitly safe test
+configuration.
+:::
 
-API-Reference
--------------
+## API-Reference
 
+```{eval-rst}
 .. doxygengroup:: drivers_pyro
    :content-only:
+```
 
-Operations
-----------
+## Operations
 
-.. doxygengroup:: drivers_pyro_ops
+```{doxygengroup} drivers_pyro_ops
    :content-only:
+```

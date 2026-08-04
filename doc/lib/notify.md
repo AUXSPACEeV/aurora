@@ -1,39 +1,36 @@
-Notifications
-=============
+# Notifications
 
 The notification library provides an abstract interface for user-facing
 indicators (buzzer, RGB LED, ...).
-Each backend registers a :c:struct:`notify_backend` at link time via an iterable
+Each backend registers a {c:struct}`notify_backend` at link time via an iterable
 section.
 The library fans out every call to all enabled backends.
 
-Backends
---------
+## Backends
 
 - **PWM Buzzer** (``CONFIG_AURORA_NOTIFY_BUZZER``): drives a passive
   buzzer via PWM to signal boot, calibration start/completion, state
   changes, and errors. Runs on
   a dedicated worker thread so that the blocking tone sequences do
   not stall the caller (typically the state-machine task).
-  See `Buzzer Patterns`_ and `Threading and Queueing`_.
-- **PWM LED** (``CONFIG_AURORA_NOTIFY_LED``): drives an LED via PWM
+  See [Buzzer Patterns] and [Threading and Queueing].
+- **PWM LED** (`CONFIG_AURORA_NOTIFY_LED`): drives an LED via PWM
   to signal boot, state changes, and errors. LED does not blink when data logger
-  is disabled. See `LED Patterns`_.
+  is disabled. See [LED Patterns].
 
-Notification Patterns
----------------------
+## Notification Patterns
 
 The following tables describe exactly what each backend does for every
 event in the notification API. Patterns are kept short and distinctive so
 operators on the launch pad can identify system state by ear and eye alone.
 
-Events
-~~~~~~
+### Events
 
 These are the events (hooks) dispatched by the notification library.
 Every registered backend reacts independently; not every backend reacts
 to every event.
 
+```{eval-rst}
 .. list-table::
    :header-rows: 1
    :widths: 25 75
@@ -54,16 +51,17 @@ to every event.
      - An unrecoverable error condition was reported.
    * - ``on_powerfail``
      - A power failure was detected, or the system recovered from one.
+```
 
-.. _led-patterns:
+(led-patterns)=
 
-LED Patterns
-~~~~~~~~~~~~
+### LED Patterns
 
-The LED backend drives every LED child of the ``auxspace_led`` chosen
+The LED backend drives every LED child of the `auxspace_led` chosen
 node in lockstep (same pattern on all LEDs). Brightness is 100%
-(``MAX_BRIGHTNESS``) whenever the LED is lit.
+(`MAX_BRIGHTNESS`) whenever the LED is lit.
 
+```{eval-rst}
 .. list-table::
    :header-rows: 1
    :widths: 30 25 45
@@ -106,21 +104,23 @@ node in lockstep (same pattern on all LEDs). Brightness is 100%
    * - Powerfail (recover)
      - LEDs resume normal behaviour on the next event
      - Main power restored.
+```
 
-.. note::
-   When a powerfail has been signalled and not yet recovered, the LED
-   backend ignores state changes and error events. It will re-enable
-   itself on the next event after ``on_powerfail(recover=1)``.
+:::{note}
+When a powerfail has been signalled and not yet recovered, the LED
+backend ignores state changes and error events. It will re-enable
+itself on the next event after `on_powerfail(recover=1)`.
+:::
 
-.. _buzzer-patterns:
+(buzzer-patterns)=
 
-Buzzer Patterns
-~~~~~~~~~~~~~~~
+### Buzzer Patterns
 
 The buzzer backend drives a passive PWM buzzer on the
-``auxspace_buzzer`` chosen node. Every state transition first stops any
+`auxspace_buzzer` chosen node. Every state transition first stops any
 currently playing melody before issuing the new pattern.
 
+```{eval-rst}
 .. list-table::
    :header-rows: 1
    :widths: 30 35 35
@@ -178,15 +178,17 @@ currently playing melody before issuing the new pattern.
    * - Powerfail
      - *(not handled)*
      - The buzzer backend does not implement ``on_powerfail``.
+```
 
-.. note::
-   The ``LANDED`` melody is a looping recovery beacon and is the only
-   pattern that runs asynchronously; it is stopped automatically on the
-   next state transition.
+:::{note}
+The `LANDED` melody is a looping recovery beacon and is the only
+pattern that runs asynchronously; it is stopped automatically on the
+next state transition.
+:::
 
-Quick Reference
-~~~~~~~~~~~~~~~
+### Quick Reference
 
+```{eval-rst}
 .. list-table::
    :header-rows: 1
    :widths: 20 40 40
@@ -221,12 +223,12 @@ Quick Reference
    * - ``ERROR``
      - Solid ON
      - 3 × 4000 Hz · 100 ms beeps
+```
 
-Threading and Queueing
-----------------------
+## Threading and Queueing
 
-The notification dispatcher (:c:func:`notify_state_change`,
-:c:func:`notify_error`, ...) runs synchronously in the caller's
+The notification dispatcher ({c:func}`notify_state_change`,
+{c:func}`notify_error`, ...) runs synchronously in the caller's
 thread — it fans out to each backend inline. Individual backends may
 choose to offload their work to avoid blocking flight-critical
 threads.
@@ -238,16 +240,17 @@ FIFO event queue:
   enqueue an event), so blocking tone sequences (up to ~600 ms for
   the error pattern) never stall the 10 Hz state machine.
 - Events are played in FIFO order. Important sequencing — notably
-  stopping the ``LANDED`` melody before a new tone — is preserved
-  because the worker thread runs ``pwm_melody_stop`` and the
+  stopping the `LANDED` melody before a new tone — is preserved
+  because the worker thread runs `pwm_melody_stop` and the
   subsequent tone in one dequeued step.
 - When the queue is full, new events are dropped with a
-  ``LOG_WRN``. This gives natural back-pressure: the worker drains
+  `LOG_WRN`. This gives natural back-pressure: the worker drains
   at the speed of its tone sequences, and bursty producers cannot
   unboundedly queue up noise.
 
-Tunables (under ``AURORA_NOTIFY_BUZZER``):
+Tunables (under `AURORA_NOTIFY_BUZZER`):
 
+```{eval-rst}
 .. list-table::
    :header-rows: 1
    :widths: 50 20 30
@@ -265,14 +268,15 @@ Tunables (under ``AURORA_NOTIFY_BUZZER``):
      - 10
      - Worker thread priority. Keep numerically above flight
        threads (priority 5) so notifications never preempt them.
+```
 
 **LED backend** does not need a dedicated thread: blinking is
-delegated to Zephyr's ``pwm-leds`` driver (software timer), and the
+delegated to Zephyr's `pwm-leds` driver (software timer), and the
 remaining inline sleeps are short (≤ 500 ms at boot, 50 ms on
 calibration) and occur outside the flight hot path.
 
-API Reference
--------------
+## API Reference
 
-.. doxygengroup:: lib_notify
+```{doxygengroup} lib_notify
    :content-only:
+```
