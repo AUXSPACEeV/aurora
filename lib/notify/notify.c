@@ -78,6 +78,29 @@ int notify_state_change(enum sm_state prev, enum sm_state next)
 	return rc;
 }
 
+int notify_calibration_start(void)
+{
+	int rc = 0;
+
+	STRUCT_SECTION_FOREACH(notify_backend, backend) {
+		if (!backend->api) {
+			LOG_ERR("Backend with NULL api pointer: %p", backend);
+			continue;
+		}
+		if (backend->api->on_calibration_start) {
+			int ret = backend->api->on_calibration_start();
+
+			if (ret) {
+				LOG_ERR("notify on_calibration_start failed (%d)", ret);
+				if (!rc) {
+					rc = ret;
+				}
+			}
+		}
+	}
+	return rc;
+}
+
 int notify_calibration_complete(void)
 {
 	int rc = 0;

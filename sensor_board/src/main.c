@@ -310,10 +310,12 @@ int state_machine_error_handler(enum sm_error_reason reason, void *args)
  * @param[out]    acceleration        Pointer where the scalar acceleration magnitude is stored.
  * @param[out]    accel_vert          Pointer where the earth-frame vertical acceleration is stored.
  * @param[out]    imu_ready           Pointer set to true once fresh orientation and acceleration are available.
+ * @param[in,out] calibration_started_notified Pointer tracking whether the user has been notified of the start.
  * @param[in,out] calibration_notified Pointer tracking whether the user has been notified of completion.
  */
 static void handle_imu(int64_t *last_imu_ns, struct attitude *attitude_state, struct imu_data *imu_data,
-	double orientation[3], double *acceleration, double *accel_vert, bool *imu_ready, bool *calibration_notified)
+	double orientation[3], double *acceleration, double *accel_vert, bool *imu_ready,
+	bool *calibration_started_notified, bool *calibration_notified)
 {
 	int64_t now_ns = (k_uptime_ticks() * NSEC_PER_SEC) / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
 	/* Delta-time since the last sample, clamped to a sane range; 0.0 on the
@@ -346,6 +348,13 @@ static void handle_imu(int64_t *last_imu_ns, struct attitude *attitude_state, st
 	if (!attitude_is_calibrated(attitude_state)) {
 		if (sm_get_state() == SM_IDLE) {
 			attitude_calibrate_sample(attitude_state, accel_b, gyro_b);
+#if defined(CONFIG_AURORA_NOTIFY)
+			if (!(*calibration_started_notified) &&
+			    attitude_state->cal_samples > 0) {
+				notify_calibration_start();
+				*calibration_started_notified = true;
+			}
+#endif /* CONFIG_AURORA_NOTIFY */
 			if (attitude_calibrate_converged(attitude_state)) {
 				if (attitude_calibrate_finish(attitude_state) == 0) {
 #if defined(CONFIG_AURORA_NOTIFY)
@@ -430,7 +439,8 @@ static void handle_pyro(enum sm_state state, enum sm_state *pyro_state, const st
 }
 
 static void handle_state_transition(enum sm_state prev_state, enum sm_state state, struct attitude *attitude_state,
-	int64_t *last_imu_ns, bool *calibration_notified, double orientation[3])
+	int64_t *last_imu_ns, bool *calibration_started_notified, bool *calibration_notified,
+	double orientation[3])
 {
 #if defined(CONFIG_AURORA_FAKE_SENSORS)
 	__ASSERT(is_valid_transition(prev_state, state),
@@ -448,6 +458,7 @@ static void handle_state_transition(enum sm_state prev_state, enum sm_state stat
 	if (state == SM_IDLE) {
 		attitude_init(attitude_state);
 		*last_imu_ns = 0;
+		*calibration_started_notified = false;
 		*calibration_notified = false;
 		orientation[2] = 0.0;
 	}
@@ -496,6 +507,7 @@ void state_machine_task(void *, void *, void *)
 #if defined(CONFIG_IMU)
 	static struct attitude attitude_state;
 	int64_t last_imu_ns = 0;
+	bool calibration_started_notified = false;
 	bool calibration_notified = false;
 
 	attitude_init(&attitude_state);
@@ -541,6 +553,7 @@ void state_machine_task(void *, void *, void *)
 					&acceleration,
 					&accel_vert,
 					&imu_ready,
+					&calibration_started_notified,
 					&calibration_notified);
 				log_imu_data(&msg_buf.imu);
 #endif
@@ -600,10 +613,11 @@ void state_machine_task(void *, void *, void *)
 				state,
 				&attitude_state,
 				&last_imu_ns,
+				&calibration_started_notified,
 				&calibration_notified,
 				orientation);
 #else
-			handle_state_transition(prev_state, state, NULL, NULL, NULL, orientation);
+			handle_state_transition(prev_state, state, NULL, NULL, NULL, NULL, orientation);
 #endif
 			prev_state = state;
 		}
