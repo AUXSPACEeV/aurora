@@ -18,7 +18,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/zbus/zbus.h>
 
-#include <app_version.h>
+#include <zephyr/app_version.h>
 
 #if defined(CONFIG_IMU)
 #include <aurora/lib/attitude.h>

@@ -244,7 +244,7 @@ __ASSERT_NO_MSG(DEVICE_API_IS(pyro, dev));
 return DEVICE_API_GET(pyro, dev)->get_nchannels(dev);
 }
 
-#include <syscalls/pyro.h>
+#include <zephyr/syscalls/pyro.h>
 
 /** @} */
 
