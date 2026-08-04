@@ -11,7 +11,8 @@ Backends
 --------
 
 - **PWM Buzzer** (``CONFIG_AURORA_NOTIFY_BUZZER``): drives a passive
-  buzzer via PWM to signal boot, state changes, and errors. Runs on
+  buzzer via PWM to signal boot, calibration start/completion, state
+  changes, and errors. Runs on
   a dedicated worker thread so that the blocking tone sequences do
   not stall the caller (typically the state-machine task).
   See `Buzzer Patterns`_ and `Threading and Queueing`_.
@@ -41,6 +42,10 @@ to every event.
      - When it fires
    * - ``on_boot``
      - Once at system startup, after backends are initialised.
+   * - ``on_calibration_start``
+     - IMU calibration has begun accumulating a stationary window. Raised
+       once per calibration cycle, not on the internal restarts the
+       attitude tracker performs whenever it detects motion.
    * - ``on_calibration_complete``
      - IMU calibration has finished and the rocket is ready for arming.
    * - ``on_state_change``
@@ -69,6 +74,10 @@ node in lockstep (same pattern on all LEDs). Brightness is 100%
    * - Boot
      - Solid ON for 500 ms, then OFF
      - System powered up and notification stack initialised.
+   * - Calibration started
+     - *(not handled)*
+     - The LED backend does not implement ``on_calibration_start``; the
+       ``IDLE`` blink already covers this phase. Use the buzzer cue.
    * - Calibration complete
      - Single 50 ms flash
      - IMU calibration finished, rocket ready to arm.
@@ -122,6 +131,16 @@ currently playing melody before issuing the new pattern.
    * - Boot
      - 4000 Hz tone for 500 ms
      - System powered up.
+   * - Calibration started
+     - Two 1000 Hz beeps of 100 ms, separated by a 100 ms gap
+     - The stationary IMU calibration window has begun accumulating
+       (during ``IDLE``). Same pitch as the "Calibration complete" tone
+       below so both read as "calibration" by ear, with the rhythm
+       distinguishing them (two short = started, one long = done);
+       deliberately low against the 4000 Hz boot jingle that precedes it
+       in the normal power-on flow. Fires once per calibration cycle —
+       the window restarts the attitude tracker performs on motion are
+       silent.
    * - Calibration complete
      - 1000 Hz tone for 500 ms
      - IMU calibration finished (runs in the background during ``IDLE``),

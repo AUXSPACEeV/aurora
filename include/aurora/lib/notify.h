@@ -36,6 +36,9 @@ struct notify_backend_api {
 	/** @brief Signal a flight state-machine transition. */
 	int (*on_state_change)(enum sm_state prev, enum sm_state next);
 
+	/** @brief Signal that IMU calibration has started. */
+	int (*on_calibration_start)(void);
+
 	/** @brief Signal that IMU calibration has finished and the rocket
 	 *         is ready to launch.
 	 */
@@ -95,6 +98,19 @@ int notify_boot(void);
  * @retval 0 on success, or first non-zero return from a backend.
  */
 int notify_state_change(enum sm_state prev, enum sm_state next);
+
+/**
+ * @brief Notify all backends that IMU calibration has started.
+ *
+ * Calibration runs in the background while the state machine is in
+ * @c SM_IDLE.  The application is expected to raise this once per
+ * calibration cycle, when the stationary window actually starts
+ * accumulating — not on every internal restart the tracker performs
+ * when it detects motion.
+ *
+ * @retval 0 on success, or first non-zero return from a backend.
+ */
+int notify_calibration_start(void);
 
 /**
  * @brief Notify all backends that IMU calibration has completed and the

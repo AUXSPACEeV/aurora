@@ -29,6 +29,15 @@ conditions (LED in a noisy crowd, buzzer once the rocket is out of sight).
 
 - **Boot sound**: short jingle the moment the board is powered on. If you
   don't hear this, the board is not running.
+- **Calibration started beeps**: two short, low beeps once the board
+  begins its stationary IMU calibration window (it runs in the background
+  during ``IDLE``, so this normally follows shortly after the boot sound,
+  as soon as the rocket is standing still). Same pitch as the completion
+  tone below, so both read as "calibration"; the rhythm tells them apart
+  (two short = started, one long = done). You only hear this **once per
+  ``IDLE`` cycle**: if the board restarts its window because you bumped
+  the rail, it does *not* beep again. Hearing it a second time means the
+  board went back to ``IDLE`` (e.g. it disarmed).
 - **Calibration complete tone**: a single confirmation tone once IMU bias calibration finishes (it runs in the background during ``IDLE``).
   Pyros are **not** yet live until the ``ARMED`` beep below.
 - **Calibration-finished tone, then arming beep**: once calibration
@@ -45,10 +54,10 @@ conditions (LED in a noisy crowd, buzzer once the rocket is out of sight).
   jingle and confirms the board has come up.
 - **IDLE**: short, sparse pulses (about twice a second). The rocket is
   disarmed and safe to handle.
-- **(No separate CALIBRATING state)**: IMU bias calibration runs in the background while the board remains in ``IDLE``; pyros are **not** yet live.
-- **ARMED**: even, steady blink (slower than ``CALIBRATING``). Calibration
-  is done and pyros are live. If you see this from the launchpad walk-back,
-  the board is ready.
+- **(No separate CALIBRATING state)**: IMU bias calibration runs in the background while the board remains in ``IDLE``; pyros are **not** yet live. The LED keeps the ``IDLE`` pattern throughout, so the calibration cues are on the buzzer only.
+- **ARMED**: even, steady blink (long ON time, unlike the sparse ``IDLE``
+  pulse). Calibration is done and pyros are live. If you see this from the
+  launchpad walk-back, the board is ready.
 - **In-flight (BOOST through REDUNDANT)**: LED stays dark. This is
   intentional. It saves battery and avoids optical noise during flight.
 - **LANDED**: long pulses (mostly ON, brief OFF). Pairs with the landed song
@@ -83,12 +92,17 @@ Check the board's own page under {doc}`/boards/index` for the physical detail.
 3. **Power on.** You should hear the boot sound and see the LED flash solid
    for about half a second, then drop into the slow IDLE blink. The board is
    now running but is still in the IDLE state. It will not react to motion yet.
+   Once the rocket is standing still you will hear the two short
+   calibration-started beeps: the board has begun its stationary
+   calibration window. It runs in the background during ``IDLE``, so this
+   happens whether or not you have armed yet.
 4. **Connect the igniters.** Only do this with the board powered on but
    still disarmed, following your range's safety procedure.
 5. **Arm the board.** Trigger the arming mechanism (the exact action is
-   board-specific). The board moves into the ``CALIBRATING`` state (fast
-   LED blink) and plays the calibration-started beep. Pyros are not yet
-   live in this state.
+   board-specific). The board stays in ``IDLE`` until calibration has
+   finished, so pyros are not yet live at this point. If you already heard
+   the calibration-finished tone in step 3, arming moves it to ``ARMED``
+   right away.
 6. **Hold still.** Don't bump the rail, don't walk into the rocket, don't
    re-aim. If the board detects motion during calibration (still ``IDLE``) it discards
    the in-progress window and restarts automatically from the next still

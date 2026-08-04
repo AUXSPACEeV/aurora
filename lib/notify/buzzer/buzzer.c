@@ -4,8 +4,8 @@
  *
  * Drives the board's PWM-backed passive buzzer (via @c auxspace_buzzer chosen
  * node) to indicate boot, flight state-machine transitions, calibration
- * completion and error.  Registered at link time as a @ref notify_backend via
- * @ref NOTIFY_BACKEND_DEFINE.
+ * start/completion and error.  Registered at link time as a @ref notify_backend
+ * via @ref NOTIFY_BACKEND_DEFINE.
  *
  * All tone sequences are blocking (they interleave @c pwm_set_dt with
  * @c k_sleep); to keep them off the caller's thread (typically the state
@@ -47,6 +47,7 @@ PWM_MELODY_CTX_DEFINE(melody_ctx, &buzzer, astronomia, 1024);
 enum buzzer_evt_type {
 	BUZZER_EVT_BOOT,
 	BUZZER_EVT_STATE_CHANGE,
+	BUZZER_EVT_CALIBRATION_START,
 	BUZZER_EVT_CALIBRATION_COMPLETE,
 	BUZZER_EVT_ERROR,
 };
@@ -79,6 +80,17 @@ static int buzz(uint32_t period_ns, uint32_t duration_ms)
 static void play_boot(void)
 {
 	(void)buzz(PWM_HZ(4000), 500);
+}
+
+static void play_calibration_start(void)
+{
+	/* Two short low beeps: stationary calibration window has begun. */
+	for (int i = 0; i < 2; i++) {
+		if (buzz(PWM_HZ(1000), 100)) {
+			return;
+		}
+		k_sleep(K_MSEC(100));
+	}
 }
 
 static void play_calibration_complete(void)
@@ -149,6 +161,9 @@ static void buzzer_thread_fn(void *a, void *b, void *c)
 		case BUZZER_EVT_STATE_CHANGE:
 			play_state_change(evt.next_state);
 			break;
+		case BUZZER_EVT_CALIBRATION_START:
+			play_calibration_start();
+			break;
 		case BUZZER_EVT_CALIBRATION_COMPLETE:
 			play_calibration_complete();
 			break;
@@ -212,6 +227,13 @@ static int buzzer_on_error(void)
 	return enqueue(&evt);
 }
 
+static int buzzer_on_calibration_start(void)
+{
+	const struct buzzer_evt evt = { .type = BUZZER_EVT_CALIBRATION_START };
+
+	return enqueue(&evt);
+}
+
 static int buzzer_on_calibration_complete(void)
 {
 	const struct buzzer_evt evt = { .type = BUZZER_EVT_CALIBRATION_COMPLETE };
@@ -223,6 +245,7 @@ static const struct notify_backend_api buzzer_api = {
 	.init = buzzer_init,
 	.on_boot = buzzer_on_boot,
 	.on_state_change = buzzer_on_state_change,
+	.on_calibration_start = buzzer_on_calibration_start,
 	.on_calibration_complete = buzzer_on_calibration_complete,
 	.on_error = buzzer_on_error,
 };
