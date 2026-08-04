@@ -1,24 +1,24 @@
-State Machine
-=============
+# State Machine
 
 The state machine library provides a generic interface for initializing,
 updating, and querying the flight state.
 As almost everything else in AURORA, it features a dynamic selection of state
-machine types via Kconfig ``CONFIG_AURORA_STATE_MACHINE_TYPE``.
+machine types via Kconfig `CONFIG_AURORA_STATE_MACHINE_TYPE`.
 Currently only the simple state machine is implemented and it uses the
 following flight sequence:
 
-Simple State Machine
---------------------
+## Simple State Machine
 
 The simple state machine
 implementation defines a 9-state flight sequence driven by sensor thresholds.
 
-.. _simple-state-machine-diagram:
+(simple-state-machine-diagram)=
 
-.. image:: /img/aurora_simple_state_machine.drawio.svg
-   :alt: states
+```{image} /img/aurora_simple_state_machine.drawio.svg
+:alt: states
+```
 
+```{eval-rst}
 .. list-table:: Signals
    :header-rows: 1
    :widths: auto
@@ -29,7 +29,9 @@ implementation defines a 9-state flight sequence driven by sensor thresholds.
      - *ARM* signal from extern. Arms the pyro channels as well
    * - DISARM
      - *DISARM* signal from extern. Disarms the pyro channels as well
+```
 
+```{eval-rst}
 .. list-table:: Sensor Readings
    :header-rows: 1
    :widths: auto
@@ -46,7 +48,9 @@ implementation defines a 9-state flight sequence driven by sensor thresholds.
      - Altitude needed to go from APOGEE to MAIN
    * - T\ :sub:`L`
      - Velocity needed to signal LANDED
+```
 
+```{eval-rst}
 .. list-table:: Timers
    :header-rows: 1
    :widths: auto
@@ -57,7 +61,9 @@ implementation defines a 9-state flight sequence driven by sensor thresholds.
      - Time that T_AB and T_H shall be asserted for
    * - DT\ :sub:`L`
      - Time that T_L shall be asserted
+```
 
+```{eval-rst}
 .. list-table:: Timeouts
    :header-rows: 1
    :widths: auto
@@ -68,17 +74,18 @@ implementation defines a 9-state flight sequence driven by sensor thresholds.
      - Timeout for APOGEE state
    * - TO\ :sub:`R`
      - Timeout for REDUNDANT state
+```
 
 State transitions are also driven by sensor thresholds configured via Kconfig
 (boost acceleration, main descent height, apogee timeout, etc.).
 
-Shell Commands
---------------
+## Shell Commands
 
-Enabling ``CONFIG_AURORA_STATE_MACHINE_SHELL`` registers the
-``state_machine`` command group. Audit-log commands are only available when
-``CONFIG_AURORA_STATE_MACHINE_AUDIT`` is also enabled.
+Enabling `CONFIG_AURORA_STATE_MACHINE_SHELL` registers the
+`state_machine` command group. Audit-log commands are only available when
+`CONFIG_AURORA_STATE_MACHINE_AUDIT` is also enabled.
 
+```{eval-rst}
 .. list-table::
    :header-rows: 1
    :widths: auto
@@ -99,16 +106,18 @@ Enabling ``CONFIG_AURORA_STATE_MACHINE_SHELL`` registers the
    * - ``state_machine audit_clear``
      - Clear the audit log.
        Requires ``CONFIG_AURORA_STATE_MACHINE_AUDIT``.
+```
 
-Valid state names for ``transition`` are ``IDLE``, ``ARMED``, ``BOOST``,
-``BURNOUT``, ``APOGEE``, ``MAIN``, ``REDUNDANT``, ``LANDED`` and ``ERROR``.
+Valid state names for `transition` are `IDLE`, `ARMED`, `BOOST`,
+`BURNOUT`, `APOGEE`, `MAIN`, `REDUNDANT`, `LANDED` and `ERROR`.
 
-.. warning::
-   ``state_machine transition`` bypasses normal flight logic and resets the
-   machine. Do not use in flight.
+:::{warning}
+`state_machine transition` bypasses normal flight logic and resets the
+machine. Do not use in flight.
+:::
 
-API Reference
--------------
+## API Reference
 
-.. doxygengroup:: lib_state
+```{doxygengroup} lib_state
    :content-only:
+```
