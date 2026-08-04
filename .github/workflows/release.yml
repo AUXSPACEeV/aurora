@@ -56,6 +56,10 @@ jobs:
           toolchains: ${{ matrix.toolchain }}
           ccache-cache-key: ubuntu-22.04-release-${{ matrix.artifact }}
 
+      - name: Fetch West Blobs
+        run: |
+          west blobs fetch
+
       - name: Build firmware
         working-directory: aurora
         shell: bash
