@@ -33,7 +33,7 @@ sys.path.insert(0, str(_ZEPHYR_BASE / "scripts" / "dts" / "python-devicetree" / 
 project = 'AURORA'
 copyright = '2025-2026, Auxspace e.V.'
 author = 'Auxspace e.V.'
-release = '1.6.0'  # documentation version, NOT project version!
+release = '1.6.1'  # documentation version, NOT project version!
 
 try:
     git_tag = subprocess.check_output(
@@ -269,10 +269,6 @@ def _add_aurora_github_url(app, pagename, templatename, context, doctree):
 # which fails for Aurora's own boards that live outside the Zephyr tree.
 # Patch it to return a srcdir-relative path via the doc/boards/ symlink instead.
 import gen_boards_catalog as _gbc
-# As of Zephyr's board-catalog refactor, the twister/EDT gathering constants and
-# logic moved out of gen_boards_catalog into scripts/ci/gen_catalogs.py.
-# gen_boards_catalog inserts scripts/ci into sys.path on import, so this works.
-import gen_catalogs as _gcat
 
 _AURORA_BOARDS = _WORKSPACE / "aurora" / "boards"
 _orig_guess_image = _gbc.guess_image
@@ -301,43 +297,6 @@ def _guess_image_safe(board_or_shield):
             return None
 
 _gbc.guess_image = _guess_image_safe
-
-# run_twister_cmake_only builds its own minimal_env that intentionally strips
-# BOARD_ROOT, so Aurora's boards (which live outside ZEPHYR_BASE) are invisible
-# to twister.  Patch the function to inject --board-root via the CLI instead.
-def _run_twister_with_aurora_boards(outdir, vendor_filter):
-    import subprocess as _sp
-    twister_cmd = [
-        __import__("sys").executable,
-        f"{_gbc.ZEPHYR_BASE}/scripts/twister",
-        "-T", "samples/hello_world/",
-        "-M",
-        "--board-root", str(_AURORA_BOARDS.parent),  # aurora/boards/
-        *[arg for path in _gcat.EDT_PICKLE_PATHS for arg in ("--keep-artifacts", path)],
-        *[arg for path in _gcat.RUNNERS_YAML_PATHS for arg in ("--keep-artifacts", path)],
-        "--cmake-only",
-        "-v",
-        "--outdir", str(outdir),
-    ]
-    if vendor_filter:
-        for vendor in vendor_filter:
-            twister_cmd += ["--vendor", vendor]
-    else:
-        twister_cmd += ["--all"]
-    minimal_env = {
-        "PATH": __import__("os").environ.get("PATH", ""),
-        "ZEPHYR_BASE": str(_gbc.ZEPHYR_BASE),
-        "HOME": __import__("os").environ.get("HOME", ""),
-        "PYTHONPATH": __import__("os").environ.get("PYTHONPATH", ""),
-    }
-    try:
-        _sp.run(twister_cmd, check=True, cwd=_gbc.ZEPHYR_BASE, env=minimal_env)
-    except _sp.CalledProcessError as e:
-        _logger.warning(
-            "Failed to run Twister, list of hw features might be incomplete.\n%s", e
-        )
-
-_gbc.run_twister_cmake_only = _run_twister_with_aurora_boards
 
 # gen_boards_catalog.get_catalog only loads Zephyr's vendor-prefixes.txt into its
 # VndLookup, so Aurora's custom vendor prefix (auxspaceev) is unknown and the board
@@ -578,6 +537,11 @@ def setup(app):
 # (e.g. sensor_board_v2_rp2040.yaml), which uses the vendor prefix "auxspaceev".
 zephyr_generate_hw_features = True
 zephyr_hw_features_vendor_filter = ["auxspaceev"]
+# The twister pass runs with a minimal env that intentionally strips BOARD_ROOT,
+# so Aurora's boards (which live outside ZEPHYR_BASE) would be invisible to it.
+# Pass the board root on the command line instead.  _AURORA_BOARDS.parent is the
+# aurora repo root, i.e. the directory *containing* boards/.
+zephyr_hw_features_twister_extra_flags = ["--board-root", str(_AURORA_BOARDS.parent)]
 
 # -- Options for zephyr.link-roles -------------------------------------------
 # The zephyr_file role (used by board-supported-hw count indicators) needs to
