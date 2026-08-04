@@ -390,6 +390,33 @@ enum sm_type sm_get_type(void)
 	return SM_TYPE_SIMPLE;
 }
 
+/* sm_inflight - see state.h */
+bool sm_inflight(void)
+{
+	switch (sm_get_state()) {
+	case SM_BOOST:
+	case SM_BURNOUT:
+	case SM_APOGEE:
+	case SM_MAIN:
+	case SM_REDUNDANT:
+		return true;
+
+	case SM_IDLE:
+	case SM_ARMED:
+	case SM_LANDED:
+	case SM_ERROR:
+		/* IDLE/ARMED are pre-liftoff and LANDED is post-touchdown.
+		 * SM_ERROR is reported as not in flight: an in-flight abort
+		 * (apogee/redundant timeout) is expected to recover to IDLE,
+		 * so a machine sitting in SM_ERROR is held there by a
+		 * pre-flight interlock.
+		 */
+		return false;
+	}
+
+	return false;
+}
+
 /* sm_state_str – see simple.h */
 const char *sm_state_str(enum sm_state state)
 {

@@ -32,6 +32,8 @@
 #endif /* CONFIG_SIMPLE_STATE */
 #undef AURORA_STATE_BACKEND_INTERNAL
 
+#include <stdbool.h>
+
 /*-----------------------------------------------------------
  * State machine type
  *----------------------------------------------------------*/
@@ -142,6 +144,16 @@ void sm_update(const struct sm_inputs *inputs);
  * (usually an enum implementation in state implementation).
  */
 enum sm_state sm_get_state(void);
+
+/**
+ * @brief Return if the state machine is in flight.
+ *
+ * True from liftoff detection until touchdown.  The pre-liftoff states,
+ * the landed state and @c SM_ERROR all report false.
+ *
+ * @return True if it is in flight, false if it's on the pad.
+ */
+bool sm_inflight(void);
 
 /**
  * @brief Identify which state machine implementation is active.
