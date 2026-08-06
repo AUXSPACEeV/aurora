@@ -62,7 +62,6 @@ BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_pyro), okay),
 
 #if defined(CONFIG_AURORA_STATE_MACHINE)
 #include <aurora/lib/state/state.h>
-static int armed = 0;
 
 /** @brief Flight state machine thresholds loaded from Kconfig. */
 static const struct sm_thresholds state_cfg = {
@@ -97,22 +96,6 @@ ZBUS_CHAN_ADD_OBS(imu_data_chan, sm_sub, 1);
 #if defined (CONFIG_BARO)
 ZBUS_CHAN_ADD_OBS(baro_data_chan, sm_sub, 1);
 #endif
-
-#if defined(CONFIG_AURORA_POWERFAIL)
-static void powerfail_assert(void)
-{
-#if defined(CONFIG_AURORA_STATE_MACHINE)
-	armed = 0;
-#endif /* CONFIG_AURORA_STATE_MACHINE */
-}
-
-static void powerfail_deassert(void)
-{
-#if defined(CONFIG_AURORA_STATE_MACHINE)
-	armed = 1;
-#endif /* CONFIG_AURORA_STATE_MACHINE */
-}
-#endif /* CONFIG_AURORA_POWERFAIL */
 
 bool baro_active = false; /**< True once the barometer thread has initialized. */
 bool imu_active = false;  /**< True once the IMU thread has initialized. */
@@ -499,7 +482,7 @@ void state_machine_task(void *, void *, void *)
 	};
 
 	struct sm_inputs inputs = {
-		.armed = armed,
+		.armed = 1,
 		.acceleration = acceleration,
 		.accel_vert = accel_vert,
 	};
@@ -588,7 +571,7 @@ void state_machine_task(void *, void *, void *)
 #endif /* CONFIG_IMU */
 
 		inputs = (struct sm_inputs){
-			.armed = armed,
+			.armed = 1,
 			.log_ready = log_flight_log_online(),
 			.calibrated = calibrated,
 			.acceleration = acceleration,
@@ -647,17 +630,22 @@ int main(void)
 {
 	LOG_INF("Auxspace AURORA %s", APP_VERSION_STRING);
 
-#if defined(CONFIG_AURORA_POWERFAIL)
-	powerfail_setup(&powerfail_assert, &powerfail_deassert);
-#else
-	/* No powerfail module → assume always armed */
-	armed = 1;
-#endif /* CONFIG_AURORA_POWERFAIL */
-
 #if defined(CONFIG_AURORA_NOTIFY)
 	notify_init();
 	notify_boot();
 #endif /* CONFIG_AURORA_NOTIFY */
+
+#if defined(CONFIG_AURORA_POWERFAIL)
+	/* Samples its input during setup and can raise a notification straight
+	 * away, so it comes up behind the indicators.
+	 *
+	 * No app-level hooks: the library already stops the data loggers and
+	 * raises the notification. The flight state machine deliberately keeps
+	 * running - a sagging pack must not safe the recovery charges
+	 * mid-flight.
+	 */
+	(void)powerfail_setup(NULL, NULL);
+#endif /* CONFIG_AURORA_POWERFAIL */
 
 #if defined(CONFIG_AURORA_TELEMETRY)
 	(void)telemetry_init();

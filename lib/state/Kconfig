@@ -27,6 +27,27 @@ config SIMPLE_STATE
 
 endchoice
 
+config AURORA_STATE_MACHINE_RBF
+	bool "Remove-before-flight arm input"
+	depends on GPIO
+	help
+	  Take the arm signal from the mechanical safety interlock -
+	  streamer, key or shorting plug - on the GPIO selected by the
+	  auxspace,rbf dt chosen node, instead of from the application.
+	  The line is asserted while the interlock is installed (safe); the
+	  vehicle counts as armed once it is pulled.  When enabled, the pin
+	  overrides sm_inputs.armed on every update.
+
+config AURORA_STATE_MACHINE_RBF_DEBOUNCE_MS
+	int "RBF input debounce window (ms)"
+	default 50
+	range 0 5000
+	depends on AURORA_STATE_MACHINE_RBF
+	help
+	  Time the RBF contact has to stay quiet before a change is taken as
+	  real.  Every edge restarts the window, so a chattering plug cannot
+	  arm and disarm the machine repeatedly.
+
 config AURORA_STATE_MACHINE_AUDIT
 	bool "State machine audit log"
 	default y if AURORA_STATE_MACHINE && CONFIG_FILE_SYSTEM

@@ -319,9 +319,11 @@ case of the sensors).
 | **Flight-log raw region** | `auxspace,flight-log-disk` | A reserved raw region on the same storage device used by the data logger for high-rate writes. Needs ≥7 GiB (see the storage-access pattern caveats). |
 | **Pyro driver** | `auxspace,pyro` | At least two pyro channels (drogue/main) plus a redundant channel if you want the `REDUNDANT` state to do anything. |
 | **Battery** | - | Sized for at least the longest realistic flight + recovery window. The `LANDED` recovery beacon will keep the buzzer playing until the battery is empty or the board is powered off. |
+| **Battery sense (optional)** | `auxspace,vbat` | A divider on the pack, read as a `SENSOR_CHAN_VOLTAGE` sensor and logged as telemetry every 500 ms. Optional - without it you fly blind on remaining charge. Note this is *not* a powerfail trigger: an ADC cannot interrupt on a threshold, see below. |
 | **PWM buzzer (optional)** | `auxspace,buzzer` | Passive buzzer driven via PWM. Used for boot, calibration, state-change and recovery cues. Optional - board still flies without it, but you lose the auditory cues. |
 | **Status LED(s) (optional)** | `auxspace,led` | One or more LEDs as children of a `pwm-leds` node. Driven in lockstep. Optional - board still flies without it, but you lose the visual cues. |
-| **Arm/disarm input (optional)** | `auxspace,pfm` | A GPIO-backed switch, button or magnetic key that asserts the ARM signal. Mechanism is up to the board: the application only sees an edge. Optional - not implementing this feature might cause problems when the board is only armed and disarmed via orientation. |
+| **Arm/disarm input (optional)** | `auxspace,rbf` | The remove-before-flight interlock: a GPIO-backed switch or magnetic key, asserted while it is installed (safe) and released to arm. Read directly by the {doc}`state machine <../lib/state>` when `CONFIG_AURORA_STATE_MACHINE_RBF` is set. Optional - not implementing this feature might cause problems when the board is only armed and disarmed via orientation. |
+| **Power-fail monitor (optional)** | `auxspace,pfm` | A supply supervisor or comparator whose output is asserted while the rail is collapsing. Drives the {doc}`powerfail mitigation <../lib/powerfail>`, which closes out the flight log before power is gone. Optional - without it the storage card is unprotected against a sudden powerloss. |
 | **Fieldbus (optional)** | - | CAN, {math}`I^2C` or similar, if the board is part of a multi-PCB AURORA stack. Not required for a standalone flight. |
 
 ```{warning}

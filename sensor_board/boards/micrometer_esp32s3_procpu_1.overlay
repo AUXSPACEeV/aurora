@@ -9,7 +9,10 @@
 	chosen {
 		/* Auxspace specific */
 		auxspace,baro = &lps22hh0;
-		auxspace,pfm = &button0;
+		/* no dedicated RBF connector.
+		 * The BOOT button stands in for the plug (shorted = safe).
+		 */
+		auxspace,rbf = &button0;
 	};
 };
 
