@@ -82,19 +82,8 @@ static int running_timers[NUM_TIMERS] = {0}; /**< Per-timer running flag. */
  */
 #define TIMER_EXPIRED(tmr) (k_timer_status_get(tmr) > 0)
 
-/**
- * @brief Elevation of the configured up axis from horizontal (degrees).
- *
- * The orientation vector produced by imu_sensor_value_to_orientation()
- * already accounts for @c CONFIG_IMU_UP_AXIS_* by remapping the body
- * "up" axis to local Z, so pitch and yaw alone are sufficient to
- * recover the up-axis tilt:
- *   gz/|g| = cos(pitch) * cos(yaw)
- *
- * @return Elevation in degrees, clamped to [-90, 90].  +90 = up axis
- *         points to the sky, 0 = horizontal, -90 = inverted.
- */
-static inline double sm_orientation_elevation_deg(const double orientation[3])
+/* sm_orientation_elevation_deg – see state_internal.h */
+double sm_orientation_elevation_deg(const double orientation[3])
 {
 	const double deg2rad = M_PI / 180.0;
 	double s = cos(orientation[1] * deg2rad) * cos(orientation[0] * deg2rad);
@@ -143,6 +132,12 @@ void sm_backend_init(const struct sm_thresholds *cfg)
 {
 	th = *cfg;
 	init_timers();
+}
+
+/* sm_backend_get_thresholds – see state_internal.h */
+void sm_backend_get_thresholds(struct sm_thresholds *out)
+{
+	*out = th;
 }
 
 /* sm_backend_deinit – see state_internal.h */
