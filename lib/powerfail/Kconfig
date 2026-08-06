@@ -8,6 +8,8 @@ config AURORA_POWERFAIL
 	  When enabled, aurora will stop file i/o to protect memory cards and
 	  perform configured powerfail actions (e.g. shutdown).
 	  The GPIO trigger is configured in the auxspace,pfm dt chosen node.
+	  Needs a supply supervisor or comparator that asserts the line while
+	  power is failing; an ADC cannot raise an interrupt on a threshold.
 
 if AURORA_POWERFAIL
 

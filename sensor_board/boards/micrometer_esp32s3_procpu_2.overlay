@@ -9,7 +9,7 @@
 	chosen {
 		/* Auxspace specific */
 		auxspace,baro = &bmp581_0;
-		auxspace,pfm = &button1;
+		auxspace,rbf = &button1;
 		auxspace,vbat = &vbatt;
 		auxspace,disk-led = &sd_activity_led;
 	};

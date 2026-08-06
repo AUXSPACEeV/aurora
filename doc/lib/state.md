@@ -52,6 +52,60 @@ implementation defines a 9-state flight sequence driven by sensor thresholds.
 State transitions are also driven by sensor thresholds configured via Kconfig
 (boost acceleration, main descent height, apogee timeout, etc.).
 
+## Remove Before Flight
+
+The ARM/DISARM signal normally comes from the application, through
+`sm_inputs.armed`. Setting `CONFIG_AURORA_STATE_MACHINE_RBF` takes it from
+hardware instead: the state machine reads the mechanical safety lock (the key
+or shorting plug that is pulled off the rocket on the pad) and substitutes the
+pin for `armed` on every update. Whatever the application writes into that
+field is ignored, so software arming and the physical "is the streamer still
+in?" check can never disagree.
+
+The GPIO is selected by the `auxspace,rbf` chosen node and follows the usual
+"safe when made" convention:
+
+```devicetree
+/ {
+   chosen {
+      auxspace,rbf = &rbf_in;
+   };
+
+   buttons {
+      compatible = "gpio-keys";
+
+      rbf_in: rbf_in {
+         gpios = <&gpio1 6 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+         label = "RBF Button";
+      };
+   };
+}
+```
+
+| "Remove Before Flight"-Plug | Line | Vehicle |
+| --------------------------- | ---- | ------- |
+| installed | asserted | `SAFE`: machine held in `IDLE` |
+| removed | deasserted | `ARMED`: machine free to leave `IDLE` |
+
+Every edge restarts a debounce window
+(`CONFIG_AURORA_STATE_MACHINE_RBF_DEBOUNCE_MS`, default 50 ms) and the level is
+only sampled once the contact has been quiet for a full window, so a chattering
+plug cannot arm and disarm the machine repeatedly. Changes are recorded in the
+audit log.
+
+The level is also **not** latched during `sm_init()`, before the interrupt is
+enabled: a board that boots with the interlock already pulled never produces
+an edge and will sit disarmed forever waiting for one. If the pin
+cannot be brought up at all the interlock reports safe, holding the machine in
+`IDLE` rather than arming on an input it cannot read.
+
+```{note}
+This used to be done by pointing the {doc}`powerfail <powerfail>` subsystem at
+the RBF pin and treating "power failing" as "disarmed". That is no longer the
+case: powerfail watches the battery, the state machine watches the interlock,
+and the two are independent.
+```
+
 ## Shell Commands
 
 Enabling `CONFIG_AURORA_STATE_MACHINE_SHELL` registers the

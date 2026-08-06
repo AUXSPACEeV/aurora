@@ -163,6 +163,15 @@ void sm_init(const struct sm_thresholds *cfg,
 	}
 #endif /* CONFIG_FILTER */
 
+#if defined(CONFIG_AURORA_STATE_MACHINE_RBF)
+	if (sm_rbf_init() < 0) {
+		/* The interlock reports safe on failure, so the machine is
+		 * held in IDLE rather than arming on a pin it cannot read.
+		 */
+		LOG_ERR("RBF arm input unavailable, machine will not arm");
+	}
+#endif /* CONFIG_AURORA_STATE_MACHINE_RBF */
+
 	sm_backend_init(cfg);
 	current_state = SM_IDLE;
 	err_reason = SM_ERR_UNKNOWN;
@@ -192,32 +201,34 @@ void sm_deinit(void)
 void sm_update(const struct sm_inputs *inputs)
 {
 	static double previous_altitude = 0.0;
+	struct sm_inputs in = *inputs;
+
+#if defined(CONFIG_AURORA_STATE_MACHINE_RBF)
+	/* The mechanical interlock is the authority on arming: whatever the
+	 * caller put in .armed is overridden by the pin.
+	 */
+	in.armed = sm_rbf_armed() ? 1 : 0;
+#endif /* CONFIG_AURORA_STATE_MACHINE_RBF */
 
 #if defined(CONFIG_FILTER)
 	static uint64_t last_time_ns = 0;
-	struct sm_inputs filtered_inputs;
 
 	uint64_t current_time_ns = k_ticks_to_ns_floor64(k_uptime_ticks());
 
 	if (last_time_ns != 0) {
 		filter_predict(&filter, current_time_ns - last_time_ns,
-			       inputs->accel_vert);
-		filter_update(&filter, inputs->altitude);
+			       in.accel_vert);
+		filter_update(&filter, in.altitude);
 	}
 	last_time_ns = current_time_ns;
 
-	filtered_inputs = *inputs;
-	filtered_inputs.altitude = filter.state[0];
-	filtered_inputs.velocity = filter.state[1];
-
-	sm_backend_step(&filtered_inputs, previous_altitude);
-	previous_altitude = filtered_inputs.altitude;
-	last_inputs = filtered_inputs;
-#else
-	sm_backend_step(inputs, previous_altitude);
-	previous_altitude = inputs->altitude;
-	last_inputs = *inputs;
+	in.altitude = filter.state[0];
+	in.velocity = filter.state[1];
 #endif /* CONFIG_FILTER */
+
+	sm_backend_step(&in, previous_altitude);
+	previous_altitude = in.altitude;
+	last_inputs = in;
 }
 
 /* sm_update_force – see state.h */

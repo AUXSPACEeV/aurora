@@ -38,8 +38,9 @@ Revision 1 is the default, so the bare board name resolves to it.
 | `micrometer@2/esp32s3/procpu`   | v2  | updated sensors, dedicated ARM pin |
 
 Revision 2 additionally changes to native (4-bit) SDHC instead of the
-SPI-attached card, uses a faster and better barometer and adds a dedicated
-"Remove Before Flight" pin for launch-safety.
+SPI-attached card, uses a faster and better barometer, adds a dedicated
+"Remove Before Flight"-pin for launch-safety and a divider on the battery
+that feeds voltage telemetry.
 
 ## Supported Features
 

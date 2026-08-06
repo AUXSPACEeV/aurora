@@ -39,7 +39,10 @@ static const char *led_labels[] = {
 	DT_FOREACH_CHILD_SEP_VARGS(LED_PWM_NODE_ID, DT_PROP_OR, (,), label, NULL)
 };
 static const int num_leds = ARRAY_SIZE(led_labels);
-static int recovered = 0;
+/* The LEDs go dark for the duration of a powerfail. Boot is not a powerfail,
+ * so start in the recovered state.
+ */
+static int recovered = 1;
 
 /** @brief Blink with @p delay_on and @p delay_off in ms. */
 static int blink(uint32_t delay_on, uint32_t delay_off)

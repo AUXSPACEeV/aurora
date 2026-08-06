@@ -78,13 +78,11 @@ static inline void emergency_state_recover(void)
 #endif /* CONFIG_AURORA_NOTIFY */
 }
 
-static void powerfail_isr(const struct device *dev, struct gpio_callback *cb,
-			   uint32_t pins)
+/** @brief Act on the line level, ignoring repeats (bounce). */
+static void powerfail_handle(int val)
 {
-	int val = gpio_pin_get_dt(&pfail_pin);
 	atomic_val_t prev = atomic_set(&pfail_state, val);
 
-	/* Ignore repeated edges with the same value (bounce) */
 	if (val == prev) {
 		LOG_DBG("edge on %s pin %d, line still %s",
 			pfail_pin.port->name, pfail_pin.pin,
@@ -114,37 +112,64 @@ static void powerfail_isr(const struct device *dev, struct gpio_callback *cb,
 	}
 }
 
-void powerfail_setup(powerfail_cb_t assert_cb, powerfail_cb_t deassert_cb)
+static void powerfail_isr(const struct device *dev, struct gpio_callback *cb,
+			   uint32_t pins)
 {
-	int ret;
+	ARG_UNUSED(dev);
+	ARG_UNUSED(cb);
+	ARG_UNUSED(pins);
+
+	int val = gpio_pin_get_dt(&pfail_pin);
+	if (val < 0) {
+		LOG_ERR("failed to read powerfail pin: %d", val);
+		return;
+	}
+
+	powerfail_handle(val);
+}
+
+int powerfail_setup(powerfail_cb_t assert_cb, powerfail_cb_t deassert_cb)
+{
+	int ret, val;
 
 	pfail_assert_cb = assert_cb;
 	pfail_deassert_cb = deassert_cb;
 
 	if (!gpio_is_ready_dt(&pfail_pin)) {
 		LOG_ERR("powerfail GPIO device not ready");
-		return;
+		return -ENODEV;
 	}
 
 	ret = gpio_pin_configure_dt(&pfail_pin, GPIO_INPUT);
 	if (ret < 0) {
 		LOG_ERR("failed to configure powerfail pin: %d", ret);
-		return;
+		return ret;
 	}
 
 	ret = gpio_pin_interrupt_configure_dt(&pfail_pin, GPIO_INT_EDGE_BOTH);
 	if (ret < 0) {
 		LOG_ERR("failed to configure powerfail interrupt: %d", ret);
-		return;
+		return ret;
 	}
 
 	gpio_init_callback(&pfail_cb_data, powerfail_isr, BIT(pfail_pin.pin));
 	ret = gpio_add_callback(pfail_pin.port, &pfail_cb_data);
 	if (ret < 0) {
 		LOG_ERR("failed to add powerfail callback: %d", ret);
-		return;
+		return ret;
 	}
+
+	/* Sample once: a board that boots with the line already asserted never
+	 * produces an edge to react to. */
+	val = gpio_pin_get_dt(&pfail_pin);
+	if (val < 0) {
+		LOG_ERR("failed to read powerfail pin: %d", val);
+		return val;
+	}
+	powerfail_handle(val);
 
 	LOG_INF("powerfail mitigation ready on %s pin %d",
 		pfail_pin.port->name, pfail_pin.pin);
+
+	return 0;
 }

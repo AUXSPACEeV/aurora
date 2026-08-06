@@ -6,6 +6,8 @@
 #ifndef APP_LIB_STATE_INTERNAL_H_
 #define APP_LIB_STATE_INTERNAL_H_
 
+#include <stdbool.h>
+
 #include <aurora/lib/state/state.h>
 
 /**
@@ -76,6 +78,34 @@ void sm_error_retry(void);
  */
 int sm_filter_detect_apogee(void);
 #endif /* CONFIG_FILTER */
+
+/*-----------------------------------------------------------
+ * Remove-before-flight arm input (defined by state_rbf.c)
+ *----------------------------------------------------------*/
+
+#if defined(CONFIG_AURORA_STATE_MACHINE_RBF)
+/**
+ * @brief Bring up the remove-before-flight interlock GPIO.
+ *
+ * Called from @ref sm_init.  Latches the current pin level before enabling
+ * the change interrupt, so a board that boots with the interlock already
+ * pulled comes up armed.
+ *
+ * @retval 0 on success, negative errno otherwise.  On failure the interlock
+ *         reports safe, holding the machine in @c SM_IDLE.
+ */
+int sm_rbf_init(void);
+
+/**
+ * @brief Debounced state of the interlock.
+ *
+ * The core substitutes this for @c sm_inputs.armed on every update.
+ *
+ * @retval true if the interlock has been removed (vehicle armed).
+ * @retval false while it is installed, or before @ref sm_rbf_init succeeded.
+ */
+bool sm_rbf_armed(void);
+#endif /* CONFIG_AURORA_STATE_MACHINE_RBF */
 
 /*-----------------------------------------------------------
  * Backend -> common core (defined by the selected backend)
