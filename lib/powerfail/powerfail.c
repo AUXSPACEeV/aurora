@@ -85,8 +85,14 @@ static void powerfail_isr(const struct device *dev, struct gpio_callback *cb,
 	atomic_val_t prev = atomic_set(&pfail_state, val);
 
 	/* Ignore repeated edges with the same value (bounce) */
-	if (val == prev)
+	if (val == prev) {
+		LOG_DBG("edge on %s pin %d, line still %s",
+			pfail_pin.port->name, pfail_pin.pin,
+			val > 0 ? "asserted" : "deasserted");
 		return;
+	}
+
+	LOG_DBG("powerfail line %s", val > 0 ? "asserted" : "deasserted");
 
 	if (val > 0) {
 		/* Power failure asserted */

@@ -168,11 +168,30 @@ enum sm_type sm_get_type(void);
 void sm_get_inputs(struct sm_inputs *out);
 
 /**
+ * @brief Copy the thresholds that the backend is currently running with.
+ *
+ * @param out Buffer for the active thresholds.
+ */
+void sm_backend_get_thresholds(struct sm_thresholds *out);
+
+/**
  * @brief Update the state machine with force. No further checks are done.
  *
  * @param transition_to State to transition.
  */
 void sm_update_force(enum sm_state transition_to);
+
+/**
+ * @brief Elevation of the configured up axis from horizontal (degrees).
+ *
+ * Exposed beyond the backend so the shell can report the arm/disarm
+ * angle gate against the same number the transition logic uses.
+ *
+ * @param orientation Orientation reading (yaw, pitch, roll) in degrees.
+ * @return Elevation in degrees, clamped to [-90, 90].  +90 = up axis
+ *         points to the sky, 0 = horizontal, -90 = inverted.
+ */
+double sm_orientation_elevation_deg(const double orientation[3]);
 
 /** @} */
 

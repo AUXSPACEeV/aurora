@@ -96,11 +96,34 @@ static void transition_bypass_cb(const struct shell *sh, uint8_t *data, size_t l
 /** @brief Show state machine type and current state. */
 static int cmd_status(const struct shell *sh, size_t argc, char **argv)
 {
+	struct sm_thresholds th;
+	struct sm_inputs in;
+
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
 	shell_print(sh, "Type:  %s", SM_TYPE_NAME);
 	shell_print(sh, "State: %s", sm_state_str(sm_get_state()));
+
+	/* Every condition the machine needs to leave IDLE, as last seen by
+	 * sm_update().  A board that sits in IDLE with calibration done says
+	 * nothing about which input is missing; this does.  All-zero inputs
+	 * mean sm_update() has not run yet (the app gates it on both sensors
+	 * having reported).
+	 */
+	sm_get_inputs(&in);
+	sm_backend_get_thresholds(&th);
+	shell_print(sh, "Arm gate (last update):");
+	shell_print(sh, "  armed:       %s", in.armed ? "yes" : "NO");
+	shell_print(sh, "  log_ready:   %s", in.log_ready ? "yes" : "NO");
+	shell_print(sh, "  calibrated:  %s", in.calibrated ? "yes" : "NO");
+#if defined(CONFIG_SIMPLE_STATE)
+	shell_print(sh, "  elevation:   %.1f deg (arm >= %d, disarm < %d)",
+		    sm_orientation_elevation_deg(in.orientation),
+		    th.T_OA, th.T_OI);
+#endif /* CONFIG_SIMPLE_STATE */
+	shell_print(sh, "  orientation: %.1f %.1f %.1f deg",
+		    in.orientation[0], in.orientation[1], in.orientation[2]);
 
 	return 0;
 }
