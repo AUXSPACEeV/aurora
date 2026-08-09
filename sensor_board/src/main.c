@@ -134,6 +134,8 @@ void imu_task(void *, void *, void *)
 		int rc = imu_poll(imu0);
 		if (rc != 0) {
 			LOG_ERR("IMU polling failed (%d)", rc);
+
+			k_sleep(K_MSEC(1000));
 			continue;
 		}
 		k_sleep(K_MSEC(1000 / imu_hz));
@@ -172,6 +174,8 @@ void baro_task(void *, void *, void *)
 	while (1) {
 		if (baro_measure(baro0)) {
 			LOG_ERR("Failed to measure baro0");
+
+			k_sleep(K_MSEC(1000));
 			continue;
 		}
 
@@ -183,7 +187,7 @@ void baro_task(void *, void *, void *)
 }
 
 /* Create the BARO task */
-K_THREAD_DEFINE(baro_polling, 2048, baro_task, NULL, NULL, NULL, 7, 0, 0);
+K_THREAD_DEFINE(baro_polling, 4096, baro_task, NULL, NULL, NULL, 7, 0, 0);
 #endif /* CONFIG_BARO && !CONFIG_AURORA_FAKE_SENSORS */
 
 /* ============================================================

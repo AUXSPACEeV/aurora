@@ -89,7 +89,7 @@ static void trigger_handler(const struct device *dev,
  */
 static void run_trigger_mode(const struct device *dev)
 {
-	struct sensor_trigger trig;
+	static struct sensor_trigger trig;
 
 	trig.type = SENSOR_TRIG_DATA_READY;
 	trig.chan = SENSOR_CHAN_ALL;
