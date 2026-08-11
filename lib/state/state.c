@@ -16,10 +16,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <string.h>
-#include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
-#include <zephyr/spinlock.h>
+ #include <string.h>
+ #include <zephyr/kernel.h>
+ #include <zephyr/logging/log.h>
+ #include <zephyr/spinlock.h>
 
 #include <aurora/lib/state/state.h>
 #include "state_internal.h"
@@ -200,6 +200,8 @@ void sm_deinit(void)
 /* sm_update – see state.h */
 void sm_update(const struct sm_inputs *inputs)
 {
+	__ASSERT(inputs != NULL, "sm_inputs are NULL.");
+
 	static double previous_altitude = 0.0;
 	struct sm_inputs in = *inputs;
 
