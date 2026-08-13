@@ -135,7 +135,7 @@ void imu_task(void *, void *, void *)
 		if (rc != 0) {
 			LOG_ERR("IMU polling failed (%d)", rc);
 
-			k_sleep(K_MSEC(1000));
+			k_sleep(K_MSEC(100));
 			continue;
 		}
 		k_sleep(K_MSEC(1000 / imu_hz));
@@ -146,7 +146,7 @@ void imu_task(void *, void *, void *)
 }
 
 /* Create the IMU task (inactive unless CONFIG_IMU=y) */
-K_THREAD_DEFINE(imu_polling, 2048, imu_task, NULL, NULL, NULL, 7, 0, 0);
+K_THREAD_DEFINE(imu_polling, 4096, imu_task, NULL, NULL, NULL, 7, 0, 0);
 #endif /* CONFIG_IMU && !CONFIG_AURORA_FAKE_SENSORS */
 
 /* ============================================================
@@ -175,7 +175,7 @@ void baro_task(void *, void *, void *)
 		if (baro_measure(baro0)) {
 			LOG_ERR("Failed to measure baro0");
 
-			k_sleep(K_MSEC(1000));
+			k_sleep(K_MSEC(100));
 			continue;
 		}
 
