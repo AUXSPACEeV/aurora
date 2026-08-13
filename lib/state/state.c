@@ -183,6 +183,19 @@ void sm_init(const struct sm_thresholds *cfg,
 	}
 }
 
+/* sm_set_thresholds – see state.h */
+int sm_set_thresholds(const struct sm_thresholds *cfg)
+{
+	if (current_state != SM_IDLE) {
+		return -EBUSY;
+	}
+
+	sm_backend_set_thresholds(cfg);
+	sm_event("thresholds changed");
+
+	return 0;
+}
+
 /* sm_deinit – see state.h */
 void sm_deinit(void)
 {

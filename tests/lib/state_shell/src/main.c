@@ -19,6 +19,7 @@
 
 #include <aurora/lib/state/state.h>
 #include <aurora/lib/state/audit.h>
+#include <aurora/lib/state/config.h>
 
 /* Build an orientation vector (yaw, pitch, roll) whose up-axis elevation
  * equals @p elev degrees.
@@ -206,6 +207,149 @@ ZTEST(state_shell_tests, test_transition_calibrating_rejected)
 
 	err = shell_execute_cmd(sh, "state_machine transition CALIBRATING");
 	zassert_not_equal(err, 0, "CALIBRATING should no longer be a valid state name");
+}
+
+/*-----------------------------------------------------------
+ * config command
+ *
+ * This build has no threshold store, so "set" and "default" apply the new
+ * values and warn that they will not survive a reboot; the persistence
+ * itself is covered by the state_config suite.
+ *----------------------------------------------------------*/
+
+/** @brief Read one threshold out of the running set. */
+static int running_threshold(const char *name)
+{
+	struct sm_thresholds cur;
+
+	sm_backend_get_thresholds(&cur);
+
+	return sm_config_field_get(&cur, sm_config_field_find(name));
+}
+
+/**
+ * @brief Test that "state_machine config" lists the running thresholds.
+ */
+ZTEST(state_shell_tests, test_config_lists_thresholds)
+{
+	execute_and_check("state_machine config", "T_AB");
+	execute_and_check("state_machine config", "TO_R");
+}
+
+/**
+ * @brief Test that "state_machine config set" applies the new value.
+ */
+ZTEST(state_shell_tests, test_config_set_applies)
+{
+	int err;
+
+	err = shell_execute_cmd(sh, "state_machine config set T_M 400");
+	zassert_ok(err, "config set failed (err %d)", err);
+	zassert_equal(running_threshold("T_M"), 400, "T_M should have been applied");
+}
+
+/**
+ * @brief Test that "state_machine config set" accepts lowercase names.
+ */
+ZTEST(state_shell_tests, test_config_set_is_case_insensitive)
+{
+	int err;
+
+	err = shell_execute_cmd(sh, "state_machine config set t_m 350");
+	zassert_ok(err, "config set failed (err %d)", err);
+	zassert_equal(running_threshold("T_M"), 350, "T_M should have been applied");
+}
+
+/**
+ * @brief Test that an unknown threshold name is rejected.
+ */
+ZTEST(state_shell_tests, test_config_set_unknown_name)
+{
+	int err;
+
+	err = shell_execute_cmd(sh, "state_machine config set T_BOGUS 1");
+	zassert_not_equal(err, 0, "Should fail for an unknown threshold");
+}
+
+/**
+ * @brief Test that a non-numeric value is rejected.
+ */
+ZTEST(state_shell_tests, test_config_set_non_numeric_value)
+{
+	int err;
+
+	err = shell_execute_cmd(sh, "state_machine config set T_M high");
+	zassert_not_equal(err, 0, "Should fail for a non-numeric value");
+	zassert_equal(running_threshold("T_M"), test_cfg.T_M, "T_M should be unchanged");
+}
+
+/**
+ * @brief Test that a value outside the threshold's range is rejected.
+ */
+ZTEST(state_shell_tests, test_config_set_out_of_range)
+{
+	int err;
+
+	/* T_OA is an elevation, capped at 90 degrees. */
+	err = shell_execute_cmd(sh, "state_machine config set T_OA 500");
+	zassert_not_equal(err, 0, "Should fail for an out-of-range value");
+	zassert_equal(running_threshold("T_OA"), test_cfg.T_OA, "T_OA should be unchanged");
+}
+
+/**
+ * @brief Test that "state_machine config set" is refused outside IDLE.
+ *
+ * Swapping a threshold mid-flight would race the timers already started
+ * under the old set, so the shell must refuse rather than apply it.
+ */
+ZTEST(state_shell_tests, test_config_set_refused_outside_idle)
+{
+	int err;
+	struct sm_inputs in = {
+		.armed = 1,
+		.log_ready = 1,
+		.calibrated = 1,
+		.orientation = ORIENT(test_cfg.T_OA),
+	};
+
+	sm_update(&in);
+	zassert_equal(sm_get_state(), SM_ARMED, "Precondition: should be ARMED");
+
+	err = shell_execute_cmd(sh, "state_machine config set T_M 400");
+	zassert_not_equal(err, 0, "Should fail outside IDLE");
+	zassert_equal(running_threshold("T_M"), test_cfg.T_M, "T_M should be unchanged");
+}
+
+/**
+ * @brief Test that "state_machine config default" restores the Kconfig set.
+ */
+ZTEST(state_shell_tests, test_config_default_restores_kconfig)
+{
+	struct sm_thresholds def, cur;
+	int err;
+
+	sm_config_defaults(&def);
+
+	err = shell_execute_cmd(sh, "state_machine config set T_M 400");
+	zassert_ok(err, "config set failed (err %d)", err);
+
+	err = shell_execute_cmd(sh, "state_machine config default");
+	zassert_ok(err, "config default failed (err %d)", err);
+
+	sm_backend_get_thresholds(&cur);
+	zassert_mem_equal(&cur, &def, sizeof(cur),
+			  "config default should restore the whole Kconfig set");
+}
+
+/**
+ * @brief Test that "state_machine config save" reports a missing store.
+ */
+ZTEST(state_shell_tests, test_config_save_without_store)
+{
+	int err;
+
+	err = shell_execute_cmd(sh, "state_machine config save");
+	zassert_not_equal(err, 0, "Should fail without a threshold store");
 }
 
 /*-----------------------------------------------------------

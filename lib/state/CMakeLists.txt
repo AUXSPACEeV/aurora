@@ -6,6 +6,9 @@ zephyr_library()
 # Common state machine core (implementation-independent).
 zephyr_library_sources(state.c)
 
+# Flight thresholds: Kconfig defaults + persistent store.
+zephyr_library_sources(state_config.c)
+
 if(CONFIG_SIMPLE_STATE)
     zephyr_library_sources(simple.c)
 endif()

@@ -2,20 +2,22 @@
  * @file state_shell.c
  * @brief Zephyr shell commands for the state machine.
  *
- * Provides "state_machine status|transition|audit|audit_clear" commands
- * for inspecting and controlling the flight state machine.
+ * Provides "state_machine status|transition|config|audit|audit_clear"
+ * commands for inspecting and controlling the flight state machine.
  *
  * Copyright (c) 2025-2026 Auxspace e.V.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 
 #include <zephyr/shell/shell.h>
 
+#include <aurora/lib/state/config.h>
 #include <aurora/lib/state/state.h>
 
 #if defined(CONFIG_AURORA_STATE_MACHINE_AUDIT)
@@ -177,6 +179,181 @@ static int cmd_transition(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
+/*-----------------------------------------------------------
+ * Threshold configuration
+ *----------------------------------------------------------*/
+
+/**
+ * @brief Apply @p cfg and write it to the threshold store.
+ *
+ * Applying first means a board with no store still flies the new values for
+ * this session; the save failure is reported but not fatal.
+ */
+static int apply_and_save(const struct shell *sh, const struct sm_thresholds *cfg)
+{
+	int rc = sm_set_thresholds(cfg);
+
+	if (rc == -EBUSY) {
+		shell_error(sh, "Thresholds can only be changed in IDLE (now %s)",
+			    sm_state_str(sm_get_state()));
+		return rc;
+	}
+
+	rc = sm_config_save(cfg);
+	if (rc == -ENOTSUP) {
+		shell_warn(sh, "Applied, but this board has no threshold store "
+			       "- the change is lost on reboot");
+		return 0;
+	}
+	if (rc) {
+		shell_error(sh, "Applied, but saving failed (%d)", rc);
+		return rc;
+	}
+
+	shell_print(sh, "Applied and saved");
+
+	return 0;
+}
+
+/** @brief List the running thresholds next to the compiled-in defaults. */
+static int cmd_config_show(const struct shell *sh, size_t argc, char **argv)
+{
+	struct sm_thresholds cur, def;
+	const struct sm_config_field *fields;
+	size_t count;
+
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	sm_backend_get_thresholds(&cur);
+	sm_config_defaults(&def);
+	fields = sm_config_fields(&count);
+
+	shell_print(sh, "%-8s %10s %10s %-8s %s",
+		    "Name", "Value", "Default", "Unit", "Description");
+	shell_print(sh, "----------------------------------------------------------------");
+
+	for (size_t i = 0; i < count; i++) {
+		int value = sm_config_field_get(&cur, &fields[i]);
+		int dflt = sm_config_field_get(&def, &fields[i]);
+
+		shell_print(sh, "%-8s %10d %10d %-8s %s",
+			    fields[i].name, value, dflt,
+			    fields[i].unit, fields[i].desc);
+	}
+
+	return 0;
+}
+
+/** @brief Set one threshold, apply it and persist the whole set. */
+static int cmd_config_set(const struct shell *sh, size_t argc, char **argv)
+{
+	const struct sm_config_field *field;
+	struct sm_thresholds cfg;
+	char *end;
+	long value;
+	int rc;
+
+	ARG_UNUSED(argc);
+
+	field = sm_config_field_find(argv[1]);
+	if (field == NULL) {
+		shell_error(sh, "Unknown threshold '%s'", argv[1]);
+		return -EINVAL;
+	}
+
+	value = strtol(argv[2], &end, 0);
+	if (*end != '\0' || end == argv[2]) {
+		shell_error(sh, "'%s' is not a number", argv[2]);
+		return -EINVAL;
+	}
+
+	sm_backend_get_thresholds(&cfg);
+
+	rc = sm_config_field_set(&cfg, field, (int)value);
+	if (rc == -ERANGE) {
+		shell_error(sh, "%s must be between %d and %d %s",
+			    field->name, field->min, field->max, field->unit);
+		return rc;
+	}
+
+	shell_print(sh, "%s = %ld %s", field->name, value, field->unit);
+
+	return apply_and_save(sh, &cfg);
+}
+
+/** @brief Restore the compiled-in defaults and persist them. */
+static int cmd_config_default(const struct shell *sh, size_t argc, char **argv)
+{
+	struct sm_thresholds def;
+
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	sm_config_defaults(&def);
+	shell_print(sh, "Restoring factory thresholds");
+
+	return apply_and_save(sh, &def);
+}
+
+/** @brief Persist the running thresholds as they are. */
+static int cmd_config_save(const struct shell *sh, size_t argc, char **argv)
+{
+	struct sm_thresholds cur;
+	int rc;
+
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	sm_backend_get_thresholds(&cur);
+
+	rc = sm_config_save(&cur);
+	if (rc == -ENOTSUP) {
+		shell_error(sh, "This board has no threshold store");
+		return rc;
+	}
+	if (rc) {
+		shell_error(sh, "Save failed (%d)", rc);
+		return rc;
+	}
+
+	shell_print(sh, "Saved");
+
+	return 0;
+}
+
+/*-----------------------------------------------------------
+ * Dynamic completion for threshold names
+ *----------------------------------------------------------*/
+static void config_name_get(size_t idx, struct shell_static_entry *entry)
+{
+	__ASSERT(entry != NULL, "config_name_get: entry is NULL.");
+
+	const struct sm_config_field *fields;
+	size_t count;
+
+	entry->handler = NULL;
+	entry->subcmd = NULL;
+	entry->help = NULL;
+
+	fields = sm_config_fields(&count);
+	entry->syntax = idx < count ? fields[idx].name : NULL;
+}
+
+SHELL_DYNAMIC_CMD_CREATE(dsub_config_name, config_name_get);
+
+SHELL_STATIC_SUBCMD_SET_CREATE(
+	sub_config,
+	SHELL_CMD_ARG(set, &dsub_config_name,
+		      "Set a threshold and save it: config set <NAME> <VALUE>",
+		      cmd_config_set, 3, 0),
+	SHELL_CMD(default, NULL,
+		  "Restore the factory thresholds and save them",
+		  cmd_config_default),
+	SHELL_CMD(save, NULL,
+		  "Save the running thresholds", cmd_config_save),
+	SHELL_SUBCMD_SET_END);
+
 #if defined(CONFIG_AURORA_STATE_MACHINE_AUDIT)
 
 /** @brief Dump the audit log. */
@@ -262,6 +439,9 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 	SHELL_CMD_ARG(transition, &dsub_state_name,
 		      "Force a state transition (ground test only)",
 		      cmd_transition, 2, 0),
+	SHELL_CMD(config, &sub_config,
+		  "Show the flight thresholds; see subcommands to change them",
+		  cmd_config_show),
 #if defined(CONFIG_AURORA_STATE_MACHINE_AUDIT)
 	SHELL_CMD(audit, NULL,
 		  "Show audit log of state transitions and events",

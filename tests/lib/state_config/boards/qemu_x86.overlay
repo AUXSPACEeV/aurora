@@ -1,0 +1,26 @@
+/*
+ * Copyright (c) 2025-2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * One sim-flash erase block (1 KiB on qemu_x86) reserved for the flight
+ * threshold store, mirroring the single page reserved on real hardware.
+ */
+
+/ {
+	chosen {
+		auxspace,sm-config = &sm_config;
+	};
+};
+
+&flash_sim0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		sm_config: partition@0 {
+			label = "sm-config";
+			reg = <0x00000000 DT_SIZE_K(1)>;
+		};
+	};
+};

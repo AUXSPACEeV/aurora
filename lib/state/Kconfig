@@ -86,6 +86,114 @@ config AURORA_STATE_MACHINE_SHELL
 	depends on SHELL
 	help
 	  Enable shell commands for inspecting state machine type,
-	  current state, forcing transitions, and viewing the audit log.
+	  current state, forcing transitions, viewing the audit log and
+	  editing the flight thresholds.
+
+config AURORA_STATE_MACHINE_CONFIG_STORE
+	bool "Persist flight thresholds in flash"
+	depends on FLASH
+	select CRC
+	default y
+	help
+	  Keep the flight thresholds in the flash partition selected by the
+	  'auxspace,sm-config' chosen node, so a set made over the shell
+	  survives a reboot.  The partition must be exactly one erase page.
+	  Without the chosen node the thresholds stay at their Kconfig
+	  values and saving reports -ENOTSUP.
+
+menu "Flight thresholds (defaults)"
+
+comment "Factory defaults - the running values can be changed at"
+comment "runtime and are persisted, see the state_machine shell."
+
+config BOOST_ACCELERATION
+	int "Boost detection acceleration threshold"
+	default 30
+	help
+		Acceleration threshold in m/s^2 for boost detection.
+
+config BOOST_ALTITUDE
+	int "Boost detection altitude threshold"
+	default 50
+	help
+		Altitude threshold in meters for boost detection.
+
+config BURNOUT_ACCELERATION
+	int "Burnout detection acceleration threshold"
+	default 15
+	help
+		Acceleration threshold in m/s^2 for burnout detection.
+
+config MAIN_DESCENT_HEIGHT
+	int "Main PYRO event height threshold"
+	default 200
+	help
+		Descent height threshold in meters for MAIN Pyro event.
+
+config LANDING_VELOCITY
+	int "Velocity threshold for landing detection"
+	default 2
+	help
+		Velocity threshold in m/s for landing detection.
+
+config ARM_ANGLE
+	int "Angle threshold for arming"
+	default 85
+	help
+		Angle threshold in degrees for arming the system.
+		0 degrees is horizontal, 90 degrees is vertical.
+
+config DISARM_ANGLE
+	int "Angle threshold for disarming"
+	default 30
+	help
+		Angle threshold in degrees for disarming the system.
+		0 degrees is horizontal, 90 degrees is vertical.
+
+config DISARM_ANGLE_SAMPLES
+	int "Number of disarm angle samples"
+	default 10
+	range 1 1000
+	help
+		Number of consecutive samples with angle < DISARM_ANGLE to
+		disarm.
+
+config BOOST_TIMER_MS
+	int "Boost timer duration"
+	default 900
+	help
+		Boost timer duration in milliseconds.
+		Both BOOST_ACCELERATION and BOOST_ALTITUDE must be reached and held
+		asserted during this time.
+
+config LANDING_TIMER_MS
+	int "Landing timer duration"
+	default 500
+	help
+		Landing timer duration in milliseconds.
+		LANDING_VELOCITY must be reached and held asserted during this time.
+
+config APOGEE_TIMEOUT_MS
+	int "Apogee timeout duration"
+	default 60000
+	help
+		Time after which the APOGEE state returns to IDLE in milliseconds,
+		if no further state changes occur.
+
+config MAIN_TIMEOUT_MS
+	int "Main to REDUNDANT duration"
+	default 2000
+	help
+		Time after which the redundand pyro channel is fired after MAIN in
+		milliseconds.
+
+config REDUNDANT_TIMEOUT_MS
+	int "Redundant timeout duration"
+	default 900000
+	help
+		Time after which the REDUNDANT state returns to IDLE in milliseconds,
+		if no further state changes occur.
+
+endmenu
 
 endif
