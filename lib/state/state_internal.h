@@ -119,6 +119,13 @@ bool sm_rbf_armed(void);
 void sm_backend_init(const struct sm_thresholds *cfg);
 
 /**
+ * @brief Replace the loaded thresholds, leaving timers and state alone.
+ *
+ * @param cfg Threshold configuration to copy into the backend.
+ */
+void sm_backend_set_thresholds(const struct sm_thresholds *cfg);
+
+/**
  * @brief Release backend-private resources and clear loaded thresholds.
  */
 void sm_backend_deinit(void);

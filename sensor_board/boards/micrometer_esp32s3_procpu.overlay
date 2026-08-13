@@ -16,6 +16,7 @@
 		auxspace,buzzer = &buzzer0;
 		auxspace,led = &pwmleds;
 		auxspace,flight-log-disk = &flight_log_disk;
+		auxspace,sm-config = &sm_config_partition;
 	};
 
 	fstab {
@@ -37,6 +38,26 @@
 	};
 };
 
+/* The 4M layout inherited from partitions_0x0_amp_4M.dtsi leaves no gap, so
+ * the flight-threshold page comes out of the tail of the unused storage
+ * partition: 192K => 188K.
+ */
+&storage_partition {
+	reg = <0x3b0000 DT_SIZE_K(188)>;
+};
+
+&flash0 {
+	partitions {
+		/* One erase page (4K); the state machine erases and rewrites
+		 * the whole thing on every save.
+		 */
+		sm_config_partition: partition@3df000 {
+			compatible = "zephyr,mapped-partition";
+			label = "sm-config";
+			reg = <0x3df000 DT_SIZE_K(4)>;
+		};
+	};
+};
 
 &adc1 {
 	status = "okay";

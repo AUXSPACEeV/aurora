@@ -106,6 +106,51 @@ case: powerfail watches the battery, the state machine watches the interlock,
 and the two are independent.
 ```
 
+(state-thresholds)=
+## Flight Thresholds
+
+The thresholds that drive the transitions are per-vehicle data, not a
+firmware constant: a 200 m model and a 1 km vehicle disagree on every
+altitude and timeout in the set. The Kconfig options
+(see {ref}`the sensor_board tables <configuration>`) are the factory
+defaults; the running values are edited from the shell and persisted, so a
+board flashed with one firmware image can fly either rocket.
+
+The store is a single flash erase page selected by the `auxspace,sm-config`
+chosen node, holding one record: a magic, a layout version, a CRC and the
+threshold struct. Every save erases and rewrites the whole page. A blank
+page, a firmware update that reshuffled `struct sm_thresholds`, or a write
+cut short by a power loss all fail their check and fall back to the
+defaults, so a half-written set is never flown.
+
+Reserve the page in the board devicetree, e.g. for micrometer rev.2:
+
+```dts
+/ {
+	chosen {
+		auxspace,sm-config = &sm_config_partition;
+	};
+};
+
+&flash0 {
+	partitions {
+		sm_config_partition: partition@3df000 {
+			compatible = "zephyr,mapped-partition";
+			label = "sm-config";
+			reg = <0x3df000 DT_SIZE_K(4)>;
+		};
+	};
+};
+```
+
+Without the chosen node (or with `CONFIG_AURORA_STATE_MACHINE_CONFIG_STORE`
+disabled) the thresholds still change at runtime, but the shell warns that
+the change is lost on reboot.
+
+Thresholds can only be changed in `IDLE`. Swapping one mid-flight would
+compare fresh limits against timers already started under the old ones, so
+`sm_set_thresholds()` returns `-EBUSY` outside `IDLE`.
+
 ## Shell Commands
 
 Enabling `CONFIG_AURORA_STATE_MACHINE_SHELL` registers the
@@ -116,8 +161,20 @@ Enabling `CONFIG_AURORA_STATE_MACHINE_SHELL` registers the
 | --- | --- |
 | `state_machine status` | Print the active state-machine implementation and its current state. |
 | `state_machine transition <STATE>` | Force a transition. The state name completes via tab. Because the state machine exposes no arbitrary setter, this deinitializes and reinitializes the machine, landing it in `IDLE`; a warning is printed when the requested target is not `IDLE`. Ground testing only. |
+| `state_machine config` | List the running thresholds next to the compiled-in defaults. |
+| `state_machine config set <NAME> <VALUE>` | Set one threshold, apply it and save the whole set. The name completes via tab and is case-insensitive; out-of-range values are rejected. |
+| `state_machine config default` | Restore the factory (Kconfig) thresholds and save them. |
+| `state_machine config save` | Save the running thresholds as they are. |
 | `state_machine audit` | Dump the audit log (timestamped transitions and events). Requires `CONFIG_AURORA_STATE_MACHINE_AUDIT`. |
 | `state_machine audit_clear` | Clear the audit log. Requires `CONFIG_AURORA_STATE_MACHINE_AUDIT`. |
+
+Setting the main deployment altitude to 400 m and keeping it:
+
+```
+uart:~$ state_machine config set T_M 400
+T_M = 400 m
+Applied and saved
+```
 
 Valid state names for `transition` are `IDLE`, `ARMED`, `BOOST`,
 `BURNOUT`, `APOGEE`, `MAIN`, `REDUNDANT`, `LANDED` and `ERROR`.
@@ -130,5 +187,9 @@ machine. Do not use in flight.
 ## API Reference
 
 ```{doxygengroup} lib_state
+   :content-only:
+```
+
+```{doxygengroup} lib_state_config
    :content-only:
 ```

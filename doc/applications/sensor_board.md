@@ -198,8 +198,16 @@ To get an overview of running threads, use the Zephyr-Shell builtin command
 
 #### State Machine Thresholds
 
-These options are defined in `sensor_board/Kconfig` under the
-**State Machine Configuration** menu.
+These options are defined in `lib/state/Kconfig` under the
+**State Machine => Flight thresholds (defaults)** menu.
+
+They are only the *factory defaults*. Different vehicles need different
+thresholds: a 200 m model and a 1 km vehicle disagree on every altitude
+and timeout in the set. So the running values can be changed per vehicle
+from the shell and are persisted across reboots. See
+{ref}`the state machine threshold store <state-thresholds>`; the application
+loads the stored set (falling back to these defaults) before starting the
+state machine.
 
 ##### Flight Thresholds
 

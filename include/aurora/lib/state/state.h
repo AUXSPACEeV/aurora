@@ -175,6 +175,20 @@ void sm_get_inputs(struct sm_inputs *out);
 void sm_backend_get_thresholds(struct sm_thresholds *out);
 
 /**
+ * @brief Replace the running thresholds.
+ *
+ * Refused outside @c SM_IDLE: swapping a threshold under a running flight
+ * would compare fresh limits against timers already started under the old
+ * ones.
+ * Persisting the new set is up to the caller (sm_config_save()).
+ *
+ * @param cfg New thresholds, must be non-NULL.
+ * @retval 0 on success.
+ * @retval -EBUSY if the machine is not in @c SM_IDLE.
+ */
+int sm_set_thresholds(const struct sm_thresholds *cfg);
+
+/**
  * @brief Update the state machine with force. No further checks are done.
  *
  * @param transition_to State to transition.

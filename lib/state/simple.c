@@ -140,6 +140,12 @@ void sm_backend_get_thresholds(struct sm_thresholds *out)
 	*out = th;
 }
 
+/* sm_backend_set_thresholds – see state_internal.h */
+void sm_backend_set_thresholds(const struct sm_thresholds *cfg)
+{
+	th = *cfg;
+}
+
 /* sm_backend_deinit – see state_internal.h */
 void sm_backend_deinit(void)
 {

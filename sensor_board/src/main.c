@@ -61,28 +61,10 @@ BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_pyro), okay),
 #endif /* CONFIG_AURORA_PAD_LINK */
 
 #if defined(CONFIG_AURORA_STATE_MACHINE)
+#include <aurora/lib/state/config.h>
 #include <aurora/lib/state/state.h>
 
-/** @brief Flight state machine thresholds loaded from Kconfig. */
-static const struct sm_thresholds state_cfg = {
-	/* Sensor Metrics */
-	.T_AB = CONFIG_BOOST_ACCELERATION,
-	.T_H = CONFIG_BOOST_ALTITUDE,
-	.T_BB = CONFIG_BURNOUT_ACCELERATION,
-	.T_M = CONFIG_MAIN_DESCENT_HEIGHT,
-	.T_L = CONFIG_LANDING_VELOCITY,
-	.T_OA = CONFIG_ARM_ANGLE,
-	.T_OI = CONFIG_DISARM_ANGLE,
-	.N_OI = CONFIG_DISARM_ANGLE_SAMPLES,
-	/* Timers */
-	.DT_AB = CONFIG_BOOST_TIMER_MS,
-	.DT_L = CONFIG_LANDING_TIMER_MS,
-
-	/* Timeouts */
-	.TO_A = CONFIG_APOGEE_TIMEOUT_MS,
-	.TO_M = CONFIG_MAIN_TIMEOUT_MS,
-	.TO_R = CONFIG_REDUNDANT_TIMEOUT_MS,
-};
+static struct sm_thresholds state_cfg;
 #endif /* CONFIG_AURORA_STATE_MACHINE */
 
 LOG_MODULE_REGISTER(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
@@ -512,6 +494,9 @@ void state_machine_task(void *, void *, void *)
 	const struct device *pyro0 = NULL;
 	enum sm_state pyro_state = SM_IDLE;
 #endif /*.CONFIG_PYRO */
+
+	/* Per-vehicle thresholds with Kconfig fallbacks */
+	sm_config_load(&state_cfg);
 
 	sm_init(&state_cfg, &sm_error_handler);
 	sm_active = true;
