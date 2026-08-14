@@ -18,7 +18,7 @@ source "subsys/logging/Kconfig.template.log_config"
 
 config AURORA_FAKE_SENSORS
 	bool "Synthetic IMU/baro data source (no hardware)"
-	depends on IMU && BARO
+	depends on AURORA_SENSORS
 	help
 	  Replaces the hardware IMU and barometer polling threads with a
 	  synthetic flight-profile generator. The generator publishes
