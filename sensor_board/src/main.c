@@ -586,7 +586,6 @@ void state_machine_task(void *, void *, void *)
 
 		sm_update(&inputs);
 		state = sm_get_state();
-		LOG_DBG("STATE = %d", state);
 
 		/*update pad link data*/
 		update_pad_link_data();
