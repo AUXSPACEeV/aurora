@@ -28,8 +28,10 @@
 #if defined(CONFIG_DATA_LOGGER_BIN)
 LOG_MODULE_DECLARE(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 
-K_THREAD_DEFINE(logger_thread, 2048, logger_task, NULL, NULL, NULL, 8, 0, 0);
-K_THREAD_DEFINE(converter_thread, 2048, converter_task, NULL, NULL, NULL, 9, 0, 0);
+K_THREAD_DEFINE(logger_thread, CONFIG_DATA_LOGGER_LOGGER_STACK_SIZE, logger_task, NULL, NULL, NULL,
+		8, 0, 0);
+K_THREAD_DEFINE(converter_thread, CONFIG_DATA_LOGGER_CONVERTER_STACK_SIZE, converter_task, NULL,
+		NULL, NULL, 9, 0, 0);
 
 /* Latched (until reboot) when opening the flight log at ARM time fails.
  * Feeds log_flight_log_online() so the state machine drops back from ARMED
