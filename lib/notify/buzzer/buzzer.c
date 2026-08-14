@@ -111,7 +111,10 @@ static void play_error(void)
 
 static void play_state_change(enum sm_state next)
 {
-	pwm_melody_stop(&melody_ctx);
+	if (pwm_melody_stop(&melody_ctx) != 0) {
+		LOG_WRN("Melody still playing, skipping state-change tone.");
+		return;
+	}
 
 	switch (next) {
 	case SM_ARMED:

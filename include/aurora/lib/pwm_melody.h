@@ -75,12 +75,14 @@ struct pwm_melody_ctx {
 /**
  * @brief Start playing a melody.
  *
- * Spawns a thread that iterates over the notes in @p ctx and drives the
- * PWM output accordingly.
+ * Stops any melody already playing, then spawns a thread that iterates over
+ * the notes in @p ctx and drives the PWM output accordingly.
  *
  * @param ctx Melody player context (must have been initialised, e.g. via
  *            @ref PWM_MELODY_CTX_DEFINE).
  * @return 0 on success, or a negative error code.
+ * @retval -EBUSY The previous playback thread did not terminate in time, so
+ *                its context could not be reused.  Nothing was started.
  */
 int pwm_melody_start(struct pwm_melody_ctx *ctx);
 
@@ -91,8 +93,12 @@ int pwm_melody_start(struct pwm_melody_ctx *ctx);
  * The PWM output is turned off before returning.
  *
  * @param ctx Melody player context.
+ * @return 0 once no playback thread is running (including when none was).
+ * @retval -EBUSY The thread did not terminate within the join timeout.  The
+ *                context is still in use and must not be restarted; the PWM
+ *                output is left untouched.
  */
-void pwm_melody_stop(struct pwm_melody_ctx *ctx);
+int pwm_melody_stop(struct pwm_melody_ctx *ctx);
 
 /** Astronomia (Coffin Dance) melody. Ideal for post-flight celebration. */
 static const struct pwm_melody_note astronomia[] = {
