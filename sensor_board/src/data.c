@@ -55,7 +55,9 @@ static void log_begin_flight(void)
 	}
 	k_sem_give(&convert_idle);
 
-	memset(&sm_logger, 0, sizeof(sm_logger));
+	/* Deliberately no memset of sm_logger here since its state carries the
+	 * mutex that serialises logger_task against data_logger_close().
+	 */
 	if (data_logger_init(&sm_logger, "flight", &data_logger_bin_formatter) != 0) {
 		LOG_ERR("data_logger_init failed");
 		atomic_set(&flight_recording_failed, 1);

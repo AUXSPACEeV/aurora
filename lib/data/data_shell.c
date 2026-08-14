@@ -27,10 +27,10 @@ static const char *fmt_name(const struct data_logger *logger)
 
 static const char *logger_state_str(const struct data_logger *logger)
 {
-	if (logger->state == NULL) {
+	if (logger->fmt == NULL) {
 		return "closed";
 	}
-	return logger->state->running ? "running" : "stopped";
+	return logger->state.running ? "running" : "stopped";
 }
 
 struct list_ctx {

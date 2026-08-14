@@ -28,13 +28,13 @@ LOG_MODULE_REGISTER(powerfail, CONFIG_AURORA_POWERFAIL_LOG_LEVEL);
 static inline void emergency_stop_data_logger(struct data_logger *logger,
 					      void *argv)
 {
-	atomic_set(&logger->state->running, 0);
+	atomic_set(&logger->state.running, 0);
 }
 
 static inline void emergency_recover_data_logger(struct data_logger *logger,
 						 void *argv)
 {
-	atomic_set(&logger->state->running, 1);
+	atomic_set(&logger->state.running, 1);
 }
 #endif /* CONFIG_DATA_LOGGER */
 

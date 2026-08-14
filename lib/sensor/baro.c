@@ -21,6 +21,15 @@
 #include <aurora/lib/baro.h>
 #include <aurora/lib/data_logger.h>
 
+#include "bus_recover.h"
+
+/* See imu.c: same stuck-bus recovery, resolved from the baro's chosen node. */
+#if DT_HAS_CHOSEN(auxspace_baro) && DT_ON_BUS(DT_CHOSEN(auxspace_baro), i2c)
+#define BARO_I2C_BUS DEVICE_DT_GET(DT_BUS(DT_CHOSEN(auxspace_baro)))
+#else
+#define BARO_I2C_BUS NULL
+#endif
+
 LOG_MODULE_REGISTER(baro, CONFIG_AURORA_SENSORS_LOG_LEVEL);
 
 ZBUS_CHAN_DEFINE(baro_data_chan,
@@ -39,12 +48,17 @@ ZBUS_CHAN_DEFINE(baro_data_chan,
  */
 static int fetch_and_send(const struct device *dev)
 {
+	static int64_t last_recover_ms;
 	struct baro_data msg;
 	int ret;
 
 	ret = sensor_sample_fetch(dev);
 	if ( ret != 0) {
 		LOG_ERR("Failed to fetch sensor data");
+		if (aurora_i2c_bus_recover(BARO_I2C_BUS, ret, &last_recover_ms)) {
+			LOG_WRN("recovered stuck I2C bus after baro fetch (%d)",
+				ret);
+		}
 		return ret;
 	}
 

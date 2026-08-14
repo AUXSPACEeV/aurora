@@ -400,8 +400,13 @@ ZTEST(data_logger_core, test_close_error_propagated)
 	zassert_equal(data_logger_close(&logger), -EIO, NULL);
 	/* Fields must be reset even on error. */
 	zassert_is_null(logger.fmt, NULL);
-	zassert_is_null(logger.state, NULL);
 	zassert_is_null(logger.ctx, NULL);
+	/* The state is embedded and deliberately outlives close: it carries
+	 * the mutex a concurrent writer may still be queued on. Only the
+	 * running flag is cleared.
+	 */
+	zassert_equal(atomic_get(&logger.state.running), 0, NULL);
+	zassert_true(logger.state.mutex_ready, NULL);
 }
 
 /* ---- data_logger_stop --------------------------------------------------- */
