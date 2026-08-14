@@ -39,4 +39,8 @@ menu "Pad Link"
 rsource "pad_link/Kconfig"
 endmenu
 
+menu "Watchdog"
+rsource "watchdog/Kconfig"
+endmenu
+
 endmenu

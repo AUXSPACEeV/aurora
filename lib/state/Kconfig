@@ -81,6 +81,25 @@ config AURORA_STATE_MACHINE_AUDIT_MAX_FILES
 	  output files.
 	  If the maximum is reached, old files are overwritten.
 
+config AURORA_STATE_MACHINE_RETAIN
+	bool "Resume the flight state after a watchdog reset"
+	depends on AURORA_STATE_MACHINE
+	select HWINFO
+	select CRC
+	help
+	  Keep the active flight state in RTC slow memory so a watchdog reset
+	  mid-flight resumes in the state it interrupted instead of silently
+	  rebooting into IDLE (a disarmed vehicle).
+
+	  Recovery is gated on the reset cause: only RESET_WATCHDOG resumes.
+	  A power-up, reset button or debugger attach always starts in IDLE so
+	  the operator keeps a reliable way to reach a known-safe state.
+
+	  The record does not survive losing the supply, since RTC RAM goes
+	  with it.  Flight-phase timers restart from zero on recovery: the
+	  time spent absent is unknowable, so timeouts are generous after a
+	  recovery rather than wrong in the unsafe direction.
+
 config AURORA_STATE_MACHINE_SHELL
 	bool "State machine shell commands"
 	depends on SHELL

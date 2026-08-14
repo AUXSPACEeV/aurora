@@ -60,6 +60,10 @@ BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_pyro), okay),
 #include <aurora/lib/telemetry.h>
 #endif /* CONFIG_AURORA_TELEMETRY */
 
+#if defined(CONFIG_AURORA_WATCHDOG)
+#include <aurora/lib/watchdog.h>
+#endif /* CONFIG_AURORA_WATCHDOG */
+
 #if defined(CONFIG_AURORA_PAD_LINK)
 #include <aurora/lib/pad_link.h>
 #endif /* CONFIG_AURORA_PAD_LINK */
@@ -67,6 +71,21 @@ BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_pyro), okay),
 #if defined(CONFIG_AURORA_STATE_MACHINE)
 #include <aurora/lib/state/config.h>
 #include <aurora/lib/state/state.h>
+
+#if defined(CONFIG_AURORA_STATE_MACHINE_RETAIN)
+#include <aurora/lib/state/retain.h>
+
+#if defined(CONFIG_IMU)
+/* The save call below discards its return value, so an attitude struct that
+ * outgrew the payload would stop being retained without a word -- and the
+ * symptom (a recovered flight that cannot see vertical acceleration) would
+ * only show up in the air.  Fail the build instead.
+ */
+BUILD_ASSERT(sizeof(struct attitude) <= SM_RETAIN_BLOB_SIZE,
+	     "struct attitude no longer fits in the retained payload; "
+	     "raise SM_RETAIN_BLOB_SIZE in retain.h");
+#endif /* CONFIG_IMU */
+#endif /* CONFIG_AURORA_STATE_MACHINE_RETAIN */
 
 static struct sm_thresholds state_cfg;
 #endif /* CONFIG_AURORA_STATE_MACHINE */
@@ -330,6 +349,17 @@ static void handle_imu(int64_t *last_imu_ns, struct attitude *attitude_state, st
 #endif /* CONFIG_AURORA_NOTIFY */
 			if (attitude_calibrate_converged(attitude_state)) {
 				if (attitude_calibrate_finish(attitude_state) == 0) {
+#if defined(CONFIG_AURORA_STATE_MACHINE_RETAIN)
+					/* Snapshot it now, while the vehicle is
+					 * still stationary and the result is
+					 * known good.  Calibration only runs in
+					 * SM_IDLE, so a board that reboots into
+					 * a flight state can never redo this --
+					 * it has to be handed the old answer.
+					 */
+					(void)sm_retain_save_blob(attitude_state,
+								  sizeof(*attitude_state));
+#endif /* CONFIG_AURORA_STATE_MACHINE_RETAIN */
 #if defined(CONFIG_AURORA_NOTIFY)
 					if (!(*calibration_notified)) {
 						notify_calibration_complete();
@@ -504,6 +534,20 @@ void state_machine_task(void *, void *, void *)
 
 	sm_init(&state_cfg, &sm_error_handler);
 	sm_active = true;
+
+#if defined(CONFIG_IMU) && defined(CONFIG_AURORA_STATE_MACHINE_RETAIN)
+	if (sm_retain_recovered()) {
+		/* Hand back the calibration from before the reset */
+		if (sm_retain_load_blob(&attitude_state, sizeof(attitude_state)) == 0) {
+			LOG_WRN("restored attitude calibration from before the reset");
+		} else {
+			/* Nothing to restore */
+			LOG_ERR("no attitude calibration retained; vertical "
+				"acceleration and orientation are unavailable "
+				"for the rest of this flight");
+		}
+	}
+#endif /* CONFIG_IMU && CONFIG_AURORA_STATE_MACHINE_RETAIN */
 
 	/* TODO: Add idling */
 	while (!baro_active || !imu_active) {
@@ -708,6 +752,10 @@ int main(void)
 	notify_init();
 	notify_boot();
 #endif /* CONFIG_AURORA_NOTIFY */
+
+#if defined(CONFIG_AURORA_WATCHDOG)
+	(void)aurora_watchdog_setup();
+#endif /* CONFIG_AURORA_WATCHDOG */
 
 #if defined(CONFIG_AURORA_POWERFAIL)
 	/* Samples its input during setup and can raise a notification straight
