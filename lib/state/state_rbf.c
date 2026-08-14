@@ -39,6 +39,16 @@ static atomic_t rbf_armed = ATOMIC_INIT(0);
 
 static struct k_work_delayable rbf_debounce_work;
 
+/* Own queue, not the syswq: the arm interlock must not wait behind the
+ * SD close at LANDED or a BLE notify. Priority is just above the SM thread so
+ * a pending debounce always resolves before the next update samples it.
+ */
+#define RBF_WQ_STACK 2048
+#define RBF_WQ_PRIO  5
+
+static K_THREAD_STACK_DEFINE(rbf_wq_stack, RBF_WQ_STACK);
+static struct k_work_q rbf_wq;
+
 /** @brief Translate the raw pin level into an arm verdict. */
 static inline atomic_val_t rbf_armed_from_level(int level)
 {
@@ -50,7 +60,7 @@ static inline atomic_val_t rbf_armed_from_level(int level)
 /**
  * @brief Sample the line once the contact is stable.
  *
- * Runs on the system workqueue; the state machine picks the result up on its
+ * Runs on the RBF workqueue; the state machine picks the result up on its
  * next update rather than being driven from here.
  */
 static void rbf_debounce_handler(struct k_work *work)
@@ -87,8 +97,8 @@ static void rbf_isr(const struct device *dev, struct gpio_callback *cb,
 
 	/* Restart the window on every edge: the level is only sampled once the
 	 * contact has been quiet for a full debounce period. */
-	k_work_reschedule(&rbf_debounce_work,
-			  K_MSEC(CONFIG_AURORA_STATE_MACHINE_RBF_DEBOUNCE_MS));
+	k_work_reschedule_for_queue(&rbf_wq, &rbf_debounce_work,
+				    K_MSEC(CONFIG_AURORA_STATE_MACHINE_RBF_DEBOUNCE_MS));
 }
 
 /* sm_rbf_init – see state_internal.h */
@@ -121,6 +131,12 @@ int sm_rbf_init(void)
 	}
 
 	k_work_init_delayable(&rbf_debounce_work, rbf_debounce_handler);
+
+	/* Before the interrupt: rbf_isr() must never submit to a dead queue. */
+	k_work_queue_start(&rbf_wq, rbf_wq_stack,
+			   K_THREAD_STACK_SIZEOF(rbf_wq_stack),
+			   RBF_WQ_PRIO,
+			   &(struct k_work_queue_config){ .name = "rbf_wq" });
 
 	ret = gpio_pin_interrupt_configure_dt(&rbf_pin, GPIO_INT_EDGE_BOTH);
 	if (ret < 0) {
