@@ -1,0 +1,69 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+config AURORA_WATCHDOG
+	bool "Hardware watchdog supervision"
+	select WATCHDOG
+	select TASK_WDT
+	select TASK_WDT_HW_FALLBACK
+	help
+	  Reset the board when the kernel stops running.  A dedicated thread
+	  feeds a task watchdog channel; if it stops being scheduled, the
+	  board resets.
+
+	  This supervises kernel liveness only, not sensor data flow.  A
+	  sensor that goes quiet is a degraded flight to fly through, not a
+	  reason to reboot -- and since an I2C wedge survives a warm reset,
+	  supervising sensor flow produces a reset loop rather than a
+	  recovery.
+
+	  TASK_WDT_HW_FALLBACK is what makes this work against the failures
+	  worth catching: the task watchdog runs off the kernel timer, so a
+	  stopped kernel clock stops the supervisor too.  The hardware
+	  watchdog behind it has its own clock.
+
+	  Pair with AURORA_STATE_MACHINE_RETAIN so the reset resumes the
+	  flight instead of rebooting into a disarmed vehicle.
+
+if AURORA_WATCHDOG
+
+config AURORA_WATCHDOG_TIMEOUT_MS
+	int "Watchdog timeout (ms)"
+	default 2000
+	range 100 60000
+	help
+	  How long the feeder thread may go unscheduled before the board is
+	  reset.  Keep it comfortably above the feed interval so ordinary
+	  scheduling jitter, logging bursts and flash writes do not trip it.
+
+config AURORA_WATCHDOG_FEED_INTERVAL_MS
+	int "Feed interval (ms)"
+	default 500
+	range 10 30000
+	help
+	  How often the feeder thread feeds the channel.  Should be a good
+	  fraction of AURORA_WATCHDOG_TIMEOUT_MS so a single missed cycle
+	  does not reset the board.
+
+config AURORA_WATCHDOG_PRIORITY
+	int "Feeder thread priority"
+	default 10
+	help
+	  Priority of the feeder thread.  A preemptible priority is
+	  intentional: if a higher-priority thread spins and starves
+	  everything below it, the board is not doing useful work and the
+	  reset is the correct outcome.
+
+config AURORA_WATCHDOG_STACK_SIZE
+	int "Feeder thread stack size"
+	default 1024
+	help
+	  Stack for the feeder thread.  It only calls task_wdt_feed() and
+	  k_sleep(), but on Xtensa any interrupt taken while it runs pushes a
+	  save area plus spilled registers onto this stack.
+
+module = AURORA_WATCHDOG
+module-str = Aurora watchdog
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # AURORA_WATCHDOG

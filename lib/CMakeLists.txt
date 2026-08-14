@@ -25,5 +25,8 @@ add_subdirectory_ifdef(CONFIG_AURORA_STATE_MACHINE state)
 # telemetry lib
 add_subdirectory_ifdef(CONFIG_AURORA_TELEMETRY telemetry)
 
+# hardware watchdog supervision
+add_subdirectory_ifdef(CONFIG_AURORA_WATCHDOG watchdog)
+
 # pad link (BLE status server on launchrail)
 add_subdirectory_ifdef(CONFIG_AURORA_PAD_LINK pad_link)

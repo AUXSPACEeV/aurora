@@ -105,6 +105,22 @@ int sm_rbf_init(void);
  * @retval false while it is installed, or before @ref sm_rbf_init succeeded.
  */
 bool sm_rbf_armed(void);
+
+/**
+ * @brief force the interlock's current level as the armed state
+ *
+ * @ref sm_rbf_init deliberately leaves the vehicle reporting SAFE at boot and
+ * waits for an edge, so that forgetting to install the plug cannot arm the
+ * machine.
+ * On cold boot this works, but a WDT recovery fails here.
+ *
+ * Only the flight-recovery path may call this, and only once it knows the
+ * reset came from the watchdog and a valid in-flight record exists.
+ *
+ * @retval 0 on success.
+ * @retval -errno as reported by the GPIO driver.
+ */
+int sm_rbf_resync(void);
 #endif /* CONFIG_AURORA_STATE_MACHINE_RBF */
 
 /*-----------------------------------------------------------

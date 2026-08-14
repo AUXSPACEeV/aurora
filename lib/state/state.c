@@ -28,6 +28,10 @@
 #include <aurora/lib/state/audit.h>
 #endif /* CONFIG_AURORA_STATE_MACHINE_AUDIT */
 
+#if defined(CONFIG_AURORA_STATE_MACHINE_RETAIN)
+#include <aurora/lib/state/retain.h>
+#endif /* CONFIG_AURORA_STATE_MACHINE_RETAIN */
+
 #if defined(CONFIG_FILTER)
 #include <aurora/lib/filter.h>
 static struct filter filter;
@@ -77,6 +81,10 @@ void sm_transition(enum sm_state new_state)
 	sm_audit_transition(current_state, new_state);
 #endif /* CONFIG_AURORA_STATE_MACHINE_AUDIT */
 	current_state = new_state;
+
+#if defined(CONFIG_AURORA_STATE_MACHINE_RETAIN)
+	sm_retain_save(current_state);
+#endif /* CONFIG_AURORA_STATE_MACHINE_RETAIN */
 }
 
 /* sm_event – see state_internal.h */
@@ -181,6 +189,39 @@ void sm_init(const struct sm_thresholds *cfg,
 		err_hdl.cb = sm_err_hdl->cb;
 		err_hdl.args = sm_err_hdl->args;
 	}
+
+#if defined(CONFIG_AURORA_STATE_MACHINE_RETAIN)
+	{
+		enum sm_state resumed;
+
+		if (sm_retain_restore(&resumed) == 0) {
+#if defined(CONFIG_AURORA_STATE_MACHINE_RBF)
+			if (sm_rbf_resync() != 0 || !sm_rbf_armed()) {
+				LOG_WRN("watchdog reset during %s, but the RBF "
+					"interlock reports safe; staying in IDLE",
+					sm_state_str(resumed));
+				sm_event("recovery refused: interlock safe");
+				sm_retain_invalidate();
+				return;
+			}
+#endif /* CONFIG_AURORA_STATE_MACHINE_RBF */
+
+			LOG_WRN("watchdog reset during flight: resuming in %s "
+				"(recovery %u)",
+				sm_state_str(resumed),
+				(unsigned int)sm_retain_recovery_count());
+
+			/* Timers restart from zero.  There is no way to know how
+			 * long the board was absent, so the flight-phase timeouts
+			 * are necessarily generous after a recovery rather than
+			 * wrong in the unsafe direction.
+			 * TODO: Fix this with future versions using RTCs
+			 */
+			sm_transition(resumed);
+			sm_event("recovered after watchdog reset");
+		}
+	}
+#endif /* CONFIG_AURORA_STATE_MACHINE_RETAIN */
 }
 
 /* sm_set_thresholds – see state.h */
@@ -204,6 +245,10 @@ void sm_deinit(void)
 	sm_event("state machine reset");
 	current_state = SM_IDLE;
 	err_reason = SM_ERR_UNKNOWN;
+
+#if defined(CONFIG_AURORA_STATE_MACHINE_RETAIN)
+	sm_retain_invalidate();
+#endif /* CONFIG_AURORA_STATE_MACHINE_RETAIN */
 }
 
 /*-----------------------------------------------------------

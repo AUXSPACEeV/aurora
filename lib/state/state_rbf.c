@@ -169,3 +169,21 @@ bool sm_rbf_armed(void)
 {
 	return atomic_get(&rbf_armed) != 0;
 }
+
+/* sm_rbf_resync – see state_internal.h */
+int sm_rbf_resync(void)
+{
+	int level = gpio_pin_get_dt(&rbf_pin);
+
+	if (level < 0) {
+		LOG_ERR("failed to read RBF pin: %d", level);
+		return level;
+	}
+
+	atomic_set(&rbf_armed, rbf_armed_from_level(level));
+
+	LOG_INF("RBF re-sampled after watchdog reset: vehicle %s",
+		sm_rbf_armed() ? "ARMED" : "SAFE");
+
+	return 0;
+}

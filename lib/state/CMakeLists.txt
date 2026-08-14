@@ -21,6 +21,10 @@ if(CONFIG_AURORA_STATE_MACHINE_AUDIT)
     zephyr_library_sources(state_audit.c)
 endif()
 
+if(CONFIG_AURORA_STATE_MACHINE_RETAIN)
+    zephyr_library_sources(state_retain.c)
+endif()
+
 if(CONFIG_AURORA_STATE_MACHINE_SHELL)
     zephyr_library_sources(state_shell.c)
 endif()

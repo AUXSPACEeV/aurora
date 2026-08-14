@@ -52,6 +52,7 @@ implementation defines a 9-state flight sequence driven by sensor thresholds.
 State transitions are also driven by sensor thresholds configured via Kconfig
 (boost acceleration, main descent height, apogee timeout, etc.).
 
+(rbf)=
 ## Remove Before Flight
 
 The ARM/DISARM signal normally comes from the application, through
@@ -151,6 +152,107 @@ Thresholds can only be changed in `IDLE`. Swapping one mid-flight would
 compare fresh limits against timers already started under the old ones, so
 `sm_set_thresholds()` returns `-EBUSY` outside `IDLE`.
 
+## Flight State Recovery
+
+With `CONFIG_AURORA_STATE_MACHINE_RETAIN`, the active flight state survives a
+watchdog reset. Without it, a board that reboots mid-flight comes back in
+`IDLE` — a silently disarmed vehicle, with the recovery charges no longer
+going to fire.
+
+The record lives in RTC slow memory (`.rtc_noinit`), which the linker marks
+NOLOAD and the startup code does not clear, so it survives the warm reset a
+{doc}`watchdog <watchdog>` produces. It is written on every transition
+through `sm_transition()`, which is the only sanctioned way to change state
+and therefore the one place the record cannot drift out of sync.
+
+### Why not flash
+
+Flash would also survive losing power, but the state machine writes on
+*every* transition, and the transitions that matter most (`APOGEE`, `MAIN`,
+`REDUNDANT`) are exactly the ones that must not stall. A page erase blocks
+for milliseconds with interrupts locked and contends with the flight
+recorder already writing that device. The write that matters is the one
+issued while the system is already misbehaving, which is the worst possible
+moment to start erasing pages.
+
+RTC memory costs a few stores, has no wear and needs no erase. The trade-off
+is that it does **not** survive a power cycle or a brownout — see
+{doc}`powerfail <powerfail>` for that failure, which needs a different
+mitigation.
+
+### When recovery happens
+
+All of the following must hold, or the machine starts in `IDLE`:
+
+- the reset cause latched at boot includes `RESET_WATCHDOG`,
+- the record carries the expected magic, version and payload size,
+- the CRC matches,
+- it was written by the same state-machine backend (`sm_type`), so swapping
+  implementations cannot resurrect a state ID that now means something else,
+- the retained state is not `IDLE`, and
+- the {ref}`RBF interlock <rbf>` reads *removed* when re-sampled.
+
+A power-up, a reset button or a debugger attach therefore always lands in
+`IDLE`. That is deliberate: the operator needs a reliable way to reach a
+known-safe state, and holding reset must not resurrect a live flight.
+
+### The interlock has to be re-sampled
+
+`sm_rbf_init()` leaves the vehicle reported *safe* at boot and waits for an
+edge, so that forgetting to install the plug cannot arm the machine. That is
+right for a cold boot and wrong here: in flight the plug was pulled long
+before the reset, no further edge is coming, and the machine would disarm
+itself on its first update — undoing the recovery a few milliseconds after
+making it.
+
+The recovery path therefore calls `sm_rbf_resync()` to adopt the pin's
+present level, but only once it knows the reset came from the watchdog and a
+valid in-flight record exists. Under those conditions the vehicle was
+demonstrably armed already, which makes the pin the authority rather than a
+guess. A plug that is still installed still reads safe, so resetting on the
+pad still disarms.
+
+### Attitude calibration comes back too
+
+Calibration only runs while the machine is in `IDLE` (see the
+{doc}`sensor board <../applications/sensor_board>` IMU handling), so a board
+that resumes into a flight state can never redo it. Losing it is not
+cosmetic: vertical acceleration would stay pinned at zero, leaving boost and
+apogee detection blind, and orientation would integrate from a zero reference
+— reading horizontal, which trips the elevation gate and disarms within
+`N_OI` samples.
+
+The calibration is therefore snapshotted into the same record the moment it
+completes, while the vehicle is stationary and the result is known good, and
+handed back on recovery. The biases were measured on the pad and do not
+change across a reset, and there is no opportunity to measure them again
+mid-flight.
+
+If the reset landed before calibration ever finished there is nothing to
+restore. The flight continues, but degraded, and says so in the log.
+
+### Flight timers
+
+Timers restart from zero. There is no way to know how long the board was
+absent, so phase timeouts (`TO_A`, `TO_R`) are necessarily generous after a
+recovery rather than wrong in the unsafe direction.
+
+### Reading the audit log
+
+A recovery leaves a recognisable trace:
+
+```
+transition   IDLE   ARMED
+event        ARMED  recovered after watchdog reset
+```
+
+A refusal leaves `recovery refused: interlock safe` instead. If you see the
+resume followed by an `ARMED -> IDLE` transition with **no event between
+them**, that is the disarm check in the backend, not the orientation gate —
+the orientation path logs `orientation below threshold` and the log-offline
+path logs `arm aborted: flight log offline`, so an eventless transition
+means `.armed` went false.
+
 ## Shell Commands
 
 Enabling `CONFIG_AURORA_STATE_MACHINE_SHELL` registers the
@@ -191,5 +293,9 @@ machine. Do not use in flight.
 ```
 
 ```{doxygengroup} lib_state_config
+   :content-only:
+```
+
+```{doxygengroup} lib_state_retain
    :content-only:
 ```
