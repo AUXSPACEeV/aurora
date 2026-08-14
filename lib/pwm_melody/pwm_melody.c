@@ -33,18 +33,27 @@ static void melody_entry(void *p1, void *p2, void *p3)
 	}
 }
 
-void pwm_melody_stop(struct pwm_melody_ctx *ctx)
+int pwm_melody_stop(struct pwm_melody_ctx *ctx)
 {
 	if (ctx->playing) {
 		ctx->playing = false;
-		k_thread_join(&ctx->thread, K_SECONDS(5));
+
+		/* never recreate over a live thread */
+		if (k_thread_join(&ctx->thread, K_SECONDS(5)) != 0) {
+			return -EBUSY;
+		}
 		pwm_set_dt(ctx->pwm, PWM_HZ(1000), 0);
 	}
+	return 0;
 }
 
 int pwm_melody_start(struct pwm_melody_ctx *ctx)
 {
-	pwm_melody_stop(ctx);
+	int ret = pwm_melody_stop(ctx);
+	if (ret != 0) {
+		return ret;
+	}
+
 	ctx->playing = true;
 	k_thread_create(&ctx->thread, ctx->stack,
 			ctx->stack_size,
