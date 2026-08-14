@@ -56,6 +56,34 @@ static powerfail_cb_t pfail_deassert_cb;
 
 static atomic_t pfail_state = ATOMIC_INIT(0);
 
+#if defined(CONFIG_AURORA_NOTIFY)
+/* notify_powerfail() reaches the PWM LED backend, and the ESP32 LEDC driver
+ * blocks on k_sem_take(&data->cmd_sem, K_FOREVER) in pwm_led_esp32_set_cycles().
+ * A blocking take from an ISR is fatal, not merely sloppy: z_pend_curr()
+ * refuses it with k_panic() even when CONFIG_ASSERT is off, so it shows up as
+ * a bare "Kernel panic" attributed to whichever thread was interrupted.
+ *
+ * The data-logger stop below is plain atomics and is the time-critical half,
+ * so it stays inline in the ISR.  The notification is cosmetic; hand it to the
+ * system workqueue.  Coalescing is intentional: if both edges arrive before
+ * the work runs, the latest pin state is the one worth showing.
+ */
+static atomic_t pfail_notify_recover;
+
+static void powerfail_notify_work_handler(struct k_work *work)
+{
+	ARG_UNUSED(work);
+	notify_powerfail((int)atomic_get(&pfail_notify_recover));
+}
+static K_WORK_DEFINE(powerfail_notify_work, powerfail_notify_work_handler);
+
+static inline void powerfail_notify(int recover)
+{
+	atomic_set(&pfail_notify_recover, recover);
+	(void)k_work_submit(&powerfail_notify_work);
+}
+#endif /* CONFIG_AURORA_NOTIFY */
+
 static inline void emergency_state_save(void)
 {
 #if defined(CONFIG_DATA_LOGGER)
@@ -63,7 +91,7 @@ static inline void emergency_state_save(void)
 #endif /* CONFIG_DATA_LOGGER */
 
 #if defined(CONFIG_AURORA_NOTIFY)
-	notify_powerfail(0);
+	powerfail_notify(0);
 #endif /* CONFIG_AURORA_NOTIFY */
 }
 
@@ -74,7 +102,7 @@ static inline void emergency_state_recover(void)
 #endif /* CONFIG_DATA_LOGGER */
 
 #if defined(CONFIG_AURORA_NOTIFY)
-	notify_powerfail(1);
+	powerfail_notify(1);
 #endif /* CONFIG_AURORA_NOTIFY */
 }
 
