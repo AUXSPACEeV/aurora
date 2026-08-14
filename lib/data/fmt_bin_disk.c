@@ -141,10 +141,8 @@ struct bin_disk_ctx {
 static struct bin_disk_ctx g_bin_ctx;
 static atomic_t g_bin_open = ATOMIC_INIT(0);
 
-/* Writer wakes when the producer commits a frame or flush is requested. */
-K_SEM_DEFINE(bin_data_sem,  0, K_SEM_MAX_LIMIT);
-/* Producer wakes when the writer drains one or more committed frames. */
-K_SEM_DEFINE(bin_space_sem, 0, K_SEM_MAX_LIMIT);
+K_SEM_DEFINE(bin_data_sem,  0, 1);
+K_SEM_DEFINE(bin_space_sem, 0, 1);
 /* Drain handshake for bin_flush(). */
 K_SEM_DEFINE(bin_drain_sem, 0, 1);
 static atomic_t bin_drain_req = ATOMIC_INIT(0);
@@ -152,6 +150,69 @@ static atomic_t bin_drain_req = ATOMIC_INIT(0);
 /* -------------------------------------------------------------------------- */
 /*  Writer thread                                                             */
 /* -------------------------------------------------------------------------- */
+
+/* Retire one batch of committed frames, capped by the physical ring wrap
+ * and BIN_MAX_BATCH_FRAMES. Returns the number of frames retired, 0 when
+ * nothing is committed. Frames are retired even when the write fails, so
+ * a dead card back-pressures the producer through sticky_err rather than
+ * wedging the ring.
+ */
+static uint32_t bin_retire_batch(void)
+{
+	uint32_t head  = (uint32_t)atomic_get(&g_bin_ctx.head);
+	uint32_t tail  = (uint32_t)atomic_get(&g_bin_ctx.tail);
+	uint32_t avail = head - tail;
+
+	if (avail == 0U) {
+		return 0U;
+	}
+
+	uint32_t to_wrap = BIN_RING_FRAMES - (tail & BIN_RING_MASK);
+	uint32_t batch   = MIN(avail, to_wrap);
+
+	batch = MIN(batch, BIN_MAX_BATCH_FRAMES);
+
+	uint32_t sec   = g_bin_ctx.cur_sector_offset;
+	uint32_t n_sec = batch * g_bin_ctx.sectors_per_frame;
+
+	if (sec + n_sec > g_bin_ctx.size_sec) {
+		/* Linear region exhausted. Drop the batch so the producer
+		 * doesn't hang; sticky_err will propagate and the rest of
+		 * the flight is silently discarded.
+		 */
+		(void)atomic_cas(&g_bin_ctx.sticky_err, 0,
+				 (atomic_val_t)-ENOSPC);
+		LOG_ERR("bin_disk: region full at sector %u",
+			g_bin_ctx.offset_sec + sec);
+	} else {
+		int rc = disk_access_write(BIN_DISK_NAME,
+			frame_ptr(tail),
+			g_bin_ctx.offset_sec + sec,
+			n_sec);
+
+		if (rc != 0) {
+			(void)atomic_cas(&g_bin_ctx.sticky_err, 0,
+					 (atomic_val_t)rc);
+			LOG_ERR("bin_disk: write at sector %u "
+				"(n=%u) failed (%d)",
+				g_bin_ctx.offset_sec + sec,
+				n_sec, rc);
+		} else {
+			g_bin_ctx.cur_sector_offset = sec + n_sec;
+			disk_led_activity();
+		}
+	}
+
+	(void)atomic_add(&g_bin_ctx.tail, (atomic_val_t)batch);
+
+	/* One signal per batch, not per frame: bin_space_sem only says
+	 * "space was freed", and bin_wait_space() recomputes how much from
+	 * head/tail after every take.
+	 */
+	k_sem_give(&bin_space_sem);
+
+	return batch;
+}
 
 static void bin_writer_fn(void *p1, void *p2, void *p3)
 {
@@ -164,67 +225,15 @@ static void bin_writer_fn(void *p1, void *p2, void *p3)
 			continue;
 		}
 
-		uint32_t head  = (uint32_t)atomic_get(&g_bin_ctx.head);
-		uint32_t tail  = (uint32_t)atomic_get(&g_bin_ctx.tail);
-		uint32_t avail = head - tail;
-
-		if (avail > 0U) {
-			uint32_t to_wrap = BIN_RING_FRAMES - (tail & BIN_RING_MASK);
-			uint32_t batch   = MIN(avail, to_wrap);
-
-			batch = MIN(batch, BIN_MAX_BATCH_FRAMES);
-
-			uint32_t sec      = g_bin_ctx.cur_sector_offset;
-			uint32_t n_sec    = batch * g_bin_ctx.sectors_per_frame;
-
-			if (sec + n_sec > g_bin_ctx.size_sec) {
-				/* Linear region exhausted. Drop the batch so
-				 * the producer doesn't hang; sticky_err will
-				 * propagate and the rest of the flight is
-				 * silently discarded.
-				 */
-				(void)atomic_cas(&g_bin_ctx.sticky_err, 0,
-						 (atomic_val_t)-ENOSPC);
-				LOG_ERR("bin_disk: region full at sector %u",
-					g_bin_ctx.offset_sec + sec);
-			} else {
-				int rc = disk_access_write(BIN_DISK_NAME,
-					frame_ptr(tail),
-					g_bin_ctx.offset_sec + sec,
-					n_sec);
-
-				if (rc != 0) {
-					(void)atomic_cas(&g_bin_ctx.sticky_err, 0,
-							 (atomic_val_t)rc);
-					LOG_ERR("bin_disk: write at sector %u "
-						"(n=%u) failed (%d)",
-						g_bin_ctx.offset_sec + sec,
-						n_sec, rc);
-				} else {
-					g_bin_ctx.cur_sector_offset = sec + n_sec;
-					disk_led_activity();
-				}
-			}
-
-			(void)atomic_add(&g_bin_ctx.tail, (atomic_val_t)batch);
-
-			for (uint32_t i = 0; i < batch; i++) {
-				k_sem_give(&bin_space_sem);
-			}
-
-			/* If more frames are queued (or remained after wrap),
-			 * keep the writer hot.
-			 */
-			head = (uint32_t)atomic_get(&g_bin_ctx.head);
-			tail = (uint32_t)atomic_get(&g_bin_ctx.tail);
-			if (head != tail) {
-				k_sem_give(&bin_data_sem);
-			}
-		}
+		/* Drain to head in this pass rather than re-arming the
+		 * semaphore per batch.
+		 */
+		while (bin_retire_batch() > 0U);
 
 		if (atomic_get(&bin_drain_req)) {
-			head = (uint32_t)atomic_get(&g_bin_ctx.head);
-			tail = (uint32_t)atomic_get(&g_bin_ctx.tail);
+			uint32_t head = (uint32_t)atomic_get(&g_bin_ctx.head);
+			uint32_t tail = (uint32_t)atomic_get(&g_bin_ctx.tail);
+
 			if (head == tail) {
 				atomic_set(&bin_drain_req, 0);
 				k_sem_give(&bin_drain_sem);
