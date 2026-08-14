@@ -157,7 +157,6 @@ int data_logger_convert(const struct data_logger_formatter *out_fmt,
 			const char *out_path)
 {
 	struct data_logger out_logger;
-	struct data_logger_state out_state;
 	off_t start_offset;
 	uint32_t expect_seq;
 	uint64_t flight_id;
@@ -177,10 +176,9 @@ int data_logger_convert(const struct data_logger_formatter *out_fmt,
 		(uint32_t)(total_size / BIN_FRAME_SIZE);
 
 	memset(&out_logger, 0, sizeof(out_logger));
-	memset(&out_state, 0, sizeof(out_state));
-	k_mutex_init(&out_state.mutex);
-	out_logger.fmt   = out_fmt;
-	out_logger.state = &out_state;
+	k_mutex_init(&out_logger.state.mutex);
+	out_logger.state.mutex_ready = true;
+	out_logger.fmt = out_fmt;
 
 	rc = out_fmt->init(&out_logger, out_path);
 	if (rc != 0) {

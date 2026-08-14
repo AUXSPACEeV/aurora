@@ -138,6 +138,11 @@ struct data_logger_state {
 
 	/** Data logger is running and logging (atomic for ISR access) */
 	atomic_t running;
+
+	/** True once @c mutex has been initialised.
+	 * See @ref data_logger_init.
+	 */
+	bool mutex_ready;
 };
 
 /** Maximum length of a data logger name (including NUL). */
@@ -151,7 +156,7 @@ struct data_logger_state {
  */
 struct data_logger {
 	const struct data_logger_formatter *fmt; /**< Active formatter vtable  */
-	struct data_logger_state *state;         /**< Active formatter state */
+	struct data_logger_state state; /**< Formatter state. Never heap-allocated! */
 	void *ctx;                               /**< Opaque formatter context */
 	char name[DATA_LOGGER_NAME_MAX];        /**< Logger name (set by init) */
 	char path[DATA_LOGGER_PATH_MAX];        /**< Full output path (set by init) */
