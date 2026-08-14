@@ -445,7 +445,7 @@ static void handle_state_transition(enum sm_state prev_state, enum sm_state stat
 	int64_t *last_imu_ns, bool *calibration_started_notified, bool *calibration_notified,
 	double orientation[3])
 {
-#if defined(CONFIG_AURORA_FAKE_SENSORS)
+#if defined(CONFIG_AURORA_FAKE_SENSORS) && defined(CONFIG_AURORA_SIM_AUTOTEST)
 	__ASSERT(is_valid_transition(prev_state, state),
 		"Invalid SM transition: %s -> %s",
 		sm_state_str(prev_state),

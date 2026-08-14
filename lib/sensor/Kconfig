@@ -125,7 +125,7 @@ menu "Barometric Pressure Sensor (BARO)"
 config BARO
 	bool "Support for Baro"
 	depends on AURORA_SENSORS
-	default y if MS5607 || LPS22HH
+	default y if MS5607 || LPS22HH || BMP581
 	help
 		This option enables functionality for barometric pressure
 		sensors.
