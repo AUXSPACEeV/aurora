@@ -180,6 +180,26 @@ config DATA_LOGGER_BIN_WRITER_STACK_SIZE
 	  the deferred-log filter overhead (notably when BT_HCI_HOST
 	  is in the build) started tipping it over on ESP32-S3.
 
+config DATA_LOGGER_LOGGER_STACK_SIZE
+	int "Record-pump thread stack size (bytes)"
+	default 2048
+	help
+	  Stack for logger_task(), which drains the datapoint msgq into the
+	  active formatter.  Its flush path reaches the same FATFS -> SD
+	  frames as the writer thread, so size it accordingly on targets
+	  whose backend is a filesystem rather than a raw partition.
+
+config DATA_LOGGER_CONVERTER_STACK_SIZE
+	int "Post-flight converter thread stack size (bytes)"
+	default 2048
+	help
+	  Stack for converter_task().  Every call it makes lands on the
+	  filesystem: pick_convert_out_base() alone spends ~1.1 KB below
+	  its own frame in fs_stat() -> FATFS -> SD, and the conversion
+	  proper goes deeper still through fs_open()/fs_write().  On
+	  ESP32-S3 with FATFS on SD, 2048 overflows during the output-name
+	  probe; give it what the writer thread gets.
+
 config DATA_LOGGER_BIN_WRITER_PRIO
 	int "Binary log writer thread priority"
 	default 10
