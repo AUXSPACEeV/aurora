@@ -20,6 +20,10 @@
 
 #include <zephyr/app_version.h>
 
+#if defined(CONFIG_HWINFO)
+#include <zephyr/drivers/hwinfo.h>
+#endif /* CONFIG_HWINFO */
+
 #if defined(CONFIG_IMU)
 #include <aurora/lib/attitude.h>
 #include <aurora/lib/imu.h>
@@ -608,6 +612,81 @@ K_THREAD_DEFINE(state_machine, 4096, state_machine_task, NULL, NULL, NULL, 6, 0,
 /* ============================================================
  *                     MAIN INITIALIZATION
  * ============================================================ */
+#if defined(CONFIG_HWINFO)
+/**
+ * @brief Report and clear the cause of the last reset.
+ *
+ * A console cannot tell a panic from a brownout, a watchdog bite or a flat
+ * pack: every one of them just stops the log mid-line. The SoC's reset
+ * latch can, and after an unattended run it is the first thing worth
+ * knowing -- it decides whether to go looking for a coredump or for a
+ * power problem.
+ *
+ * Reported per set bit rather than as a raw mask so the answer is legible
+ * in the field with no console attached to decode it. The latch is sticky
+ * across resets, so it is cleared afterwards: otherwise every later boot
+ * keeps re-reporting the same stale cause.
+ */
+static void log_reset_cause(void)
+{
+	static const struct {
+		uint32_t flag;
+		const char *name;
+	} causes[] = {
+		{RESET_PIN, "reset pin"},
+		{RESET_SOFTWARE, "software"},
+		{RESET_BROWNOUT, "brownout"},
+		{RESET_POR, "power-on"},
+		{RESET_WATCHDOG, "watchdog"},
+		{RESET_DEBUG, "debugger"},
+		{RESET_SECURITY, "security violation"},
+		{RESET_LOW_POWER_WAKE, "low-power wake"},
+		{RESET_CPU_LOCKUP, "CPU lockup"},
+		{RESET_PARITY, "parity error"},
+		{RESET_PLL, "PLL error"},
+		{RESET_CLOCK, "clock error"},
+		{RESET_HARDWARE, "hardware"},
+		{RESET_USER, "user"},
+		{RESET_TEMPERATURE, "temperature"},
+	};
+	uint32_t cause = 0;
+	int rc = hwinfo_get_reset_cause(&cause);
+
+	if (rc != 0) {
+		LOG_WRN("Reset cause unavailable (%d)", rc);
+		return;
+	}
+
+	if (cause == 0) {
+		LOG_INF("Reset cause: not reported");
+		return;
+	}
+
+	/* A cold start or a button press is how the board is *meant* to come
+	 * up. Anything else means the previous run ended badly and should
+	 * stand out in a scrollback.
+	 */
+	bool unexpected = (cause & ~(uint32_t)(RESET_POR | RESET_PIN)) != 0;
+
+	for (size_t i = 0; i < ARRAY_SIZE(causes); i++) {
+		if ((cause & causes[i].flag) == 0) {
+			continue;
+		}
+		if (unexpected) {
+			LOG_WRN("Reset cause: %s", causes[i].name);
+		} else {
+			LOG_INF("Reset cause: %s", causes[i].name);
+		}
+	}
+
+	if (unexpected) {
+		LOG_WRN("Previous run ended abnormally; check 'coredump find'");
+	}
+
+	(void)hwinfo_clear_reset_cause();
+}
+#endif /* CONFIG_HWINFO */
+
 /**
  * @brief Application entry point.
  *
@@ -617,6 +696,13 @@ K_THREAD_DEFINE(state_machine, 4096, state_machine_task, NULL, NULL, NULL, 6, 0,
 int main(void)
 {
 	LOG_INF("Auxspace AURORA %s", APP_VERSION_STRING);
+
+#if defined(CONFIG_HWINFO)
+	/* Before any subsystem brings itself up and floods the console: this
+	 * line explains the boot that is about to happen.
+	 */
+	log_reset_cause();
+#endif /* CONFIG_HWINFO */
 
 #if defined(CONFIG_AURORA_NOTIFY)
 	notify_init();
