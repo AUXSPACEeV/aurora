@@ -199,7 +199,6 @@ K_THREAD_DEFINE(baro_polling, 4096, baro_task, NULL, NULL, NULL, 7, 0, 0);
  *                     State machine TASK
  * ============================================================ */
 #if defined(CONFIG_AURORA_STATE_MACHINE)
-
 #if defined(CONFIG_AURORA_FAKE_SENSORS)
 /* make the function known (defined in fake_sensors.c) */
 void fake_sensors_on_calibrated(void);
@@ -548,6 +547,20 @@ void state_machine_task(void *, void *, void *)
 		}
 	}
 #endif /* CONFIG_IMU && CONFIG_AURORA_STATE_MACHINE_RETAIN */
+
+#if defined(CONFIG_AURORA_STATE_MACHINE_RETAIN) && defined(CONFIG_AURORA_NOTIFY)
+	/* Announce retain as an IDLE => resumed edge */
+	if (sm_retain_recovered()) {
+		enum sm_state resumed = sm_get_state();
+
+		if (resumed != prev_state) {
+			LOG_WRN("resumed in %s after reset; re-syncing notifications",
+				sm_state_str(resumed));
+			notify_state_change(prev_state, resumed);
+			prev_state = resumed;
+		}
+	}
+#endif /* CONFIG_AURORA_STATE_MACHINE_RETAIN && CONFIG_AURORA_NOTIFY */
 
 	/* TODO: Add idling */
 	while (!baro_active || !imu_active) {

@@ -14,3 +14,7 @@ endif()
 if(CONFIG_BARO)
     zephyr_library_sources(baro.c)
 endif()
+
+if(CONFIG_AURORA_SENSOR_BUS_UNWEDGE)
+    zephyr_library_sources(bus_unwedge.c)
+endif()
