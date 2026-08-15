@@ -423,6 +423,19 @@ extern atomic_t sm_logger_live;
 extern struct k_sem convert_idle;
 extern struct k_sem convert_request;
 
+/**
+ * @brief Ask the converter thread to translate the just-closed binary log.ve closed the binary logger first.
+ */
+void data_logger_convert_request(void);
+
+/**
+ * @brief Is a post-flight conversion requested or running?
+ *
+ * @retval true  conversion is pending or running.
+ * @retval false the flight recorder is free.
+ */
+bool data_logger_convert_busy(void);
+
 /* Decouple logging from the SM hot path: SM pushes datapoints into this
  * queue with K_NO_WAIT; a dedicated logger thread drains it and owns all
  * FS-touching operations (write + periodic flush). Sized to absorb the

@@ -21,6 +21,10 @@
 
 #include <aurora/lib/data_logger.h>
 
+#if defined(CONFIG_AURORA_NOTIFY)
+#include <aurora/lib/notify.h>
+#endif /* CONFIG_AURORA_NOTIFY */
+
 LOG_MODULE_REGISTER(data_logger, CONFIG_DATA_LOGGER_LOG_LEVEL);
 
 /* -------------------------------------------------------------------------- */
@@ -424,6 +428,21 @@ K_SEM_DEFINE(convert_idle, 1, 1);
  */
 K_SEM_DEFINE(convert_request, 0, 1);
 
+static atomic_t convert_busy = ATOMIC_INIT(0);
+
+/* data_logger_convert_request – see data_logger.h */
+void data_logger_convert_request(void)
+{
+	atomic_set(&convert_busy, 1);
+	k_sem_give(&convert_request);
+}
+
+/* data_logger_convert_busy – see data_logger.h */
+bool data_logger_convert_busy(void)
+{
+	return atomic_get(&convert_busy) != 0;
+}
+
 /* Pick the next free /<base>/flight_<N>.<probe_ext> on the filesystem,
  * writing "/<base>/flight_<N>" (without extension) into @p out. The
  * converter then appends each formatter's file_ext. Falls back to
@@ -463,6 +482,12 @@ void converter_task(void *, void *, void *)
 		k_sem_take(&convert_request, K_FOREVER);
 		k_sem_take(&convert_idle, K_FOREVER);
 
+		atomic_set(&convert_busy, 1);
+
+#if defined(CONFIG_AURORA_NOTIFY)
+		(void)notify_convert_start();
+#endif /* CONFIG_AURORA_NOTIFY */
+
 		/* DATA_LOGGER_PATH_MAX minus struct data_logger_formatter's member
 		 * "file_ext" */
 		char base[DATA_LOGGER_PATH_MAX - 8];
@@ -500,6 +525,12 @@ void converter_task(void *, void *, void *)
 #endif /* CONFIG_DATA_LOGGER_CONVERT_INFLUX */
 
 		k_sem_give(&convert_idle);
+
+		atomic_set(&convert_busy, 0);
+
+#if defined(CONFIG_AURORA_NOTIFY)
+		(void)notify_convert_complete();
+#endif /* CONFIG_AURORA_NOTIFY */
 	}
 }
 

@@ -65,4 +65,16 @@ bool log_flight_log_online(void);
 static inline bool log_flight_log_online(void) { return true; }
 #endif /* CONFIG_DATA_LOGGER_BIN */
 
+/**
+ * @brief Arming precondition: is the flight log busy with the last flight?
+ *
+ * Feeds @ref sm_inputs.log_busy so the state machine holds IDLE (rather than
+ * erroring) while the post-flight conversion still owns the recorder.
+ */
+#if defined(CONFIG_DATA_LOGGER_BIN)
+bool log_flight_log_busy(void);
+#else
+static inline bool log_flight_log_busy(void) { return false; }
+#endif /* CONFIG_DATA_LOGGER_BIN */
+
 #endif /* DATA_H */

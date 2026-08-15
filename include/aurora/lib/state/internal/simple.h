@@ -92,6 +92,7 @@ enum sm_state {
 struct sm_inputs {
 	int armed;			/**< System armed status (non-zero = armed). */
 	int log_ready;			/**< Flight-log readiness (non-zero = logging available). Required, together with @ref armed and @ref calibrated, to leave IDLE for ARMED. */
+	int log_busy;			/**< Non-zero while the flight log is temporarily occupied (post-flight conversion). Arming waits for it to clear instead of failing, so unlike a low @ref log_ready this is not an error. */
 	int calibrated;			/**< Non-zero once attitude calibration has finished for this arm cycle. Required, together with @ref armed and @ref log_ready, to leave IDLE for ARMED. */
 	double orientation[3];		/**< Current orientation reading (yaw, pitch, roll). */
 	double acceleration;		/**< Current acceleration reading (magnitude, m/s^2). */

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <errno.h>
+
 #include <aurora/lib/pwm_melody.h>
 
 static void melody_entry(void *p1, void *p2, void *p3)
@@ -60,4 +62,24 @@ int pwm_melody_start(struct pwm_melody_ctx *ctx)
 			melody_entry, ctx, NULL, NULL,
 			K_PRIO_PREEMPT(10), 0, K_NO_WAIT);
 	return 0;
+}
+
+int pwm_melody_play(struct pwm_melody_ctx *ctx,
+		    const struct pwm_melody_note *notes, size_t num_notes)
+{
+	int ret;
+
+	if (ctx == NULL || notes == NULL || num_notes == 0) {
+		return -EINVAL;
+	}
+
+	ret = pwm_melody_stop(ctx);
+	if (ret != 0) {
+		return ret;
+	}
+
+	ctx->notes = notes;
+	ctx->num_notes = num_notes;
+
+	return pwm_melody_start(ctx);
 }

@@ -161,6 +161,11 @@ void sm_backend_deinit(void)
 void sm_backend_step(const struct sm_inputs *in, double previous_altitude)
 {
 	static int n_oi;
+	static bool log_busy_announced;
+
+	if (!in->log_busy) {
+		log_busy_announced = false;
+	}
 
 	/* go to IDLE if disarmed */
 	if (!in->armed && sm_get_state() != SM_IDLE) {
@@ -177,7 +182,12 @@ void sm_backend_step(const struct sm_inputs *in, double previous_altitude)
 	case SM_IDLE:
 		n_oi = 0;
 		if (in->armed && sm_orientation_elevation_deg(in->orientation) >= th.T_OA) {
-			if (!in->log_ready) {
+			if (in->log_busy) {
+				if (!log_busy_announced) {
+					sm_event("arm deferred: flight log busy");
+					log_busy_announced = true;
+				}
+			} else if (!in->log_ready) {
 				/* Arm conditions are met but the flight log is
 				 * offline.  Refuse to arm so the vehicle never
 				 * flies (or fires pyros) without recording, and
