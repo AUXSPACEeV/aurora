@@ -37,8 +37,8 @@
  * @brief Attempt to unwedge an I2C bus after a failed sensor transfer.
  *
  * Only acts on the error codes that indicate the bus itself is stuck
- * (@c -EBUSY, @c -ETIMEDOUT, @c -EIO); anything else is a sensor-level
- * problem that clocking the bus cannot fix.
+ * (@c -EBUSY, @c -ETIMEDOUT, @c -EIO, @c -ECANCELED); anything else is a
+ * sensor-level problem that clocking the bus cannot fix.
  *
  * @param bus       I2C controller the sensor hangs off, or NULL to skip.
  * @param err       errno returned by the failed transfer.
@@ -54,7 +54,8 @@ static inline bool aurora_i2c_bus_recover(const struct device *bus, int err,
 		return false;
 	}
 
-	if (err != -EBUSY && err != -ETIMEDOUT && err != -EIO) {
+	if (err != -EBUSY && err != -ETIMEDOUT && err != -EIO &&
+	    err != -ECANCELED) {
 		return false;
 	}
 

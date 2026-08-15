@@ -45,6 +45,13 @@ config AURORA_WATCHDOG_FEED_INTERVAL_MS
 	  fraction of AURORA_WATCHDOG_TIMEOUT_MS so a single missed cycle
 	  does not reset the board.
 
+config AURORA_WATCHDOG_HW_TIMEOUT_MS
+	int "Hardware backstop timeout (ms)"
+	default 1000
+	range 200 30000
+	help
+	  How long the hardware watchdog may go unfed before it bites.
+
 config AURORA_WATCHDOG_PRIORITY
 	int "Feeder thread priority"
 	default 10
