@@ -264,6 +264,97 @@ ZTEST(simple_state_tests, test_arm_with_log_offline_holds_error)
 }
 
 /**
+ * @brief An arm attempt while the flight log is busy waits, it does not error.
+ */
+ZTEST(simple_state_tests, test_arm_with_log_busy_waits_then_arms)
+{
+	struct sm_error_handling_args err_args = {
+		.cb = &mock_error_handler,
+		.args = NULL,
+	};
+
+	error_handler_call_count = 0;
+	mock_error_handler_rc = -EIO;
+	last_error_reason = SM_ERR_UNKNOWN;
+	sm_deinit();
+	sm_init(&simple_state_cfg, &err_args);
+
+	struct sm_inputs inputs = {
+		.armed = 1,
+		.log_ready = 1,
+		.log_busy = 1,
+		.calibrated = 1,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
+		.acceleration = 0.0,
+		.velocity = 0.0,
+		.altitude = 0.0,
+	};
+
+	/* Every arm condition met except the recorder being free. */
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_IDLE,
+		      "Must stay IDLE while the flight log is busy");
+	zassert_equal(error_handler_call_count, 0,
+		      "A busy flight log is not an error condition");
+
+	/* Holds and keeps not erroring for as long as it takes. */
+	sm_update(&inputs);
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_IDLE,
+		      "Must keep waiting while the flight log stays busy");
+	zassert_equal(error_handler_call_count, 0,
+		      "A busy flight log is not an error condition");
+
+	/* Conversion done: the deferred arm goes through on its own, with no
+	 * operator action and no intervening disarm.
+	 */
+	inputs.log_busy = 0;
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_ARMED,
+		      "Should arm once the conversion has released the log");
+}
+
+/**
+ * @brief A busy flight log must not mask a genuinely offline one.
+ */
+ZTEST(simple_state_tests, test_log_busy_does_not_mask_log_offline)
+{
+	struct sm_error_handling_args err_args = {
+		.cb = &mock_error_handler,
+		.args = NULL,
+	};
+
+	error_handler_call_count = 0;
+	mock_error_handler_rc = -EIO;
+	last_error_reason = SM_ERR_UNKNOWN;
+	sm_deinit();
+	sm_init(&simple_state_cfg, &err_args);
+
+	struct sm_inputs inputs = {
+		.armed = 1,
+		.log_ready = 0,
+		.log_busy = 1,
+		.calibrated = 1,
+		.orientation = ORIENT(simple_state_cfg.T_OA),
+	};
+
+	/* Busy wins while it lasts: no error yet. */
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_IDLE,
+		      "Must wait rather than error while the log is busy");
+	zassert_equal(error_handler_call_count, 0,
+		      "Must not error while the flight log is merely busy");
+
+	/* Conversion finished but the recorder is offline: now it must error. */
+	inputs.log_busy = 0;
+	sm_update(&inputs);
+	zassert_equal(sm_get_state(), SM_ERROR,
+		      "An offline flight log must still refuse the arm");
+	zassert_equal(last_error_reason, SM_ERR_LOG_OFFLINE,
+		      "Error callback must receive SM_ERR_LOG_OFFLINE");
+}
+
+/**
  * @brief A flight-log dropout while ARMED (pre-boost) aborts to ERROR.
  *
  * Covers the ARM-time failure path: the recorder is opened on the

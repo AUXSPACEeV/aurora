@@ -86,13 +86,19 @@ currently playing melody before issuing the new pattern.
 | State → `REDUNDANT` | Two 2500 Hz beeps of 150 ms, separated by a 100 ms gap | Redundant (backup) parachute deployment event. The double beep distinguishes the fallback path from the nominal `MAIN` event. |
 | State → `LANDED` | "Astronomia" (Coffin Dance) melody, plays until interrupted | Flight complete. Acts as an audible recovery beacon. |
 | Any other state transition | Silent (any ongoing melody is stopped) | In-flight states `BOOST` and `BURNOUT` are silent on the buzzer. |
+| Log conversion started | "Mii Channel" melody, loops until conversion finishes | The post-flight log conversion has the flight recorder (and the SD card). Arming is held off for the whole melody — see [Arming During a Conversion](data.md#arming-during-a-conversion). |
+| Log conversion complete | Melody stops (or reverts to "Astronomia" if the rocket is still `LANDED`) | Recorder free again; the state machine will arm as soon as the other conditions are met. Raised whether the conversion succeeded or failed. |
 | Error | Three 4000 Hz beeps of 100 ms, separated by 100 ms gaps | Unrecoverable error. Service required. |
 | Powerfail | *(not handled)* | The buzzer backend does not implement `on_powerfail`. |
 
 :::{note}
-The `LANDED` melody is a looping recovery beacon and is the only
-pattern that runs asynchronously; it is stopped automatically on the
-next state transition.
+The `LANDED` and conversion melodies are the only patterns that run
+asynchronously. The `LANDED` beacon is stopped automatically on the
+next state transition. The conversion melody outlives state changes
+somce it tracks a background job, not a state, so tones raised
+while it plays (calibration, state changes) briefly pause it and it
+resumes afterwards. Both share one playback context, because the board
+has exactly one buzzer.
 :::
 
 ### Quick Reference
@@ -108,6 +114,12 @@ next state transition.
 | `REDUNDANT` | Off | 2 × 2500 Hz · 150 ms beeps |
 | `LANDED` | Long blink (400 / 100 ms) | "Astronomia" melody (looping) |
 | `ERROR` | Solid ON | 3 × 4000 Hz · 100 ms beeps |
+
+Not a state, but audible for as long as it lasts:
+
+| Background job | LED | Buzzer |
+| --- | --- | --- |
+| Post-flight log conversion | *(unchanged)* | "Mii Channel" melody (looping) |
 
 ## Threading and Queueing
 

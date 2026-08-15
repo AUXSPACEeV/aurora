@@ -100,6 +100,23 @@ int pwm_melody_start(struct pwm_melody_ctx *ctx);
  */
 int pwm_melody_stop(struct pwm_melody_ctx *ctx);
 
+/**
+ * @brief Play a specific melody on an existing context.
+ *
+ * Stops whatever @p ctx is currently playing, points it at @p notes and
+ * starts playback.
+ *
+ * @param ctx       Melody player context (e.g. from @ref PWM_MELODY_CTX_DEFINE).
+ * @param notes     Array of @ref pwm_melody_note to play.
+ * @param num_notes Number of notes in @p notes.
+ * @return 0 on success, or a negative error code.
+ * @retval -EINVAL  @p ctx or @p notes is NULL, or @p num_notes is 0.
+ * @retval -EBUSY   The previous playback thread did not terminate in time.
+ *                  Nothing was changed and nothing was started.
+ */
+int pwm_melody_play(struct pwm_melody_ctx *ctx,
+		    const struct pwm_melody_note *notes, size_t num_notes);
+
 /** Astronomia (Coffin Dance) melody. Ideal for post-flight celebration. */
 static const struct pwm_melody_note astronomia[] = {
 	{466,4},{466,4},{466,4},{466,4},
@@ -130,6 +147,36 @@ static const struct pwm_melody_note astronomia[] = {
 	{880,4},{932,4},{880,4},{932,4},
 	{392,4},{  0,4},{392,4},{932,4},
 	{880,4},{932,4},{880,4},{932,4},
+};
+
+/**
+ * @brief Mii Channel theme.
+ */
+static const struct pwm_melody_note mii_channel[] = {
+	/* F#4 - A4 C#5 - A4 - F#4 */
+	{370,4},{  0,4},{440,4},{554,4},
+	{  0,4},{440,4},{  0,4},{370,4},
+	/* D4 D4 D4, then the bar rests out */
+	{294,4},{294,4},{294,4},{  0,4},
+	{  0,2},{  0,2},
+	/* C#4 - D4 - F#4 - A4 - */
+	{277,4},{  0,4},{294,4},{  0,4},
+	{370,4},{  0,4},{440,4},{  0,4},
+	/* C#5 - A4 - F#5 E5 F5 - */
+	{554,4},{  0,4},{440,4},{  0,4},
+	{740,4},{659,4},{698,4},{  0,4},
+	/* F#5 - F5 F#5 A5 - C#5 - */
+	{740,4},{  0,4},{698,4},{740,4},
+	{880,4},{  0,4},{554,4},{  0,4},
+	/* D5 C#5 C5 - C5 A4 - A4 */
+	{587,4},{554,4},{523,4},{  0,4},
+	{523,4},{440,4},{  0,4},{440,4},
+	/* D5 - C#5 - Bb4 - Bb4 D5 */
+	{587,4},{  0,4},{554,4},{  0,4},
+	{466,4},{  0,4},{466,4},{587,4},
+	/* C#5 - Bb4 - A4, held, then a beat of air before the loop */
+	{554,4},{  0,4},{466,4},{  0,4},
+	{440,2},{  0,2},
 };
 
 /** @} */

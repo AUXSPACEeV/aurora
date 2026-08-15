@@ -44,6 +44,12 @@ struct notify_backend_api {
 	 */
 	int (*on_calibration_complete)(void);
 
+	/** @brief Signal that post-flight log conversion has started. */
+	int (*on_convert_start)(void);
+
+	/** @brief Signal that post-flight log conversion has finished. */
+	int (*on_convert_complete)(void);
+
 	/** @brief Signal an error condition. */
 	int (*on_error)(void);
 
@@ -119,6 +125,23 @@ int notify_calibration_start(void);
  * @retval 0 on success, or first non-zero return from a backend.
  */
 int notify_calibration_complete(void);
+
+/**
+ * @brief Notify all backends that post-flight log conversion has started.
+ *
+ * @retval 0 on success, or first non-zero return from a backend.
+ */
+int notify_convert_start(void);
+
+/**
+ * @brief Notify all backends that post-flight log conversion has finished.
+ *
+ * Raised whether the conversion succeeded or failed: it means the recorder
+ * is free again, not that the output is good.
+ *
+ * @retval 0 on success, or first non-zero return from a backend.
+ */
+int notify_convert_complete(void);
 
 /**
  * @brief Notify all backends about a powerfail

@@ -215,6 +215,34 @@ data_logger_convert(&data_logger_csv_formatter, "/data/flight.csv");
 The flight-log region is left intact. Conversion must not run
 concurrently with active logging.
 
+#### Arming During a Conversion
+
+On the sensor board the conversion is driven by a dedicated converter
+thread, woken by {c:func}`data_logger_convert_request` whenever a flight
+log is closed (entry to `IDLE`, `LANDED` or `ERROR`). It can occupy the
+card for minutes, and the state machine re-arms automatically a few
+seconds after every disarm — comfortably inside that window.
+
+{c:func}`data_logger_convert_busy` reports the whole window, from the
+request rather than from the point the (lower-priority) converter thread
+is first scheduled. The application feeds it into `sm_inputs.log_busy`,
+which makes `IDLE` *wait* for the recorder instead of arming on top of a
+log that is being read:
+
+```c
+inputs.log_ready = log_flight_log_online();  /* offline => ERROR */
+inputs.log_busy  = log_flight_log_busy();    /* busy    => wait  */
+```
+
+The distinction matters: a low `log_ready` is a failure the operator has
+to acknowledge, while `log_busy` clears by itself and arming resumes on
+its own once it does. `state_machine status` prints both.
+
+With `CONFIG_AURORA_NOTIFY`, the converter raises
+{c:func}`notify_convert_start` / {c:func}`notify_convert_complete` around
+the run, so the wait is audible rather than looking like a hung board
+(see [Notification library](notify.md)).
+
 ## Example Usage
 
 ```c

@@ -4,8 +4,8 @@
  *
  * Drives the board's PWM-backed passive buzzer (via @c auxspace_buzzer chosen
  * node) to indicate boot, flight state-machine transitions, calibration
- * start/completion and error.  Registered at link time as a @ref notify_backend
- * via @ref NOTIFY_BACKEND_DEFINE.
+ * start/completion, post-flight log conversion and error.  Registered at link
+ * time as a @ref notify_backend via @ref NOTIFY_BACKEND_DEFINE.
  *
  * All tone sequences are blocking (they interleave @c pwm_set_dt with
  * @c k_sleep); to keep them off the caller's thread (typically the state
@@ -49,6 +49,8 @@ enum buzzer_evt_type {
 	BUZZER_EVT_STATE_CHANGE,
 	BUZZER_EVT_CALIBRATION_START,
 	BUZZER_EVT_CALIBRATION_COMPLETE,
+	BUZZER_EVT_CONVERT_START,
+	BUZZER_EVT_CONVERT_COMPLETE,
 	BUZZER_EVT_ERROR,
 };
 
@@ -109,8 +111,60 @@ static void play_error(void)
 	}
 }
 
+static bool convert_melody_active;
+static enum sm_state last_state = SM_IDLE;
+
+static void play_convert_start(void)
+{
+	convert_melody_active =
+		(pwm_melody_play(&melody_ctx, mii_channel, ARRAY_SIZE(mii_channel)) == 0);
+
+	if (!convert_melody_active) {
+		LOG_WRN("Could not start the conversion melody");
+	}
+}
+
+static void play_convert_complete(void)
+{
+	convert_melody_active = false;
+
+	if (pwm_melody_stop(&melody_ctx) != 0) {
+		LOG_WRN("Conversion melody would not stop");
+		return;
+	}
+
+	/* Conversion starts a while after touchdown, so it interrupts the
+	 * recovery beacon rather than replacing it.  Hand the pad back.
+	 */
+	if (last_state == SM_LANDED) {
+		(void)pwm_melody_play(&melody_ctx, astronomia,
+				      ARRAY_SIZE(astronomia));
+	}
+}
+
+static bool melody_suspend(void)
+{
+	if (!convert_melody_active) {
+		return true;
+	}
+	if (pwm_melody_stop(&melody_ctx) != 0) {
+		LOG_WRN("Melody still playing, skipping tone.");
+		return false;
+	}
+	return true;
+}
+
+static void melody_resume(void)
+{
+	if (convert_melody_active) {
+		(void)pwm_melody_play(&melody_ctx, mii_channel, ARRAY_SIZE(mii_channel));
+	}
+}
+
 static void play_state_change(enum sm_state next)
 {
+	last_state = next;
+
 	if (pwm_melody_stop(&melody_ctx) != 0) {
 		LOG_WRN("Melody still playing, skipping state-change tone.");
 		return;
@@ -139,7 +193,8 @@ static void play_state_change(enum sm_state next)
 		}
 		break;
 	case SM_LANDED:
-		(void)pwm_melody_start(&melody_ctx);
+		(void)pwm_melody_play(&melody_ctx, astronomia,
+				      ARRAY_SIZE(astronomia));
 		break;
 	default:
 		break;
@@ -158,6 +213,21 @@ static void buzzer_thread_fn(void *a, void *b, void *c)
 		(void)k_msgq_get(&buzzer_msgq, &evt, K_FOREVER);
 
 		switch (evt.type) {
+		case BUZZER_EVT_CONVERT_START:
+			play_convert_start();
+			continue;
+		case BUZZER_EVT_CONVERT_COMPLETE:
+			play_convert_complete();
+			continue;
+		default:
+			break;
+		}
+
+		if (!melody_suspend()) {
+			continue;
+		}
+
+		switch (evt.type) {
 		case BUZZER_EVT_BOOT:
 			play_boot();
 			break;
@@ -173,7 +243,11 @@ static void buzzer_thread_fn(void *a, void *b, void *c)
 		case BUZZER_EVT_ERROR:
 			play_error();
 			break;
+		default:
+			break;
 		}
+
+		melody_resume();
 	}
 }
 
@@ -244,12 +318,28 @@ static int buzzer_on_calibration_complete(void)
 	return enqueue(&evt);
 }
 
+static int buzzer_on_convert_start(void)
+{
+	const struct buzzer_evt evt = { .type = BUZZER_EVT_CONVERT_START };
+
+	return enqueue(&evt);
+}
+
+static int buzzer_on_convert_complete(void)
+{
+	const struct buzzer_evt evt = { .type = BUZZER_EVT_CONVERT_COMPLETE };
+
+	return enqueue(&evt);
+}
+
 static const struct notify_backend_api buzzer_api = {
 	.init = buzzer_init,
 	.on_boot = buzzer_on_boot,
 	.on_state_change = buzzer_on_state_change,
 	.on_calibration_start = buzzer_on_calibration_start,
 	.on_calibration_complete = buzzer_on_calibration_complete,
+	.on_convert_start = buzzer_on_convert_start,
+	.on_convert_complete = buzzer_on_convert_complete,
 	.on_error = buzzer_on_error,
 };
 

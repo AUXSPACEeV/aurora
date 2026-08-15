@@ -118,6 +118,7 @@ static int cmd_status(const struct shell *sh, size_t argc, char **argv)
 	shell_print(sh, "Arm gate (last update):");
 	shell_print(sh, "  armed:       %s", in.armed ? "yes" : "NO");
 	shell_print(sh, "  log_ready:   %s", in.log_ready ? "yes" : "NO");
+	shell_print(sh, "  log_busy:    %s", in.log_busy ? "YES (converting)" : "no");
 	shell_print(sh, "  calibrated:  %s", in.calibrated ? "yes" : "NO");
 #if defined(CONFIG_SIMPLE_STATE)
 	shell_print(sh, "  elevation:   %.1f deg (arm >= %d, disarm < %d)",

@@ -91,8 +91,7 @@ static void log_end_flight(void)
 	(void)data_logger_stop(&sm_logger);
 	(void)data_logger_close(&sm_logger);
 	data_logger_set_default(NULL);
-
-	k_sem_give(&convert_request);
+	data_logger_convert_request();
 }
 
 /* Delayable close: scheduled by the state-machine task on entry to
@@ -119,6 +118,11 @@ bool log_flight_log_online(void)
 	/* No disk bring-up module.  Nothing to gate on at boot. */
 	return true;
 #endif
+}
+
+bool log_flight_log_busy(void)
+{
+	return data_logger_convert_busy();
 }
 
 void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state)
