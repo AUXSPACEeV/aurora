@@ -59,60 +59,42 @@ static inline double out_ev(const struct sensor_value *val)
  *
  * @return 0 on success, -errno on failure.
  */
+static struct imu_data sample;
+static int64_t last_recover_ms;
+
 static int fetch_and_send(const struct device *dev)
 {
-	static int64_t last_recover_ms;
-	struct imu_data msg;
 	int ret;
 
 	ret = sensor_sample_fetch(dev);
-	if ( ret != 0) {
-		LOG_ERR("Failed to fetch sensor data");
+	if (ret != 0) {
+		LOG_ERR_RATELIMIT("Failed to fetch sensor data (%d)", ret);
 		/* A wedged I2C bus costs 500 ms of non-yielding busy-wait per
 		 * transfer on a cooperative-priority thread; see bus_recover.h.
 		 */
 		if (aurora_i2c_bus_recover(IMU_I2C_BUS, ret, &last_recover_ms)) {
-			LOG_WRN("recovered stuck I2C bus after IMU fetch (%d)",
-				ret);
+			LOG_WRN_RATELIMIT("recovered stuck I2C bus after IMU "
+					  "fetch (%d)", ret);
 		}
 		return ret;
 	}
 
-	ret = sensor_channel_get(dev, SENSOR_CHAN_ACCEL_XYZ, msg.accel);
+	ret = sensor_channel_get(dev, SENSOR_CHAN_ACCEL_XYZ, sample.accel);
 	if (ret != 0) {
-		LOG_ERR("Failed to get accelerometer data");
+		LOG_ERR_RATELIMIT("Failed to get accelerometer data (%d)", ret);
 		return ret;
 	}
 
-	ret = sensor_channel_get(dev, SENSOR_CHAN_GYRO_XYZ, msg.gyro);
+	ret = sensor_channel_get(dev, SENSOR_CHAN_GYRO_XYZ, sample.gyro);
 	if (ret != 0) {
-		LOG_ERR("Failed to get gyroscope data");
+		LOG_ERR_RATELIMIT("Failed to get gyroscope data (%d)", ret);
 		return ret;
 	}
 
-	/* Publish the IMU data to the z-bus channel.
-	 *
-	 * Rate-limited: a consumer that stops draining fills the subscriber
-	 * pool, and from then on every single sample fails.  At the IMU's
-	 * output rate that is a hundred error lines a second, which costs
-	 * more CPU than the telemetry it is complaining about and pushes the
-	 * real messages out of the log.  Report the first one immediately,
-	 * then at most once a second with a count of what was suppressed.
-	 */
-	ret = zbus_chan_pub(&imu_data_chan, &msg, K_NO_WAIT);
+	/* Publish the IMU data to the z-bus channel */
+	ret = zbus_chan_pub(&imu_data_chan, &sample, K_NO_WAIT);
 	if (ret != 0) {
-		static int64_t last_report_ms;
-		static uint32_t suppressed;
-		int64_t now = k_uptime_get();
-
-		if (last_report_ms == 0 || (now - last_report_ms) >= 1000) {
-			LOG_ERR("Failed to publish IMU data (%d), %u more since "
-				"the last report", ret, suppressed);
-			last_report_ms = now;
-			suppressed = 0;
-		} else {
-			suppressed++;
-		}
+		LOG_ERR_RATELIMIT("Failed to publish IMU data (%d)", ret);
 	}
 	return ret;
 }

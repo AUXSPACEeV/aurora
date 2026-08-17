@@ -2,8 +2,8 @@
  * @file main.c
  * @brief Sensor board application entry point.
  *
- * Defines three Zephyr threads (IMU, barometer, state machine) that run
- * concurrently to collect sensor data and drive the flight state machine.
+ * Defines two Zephyr threads that run concurrently: one owns the sensor bus
+ * and publishes samples, the other drives the flight state machine from them.
  *
  * Copyright (c) 2025-2026 Auxspace e.V.
  * SPDX-License-Identifier: Apache-2.0
@@ -110,93 +110,226 @@ bool imu_active = false;  /**< True once the IMU thread has initialized. */
 static bool sm_active = false; /**< True once the state machine thread has initialized. */
 
 /* ============================================================
- *                     IMU TASK
+ *                     SENSOR TASK
  * ============================================================ */
-#if defined(CONFIG_IMU) && !defined(CONFIG_AURORA_FAKE_SENSORS)
-/* Build-time dependency: the IMU task fetches its device from the
+#if (defined(CONFIG_IMU) || defined(CONFIG_BARO)) && !defined(CONFIG_AURORA_FAKE_SENSORS)
+/* One thread services every polled sensor, in turn, rather than one thread
+ * per sensor.
+ *
+ * The sensors share a single I2C controller, and a controller driver may
+ * serialise concurrent transfers by spinning rather than blocking: the
+ * esp32 controller opens i2c_esp32_transfer() with a k_busy_wait loop on its
+ * bus-busy flag lasting up to I2C_TRANSFER_TIMEOUT_MSEC (500 ms), and it does
+ * so before taking its own transfer semaphore.
+ * That loop does not yield, so with one poller per sensor the two spend the
+ * overlap of every colliding transfer burning CPU at each other instead of
+ * sleeping.
+ * And a slave that wedges SDA turns each attempt into 500 ms during which
+ * nothing of lower priority is scheduled at all, the watchdog feeder included.
+ *
+ * Owning the bus from a single thread removes the collision outright, and
+ * makes the fault path serial so the back-off below can actually pace it.
+ * Sensors driven by a data-ready trigger publish from the driver's own
+ * trigger thread and are only initialized here.
+ */
+#if defined(CONFIG_IMU)
+/* Build-time dependency: the sensor task fetches its device from the
  * 'auxspace,imu' chosen node. */
 #if !DT_HAS_CHOSEN(auxspace_imu)
 #error "CONFIG_IMU requires DT chosen 'auxspace,imu' to point at an IMU sensor node."
 #endif
 BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_imu), okay),
 	     "the 'auxspace,imu' chosen node must have status \"okay\"");
-/**
- * @brief IMU polling thread.
+#endif /* CONFIG_IMU */
+
+#if defined(CONFIG_BARO)
+/* Likewise for the barometer's 'auxspace,baro' chosen node. */
+#if !DT_HAS_CHOSEN(auxspace_baro)
+#error "CONFIG_BARO requires DT chosen 'auxspace,baro' to point at a baro sensor node."
+#endif
+BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_baro), okay),
+	     "the 'auxspace,baro' chosen node must have status \"okay\"");
+#endif /* CONFIG_BARO */
+
+#if (defined(CONFIG_IMU) && !defined(CONFIG_IMU_TRIGGER)) ||                                       \
+	(defined(CONFIG_BARO) && !defined(CONFIG_BARO_TRIGGER))
+#define AURORA_HAVE_POLLED_SENSOR 1
+#endif
+
+#if defined(AURORA_HAVE_POLLED_SENSOR)
+/* Retry spacing after a failed fetch.
  *
- * Initializes the IMU and continuously polls orientation and acceleration
- * at the configured frequency, updating the global sensor variables.
+ * A wedged bus costs up to 500 ms of non-yielding busy-wait per attempt (see
+ * above), so retrying at the nominal poll rate would hold a CPU for ~83% of
+ * the time the wedge lasts and starve the flight state machine, the loggers
+ * and the watchdog feeder.  Doubling the gap bounds that duty cycle to a
+ * level the feeder always survives, and as a side effect spaces attempts out
+ * past AURORA_BUS_RECOVER_MIN_INTERVAL_MS so the bus-recovery call in the
+ * sensor wrappers is actually reached instead of being rate-limited away.
  */
-void imu_task(void *, void *, void *)
+#define SENSOR_BACKOFF_MIN_MS 100
+#define SENSOR_BACKOFF_MAX_MS 2000
+
+/* Upper bound on one sleep, not a poll rate.  The loop sleeps until the
+ * earliest slot deadline, and this is only the starting value that search
+ * minimises against -- at CONFIG_IMU_FREQUENCY=100 the IMU slot pulls it
+ * straight down to 10 ms.  It survives only when every slot is dead (each
+ * dev NULL after a failed init), where it parks the loop at 1 Hz rather
+ * than letting it spin.
+ */
+#define SENSOR_MAX_SLEEP_MS 1000
+
+/** One polled sensor and its schedule. */
+struct sensor_slot {
+	const struct device *dev;            /**< NULL once init has failed. */
+	int (*fetch)(const struct device *); /**< Sample and publish. */
+	const char *name;                    /**< For diagnostics. */
+	uint32_t period_ms;                  /**< Nominal poll period. */
+	int64_t due_ms;                      /**< Absolute uptime deadline. */
+	uint32_t backoff_ms;                 /**< 0 while healthy. */
+};
+
+enum {
+#if defined(CONFIG_IMU) && !defined(CONFIG_IMU_TRIGGER)
+	SLOT_IMU,
+#endif
+#if defined(CONFIG_BARO) && !defined(CONFIG_BARO_TRIGGER)
+	SLOT_BARO,
+#endif
+	SLOT_COUNT,
+};
+
+/* File-scope rather than automatic: one thread owns this, and it keeps the
+ * schedule off a stack that on Xtensa also absorbs register-window spills.
+ */
+static struct sensor_slot sensor_slots[SLOT_COUNT] = {
+#if defined(CONFIG_IMU) && !defined(CONFIG_IMU_TRIGGER)
+	[SLOT_IMU] = {
+		.fetch = imu_poll,
+		.name = "IMU",
+		.period_ms = MAX(1, 1000 / CONFIG_IMU_FREQUENCY),
+	},
+#endif
+#if defined(CONFIG_BARO) && !defined(CONFIG_BARO_TRIGGER)
+	[SLOT_BARO] = {
+		.fetch = baro_measure,
+		.name = "baro",
+		.period_ms = MAX(1, 1000 / CONFIG_BARO_FREQUENCY),
+	},
+#endif
+};
+
+/**
+ * @brief Advance a slot's deadline after an attempt.
+ *
+ * @param slot Slot that was just polled.
+ * @param now  Uptime in ms, sampled after the fetch returned.
+ * @param ok   Whether the fetch succeeded.
+ */
+static void sensor_slot_reschedule(struct sensor_slot *slot, int64_t now, bool ok)
 {
+	if (!ok) {
+		slot->backoff_ms = (slot->backoff_ms == 0)
+					   ? SENSOR_BACKOFF_MIN_MS
+					   : MIN(slot->backoff_ms * 2U,
+						 (uint32_t)SENSOR_BACKOFF_MAX_MS);
+		slot->due_ms = now + slot->backoff_ms;
+		return;
+	}
+
+	if (slot->backoff_ms != 0) {
+		LOG_INF("%s recovered after %u ms back-off", slot->name, slot->backoff_ms);
+		slot->backoff_ms = 0;
+	}
+
+	slot->due_ms += slot->period_ms;
+	if (slot->due_ms <= now) {
+		slot->due_ms = now + slot->period_ms;
+	}
+}
+#endif /* AURORA_HAVE_POLLED_SENSOR */
+
+/**
+ * @brief Sensor thread.
+ *
+ * Initializes every configured sensor, then polls the ones that are not
+ * trigger-driven at their configured frequencies, publishing each sample to
+ * its zbus channel.
+ */
+void sensor_task(void *, void *, void *)
+{
+#if defined(CONFIG_IMU)
 	const struct device *imu0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_imu));
 
-	if (imu_init(imu0)) {
+	if (imu_init(imu0) == 0) {
+		imu_active = true;
+		LOG_INF("IMU ready");
+	} else {
 		LOG_ERR("IMU not ready!");
-		return;
+		imu0 = NULL;
 	}
-	imu_active = true;
+#endif /* CONFIG_IMU */
 
-#if !defined(CONFIG_IMU_TRIGGER)
-	const int imu_hz = CONFIG_IMU_FREQUENCY;
-	while (1) {
-		int rc = imu_poll(imu0);
-		if (rc != 0) {
-			LOG_ERR("IMU polling failed (%d)", rc);
-
-			k_sleep(K_MSEC(100));
-			continue;
-		}
-		k_sleep(K_MSEC(1000 / imu_hz));
-	}
-#endif /* !CONFIG_IMU_TRIGGER */
-
-	LOG_INF("IMU ready");
-}
-
-/* Create the IMU task (inactive unless CONFIG_IMU=y) */
-K_THREAD_DEFINE(imu_polling, 4096, imu_task, NULL, NULL, NULL, 7, 0, 0);
-#endif /* CONFIG_IMU && !CONFIG_AURORA_FAKE_SENSORS */
-
-/* ============================================================
- *                     BARO TASK
- * ============================================================ */
-#if defined(CONFIG_BARO) && !defined(CONFIG_AURORA_FAKE_SENSORS)
-/**
- * @brief Barometer polling thread.
- *
- * Initializes the barometric sensor and continuously measures temperature,
- * pressure at the configured frequency.
- */
-void baro_task(void *, void *, void *)
-{
+#if defined(CONFIG_BARO)
 	const struct device *baro0 = DEVICE_DT_GET(DT_CHOSEN(auxspace_baro));
 
-	if (baro_init(baro0)) {
+	if (baro_init(baro0) == 0) {
+		baro_active = true;
+		LOG_INF("Baro ready");
+	} else {
 		LOG_ERR("Baro not ready!");
-		return;
+		baro0 = NULL;
 	}
-	baro_active = true;
+#endif /* CONFIG_BARO */
 
-#if !defined(CONFIG_BARO_TRIGGER)
-	const int baro_hz = CONFIG_BARO_FREQUENCY;
+#if defined(AURORA_HAVE_POLLED_SENSOR)
+#if defined(CONFIG_IMU) && !defined(CONFIG_IMU_TRIGGER)
+	sensor_slots[SLOT_IMU].dev = imu0;
+#endif
+#if defined(CONFIG_BARO) && !defined(CONFIG_BARO_TRIGGER)
+	sensor_slots[SLOT_BARO].dev = baro0;
+#endif
+
 	while (1) {
-		if (baro_measure(baro0)) {
-			LOG_ERR("Failed to measure baro0");
+		int64_t now = k_uptime_get();
+		/* Seed for the "earliest deadline" search below. */
+		int64_t next_due = now + SENSOR_MAX_SLEEP_MS;
 
-			k_sleep(K_MSEC(100));
-			continue;
+		for (size_t i = 0; i < SLOT_COUNT; i++) {
+			struct sensor_slot *slot = &sensor_slots[i];
+
+			if (slot->dev == NULL) {
+				continue;
+			}
+
+			if (slot->due_ms <= now) {
+				bool ok = (slot->fetch(slot->dev) == 0);
+
+				/* A single fetch can take hundreds of ms on a
+				 * sick bus, so re-read the clock instead of
+				 * pacing the remaining slots off a stale one.
+				 */
+				now = k_uptime_get();
+				sensor_slot_reschedule(slot, now, ok);
+			}
+
+			if (slot->due_ms < next_due) {
+				next_due = slot->due_ms;
+			}
 		}
 
-		k_sleep(K_MSEC(1000 / baro_hz));
+		if (next_due > now) {
+			/* Absolute deadline */
+			k_sleep(K_TIMEOUT_ABS_MS(next_due));
+		} else {
+			k_yield();
+		}
 	}
-#endif /* !CONFIG_BARO_TRIGGER */
-
-	LOG_INF("Baro ready");
+#endif /* AURORA_HAVE_POLLED_SENSOR */
 }
 
-/* Create the BARO task */
-K_THREAD_DEFINE(baro_polling, 4096, baro_task, NULL, NULL, NULL, 7, 0, 0);
-#endif /* CONFIG_BARO && !CONFIG_AURORA_FAKE_SENSORS */
+K_THREAD_DEFINE(sensor_polling, 4096, sensor_task, NULL, NULL, NULL, 7, 0, 0);
+#endif /* (CONFIG_IMU || CONFIG_BARO) && !CONFIG_AURORA_FAKE_SENSORS */
 
 /* ============================================================
  *                     State machine TASK
@@ -244,6 +377,7 @@ static bool is_valid_transition(enum sm_state from, enum sm_state to)
  * stays audible in the field without flooding the queue or the console.
  */
 #define SM_ERROR_RESIGNAL_MS 5000
+#define SM_DRAIN_LIMIT 32
 
 /**
  * @brief Error handler for the state machine.
@@ -598,6 +732,8 @@ void state_machine_task(void *, void *, void *)
 		/* Process the first message, then drain any queued messages
 		 * so we always work with the latest sensor data.
 		 */
+		unsigned int drained = 0;
+
 		do {
 			if (data_chan == &imu_data_chan) {
 				WDT_KICK(AURORA_WDT_SRC_IMU);
@@ -623,7 +759,8 @@ void state_machine_task(void *, void *, void *)
 				}
 #endif
 			}
-		} while (zbus_sub_wait_msg(&sm_sub, &data_chan, &msg_buf, K_NO_WAIT) == 0);
+		} while (++drained < SM_DRAIN_LIMIT &&
+			 zbus_sub_wait_msg(&sm_sub, &data_chan, &msg_buf, K_NO_WAIT) == 0);
 
 		/* This check is necessary to avoid updating the state machine
 		 * with uninitialized sensor data durring startup. This ensures
