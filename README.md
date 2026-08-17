@@ -108,8 +108,9 @@ python3 -m pip install west
 west init -m https://github.com/AUXSPACEeV/aurora --mr main .
 cd aurora
 west update
-west zephyr-export
 west packages pip --install
+west zephyr-export
+west blobs fetch
 
 west sdk install -t \
     riscv64-zephyr-elf \
