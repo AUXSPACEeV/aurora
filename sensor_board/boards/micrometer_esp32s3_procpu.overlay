@@ -86,9 +86,9 @@
 &lsm6dso320 {
 	status = "okay";
 	accel-range = <LSM6DSO_DT_FS_16G>;
-	accel-odr = <LSM6DSO_DT_ODR_104Hz>;
+	accel-odr = <LSM6DSO_DT_ODR_52Hz>;
 	gyro-range = <LSM6DSO_DT_FS_1000DPS>;
-	gyro-odr = <LSM6DSO_DT_ODR_104Hz>;
+	gyro-odr = <LSM6DSO_DT_ODR_52Hz>;
 };
 
 &mmc0 {

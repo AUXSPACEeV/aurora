@@ -112,6 +112,21 @@ SYS_INIT(sm_retain_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
 /* sm_retain_save - see retain.h */
 void sm_retain_save(enum sm_state state)
 {
+	if (state == SM_ERROR) {
+		/* SM_ERROR is a latched fault, not a phase of flight, and the
+		 * core saves on every transition including this one.  Resuming
+		 * into it puts the board straight back into the error it just
+		 * reset out of -- observed as a boot that goes IDLE -> ERROR
+		 * before any input has been read, needing a disarm to clear.
+		 *
+		 * Leaving the previous state in the record is also the more
+		 * useful behaviour: a pre-flight error leaves SM_IDLE there,
+		 * which restore already refuses, and an in-flight abort
+		 * recovers to IDLE through the error handler and saves that.
+		 */
+		return;
+	}
+
 	retain_rec.magic = SM_RETAIN_MAGIC;
 	retain_rec.version = SM_RETAIN_VERSION;
 	retain_rec.size = sizeof(retain_rec);
@@ -207,7 +222,13 @@ int sm_retain_restore(enum sm_state *out)
 		return -EINVAL;
 	}
 
-	if ((enum sm_state)retain_rec.state == SM_IDLE) {
+	/* SM_IDLE means nothing was in progress; SM_ERROR is a latched fault
+	 * that must not be re-entered on boot.  sm_retain_save() already
+	 * declines to persist SM_ERROR -- this also covers a record written
+	 * by an older build that did.
+	 */
+	if ((enum sm_state)retain_rec.state == SM_IDLE ||
+	    (enum sm_state)retain_rec.state == SM_ERROR) {
 		return -EINVAL;
 	}
 

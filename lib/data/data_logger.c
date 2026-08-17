@@ -126,6 +126,22 @@ int data_logger_init(struct data_logger *logger, const char *filename,
 	}
 	atomic_set(&logger->state.running, 0);
 
+	if (fmt->append_mode) {
+		/* Stable path, no rotation probe: this formatter continues the
+		 * file it finds.  Skipping the probe also keeps arming cheap --
+		 * the rotation loop below costs up to MAX_FILES fs_stat() calls
+		 * on the card at the exact moment the vehicle is being armed.
+		 */
+		rc = snprintf(full_path, sizeof(full_path), "%s/%s_0.%s",
+			      CONFIG_DATA_LOGGER_BASE_PATH, filename,
+			      fmt->file_ext);
+		if (rc < 0 || rc >= (int)sizeof(full_path)) {
+			rc = -ENAMETOOLONG;
+			goto out_err;
+		}
+		goto path_ready;
+	}
+
 	/* Build "<base_path>/<filename>_i.<file_ext>" */
 	for (int i = 0; i <= CONFIG_DATA_LOGGER_MAX_FILES; i++) {
 		rc = snprintf(full_path, sizeof(full_path), "%s/%s_%d.%s",
@@ -153,6 +169,7 @@ int data_logger_init(struct data_logger *logger, const char *filename,
 		}
 	}
 
+path_ready:
 	logger->fmt = fmt;
 	logger->ctx = NULL;
 
@@ -416,6 +433,7 @@ int data_logger_event(struct data_logger *logger, enum data_logger_event ev)
 	return rc;
 }
 
+#if defined(CONFIG_DATA_LOGGER_CONVERT)
 /* convert_idle has one token whenever no conversion is in flight. The
  * converter thread holds it while running; SM→ARMED tries to acquire it
  * (with a short timeout) to verify the last flight has been fully
@@ -533,6 +551,8 @@ void converter_task(void *, void *, void *)
 #endif /* CONFIG_AURORA_NOTIFY */
 	}
 }
+
+#endif /* CONFIG_DATA_LOGGER_CONVERT */
 
 K_MSGQ_DEFINE(log_msgq, sizeof(struct datapoint), LOG_MSGQ_DEPTH, 4);
 void log_enqueue(const struct datapoint *dp)
