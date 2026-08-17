@@ -61,6 +61,27 @@ config AURORA_WATCHDOG_PRIORITY
 	  everything below it, the board is not doing useful work and the
 	  reset is the correct outcome.
 
+config AURORA_WATCHDOG_BREADCRUMB
+	bool "Leave a breadcrumb for the next boot"
+	default y
+	select CRC
+	help
+	  Keep a small record in RTC slow memory describing what the feeder
+	  last saw: uptime and feed count, the worst feed-to-feed gap, and how
+	  long each tracked source had been silent.  The next boot logs it.
+
+	  A watchdog reset runs no fault handler and writes no coredump, so
+	  without this the reset cause is the only evidence there is.  The
+	  worst-gap figure is the useful part: a feeder that never slipped
+	  before the reset points at a parked kernel clock or a hard lockup,
+	  while gaps that grew point at something starving the feeder.
+
+	  Observational only.  The sources never gate the feed -- see
+	  AURORA_WATCHDOG for why supervising sensor flow reset-loops.
+
+	  Shares RTC slow memory with AURORA_STATE_MACHINE_RETAIN and the same
+	  caveat: it survives a warm reset, not a power cycle.
+
 config AURORA_WATCHDOG_STACK_SIZE
 	int "Feeder thread stack size"
 	default 1024

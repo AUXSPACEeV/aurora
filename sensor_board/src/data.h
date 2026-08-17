@@ -18,10 +18,28 @@
 void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state);
 void log_flight_telemetry(void);
 void log_vbat_telemetry(void);
+
+/**
+ * @brief Open a flight log for a state restored after a watchdog reset.
+ *
+ * The recovery path writes the state machine's state directly rather than
+ * transitioning into it, so the state machine task never sees the
+ * IDLE->ARMED edge that @ref log_handle_flight_lifecycle keys the recorder
+ * off.  Without this a recovered flight is armed but records nothing, for
+ * its whole duration.
+ *
+ * Replaying the full lifecycle handler instead is not safe: its LANDED
+ * branch schedules a close for a log that was never opened.  This covers
+ * only the airborne states, where opening a fresh log is the right answer.
+ *
+ * @param state State the machine resumed in.
+ */
+void log_resume_flight_after_reset(const enum sm_state state);
 #else
 static inline void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state) {}
 static inline void log_flight_telemetry(void) {}
 static inline void log_vbat_telemetry(void) {}
+static inline void log_resume_flight_after_reset(const enum sm_state state) {}
 #endif /* CONFIG_DATA_LOGGER_BIN */
 
 #if defined(CONFIG_AURORA_PAD_LINK)
