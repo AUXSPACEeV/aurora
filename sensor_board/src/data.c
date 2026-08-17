@@ -154,6 +154,34 @@ void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_s
 	}
 }
 
+/* log_resume_flight_after_reset - see data.h */
+void log_resume_flight_after_reset(const enum sm_state state)
+{
+	/* The reset closed the previous log the hard way, so there is nothing
+	 * open, nothing to cancel, and no deferred close pending.  The
+	 * remainder of the flight lands in a fresh file; the pre-reset part is
+	 * whatever the ring had already committed to the previous one.
+	 *
+	 * Only the airborne states open a log.  LANDED is deliberately left
+	 * alone: the flight is over, so a log opened here would only ever
+	 * contain the pad, and it is the case that made
+	 * log_handle_flight_lifecycle() unsafe to replay wholesale -- its
+	 * LANDED branch schedules a close for a log that was never opened.
+	 * IDLE and ERROR have nothing to record either.
+	 */
+	if (state == SM_IDLE || state == SM_ERROR || state == SM_LANDED) {
+		return;
+	}
+
+	/* Failure latches flight_recording_failed, which drops the state
+	 * machine back to IDLE via log_flight_log_online().  Mid-flight that
+	 * safes the charges, which is a real cost -- but it is the same
+	 * bargain the arm path already makes, and a vehicle that is armed
+	 * without a recording is the outcome that latch exists to prevent.
+	 */
+	log_begin_flight();
+}
+
 void log_flight_telemetry(void)
 {
 	struct sm_inputs sm_in;

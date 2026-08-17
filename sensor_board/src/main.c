@@ -62,6 +62,9 @@ BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_pyro), okay),
 
 #if defined(CONFIG_AURORA_WATCHDOG)
 #include <aurora/lib/watchdog.h>
+#define WDT_KICK(src) aurora_watchdog_kick(src)
+#else
+#define WDT_KICK(src)
 #endif /* CONFIG_AURORA_WATCHDOG */
 
 #if defined(CONFIG_AURORA_PAD_LINK)
@@ -548,19 +551,38 @@ void state_machine_task(void *, void *, void *)
 	}
 #endif /* CONFIG_IMU && CONFIG_AURORA_STATE_MACHINE_RETAIN */
 
-#if defined(CONFIG_AURORA_STATE_MACHINE_RETAIN) && defined(CONFIG_AURORA_NOTIFY)
-	/* Announce retain as an IDLE => resumed edge */
+#if defined(CONFIG_AURORA_STATE_MACHINE_RETAIN)
+	/* Replay the IDLE => resumed edge for the consumers that are driven by
+	 * transitions and therefore still believe the vehicle is IDLE after a
+	 * silent restore.  Must stay ahead of the sensor gate below: a sensor
+	 * that does not survive the warm reset parks this task there forever,
+	 * and the flight would then run unannounced and unrecorded.
+	 *
+	 * Deliberately narrower than handle_state_transition(): replaying its
+	 * log lifecycle wholesale would, on a recovery into LANDED, schedule a
+	 * close for a log that was never opened, which is why it was excluded
+	 * outright.  log_resume_flight_after_reset() covers just the airborne
+	 * states, where a fresh log is what the flight needs.
+	 *
+	 * handle_pyro() stays excluded and still owes an audit of its own: it
+	 * seeds pyro_state to SM_IDLE, so a recovery into APOGEE/MAIN/
+	 * REDUNDANT re-fires a channel on the loop's first pass.
+	 */
 	if (sm_retain_recovered()) {
 		enum sm_state resumed = sm_get_state();
 
 		if (resumed != prev_state) {
-			LOG_WRN("resumed in %s after reset; re-syncing notifications",
+			LOG_WRN("resumed in %s after reset; re-syncing "
+				"notifications and flight recording",
 				sm_state_str(resumed));
+#if defined(CONFIG_AURORA_NOTIFY)
 			notify_state_change(prev_state, resumed);
+#endif /* CONFIG_AURORA_NOTIFY */
+			log_resume_flight_after_reset(resumed);
 			prev_state = resumed;
 		}
 	}
-#endif /* CONFIG_AURORA_STATE_MACHINE_RETAIN && CONFIG_AURORA_NOTIFY */
+#endif /* CONFIG_AURORA_STATE_MACHINE_RETAIN */
 
 	/* TODO: Add idling */
 	while (!baro_active || !imu_active) {
@@ -578,6 +600,7 @@ void state_machine_task(void *, void *, void *)
 		 */
 		do {
 			if (data_chan == &imu_data_chan) {
+				WDT_KICK(AURORA_WDT_SRC_IMU);
 #if defined(CONFIG_IMU)
 				handle_imu(&last_imu_ns,
 					&attitude_state,
@@ -592,6 +615,7 @@ void state_machine_task(void *, void *, void *)
 #endif
 #if defined(CONFIG_BARO)
 			} else if (data_chan == &baro_data_chan) {
+				WDT_KICK(AURORA_WDT_SRC_BARO);
 				log_baro_data(&msg_buf.baro);
 
 				if (baro_sensor_value_to_altitude(&msg_buf.baro.pressure, &altitude) == 0) {
@@ -632,6 +656,13 @@ void state_machine_task(void *, void *, void *)
 
 		sm_update(&inputs);
 		state = sm_get_state();
+
+		/* Deliberately here and not at the top of the loop: reaching
+		 * this point means both sensors delivered and the machine
+		 * actually advanced.  A kick at the loop head would keep
+		 * looking alive while the baro-or-imu gate above spins.
+		 */
+		WDT_KICK(AURORA_WDT_SRC_STATE);
 
 		/*update pad link data*/
 		update_pad_link_data();
