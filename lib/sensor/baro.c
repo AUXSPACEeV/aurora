@@ -46,53 +46,39 @@ ZBUS_CHAN_DEFINE(baro_data_chan,
  *
  * @return 0 on success, -errno on failure.
  */
+static struct baro_data sample;
+static int64_t last_recover_ms;
+
 static int fetch_and_send(const struct device *dev)
 {
-	static int64_t last_recover_ms;
-	struct baro_data msg;
 	int ret;
 
 	ret = sensor_sample_fetch(dev);
-	if ( ret != 0) {
-		LOG_ERR("Failed to fetch sensor data");
+	if (ret != 0) {
+		LOG_ERR_RATELIMIT("Failed to fetch sensor data (%d)", ret);
 		if (aurora_i2c_bus_recover(BARO_I2C_BUS, ret, &last_recover_ms)) {
-			LOG_WRN("recovered stuck I2C bus after baro fetch (%d)",
-				ret);
+			LOG_WRN_RATELIMIT("recovered stuck I2C bus after baro "
+					  "fetch (%d)", ret);
 		}
 		return ret;
 	}
 
-	ret = sensor_channel_get(dev, SENSOR_CHAN_AMBIENT_TEMP, &(msg.temperature));
+	ret = sensor_channel_get(dev, SENSOR_CHAN_AMBIENT_TEMP, &sample.temperature);
 	if (ret != 0) {
-		LOG_ERR("Failed to get baro temperature");
+		LOG_ERR_RATELIMIT("Failed to get baro temperature (%d)", ret);
 		return ret;
 	}
 
-	ret = sensor_channel_get(dev, SENSOR_CHAN_PRESS, &(msg.pressure));
+	ret = sensor_channel_get(dev, SENSOR_CHAN_PRESS, &sample.pressure);
 	if (ret != 0) {
-		LOG_ERR("Failed to get baro pressure");
+		LOG_ERR_RATELIMIT("Failed to get baro pressure (%d)", ret);
 		return ret;
 	}
 
-	/* Publish the baro data to the z-bus channel.  Rate-limited for the
-	 * same reason as the IMU path in imu.c: a consumer that stops draining
-	 * makes every subsequent sample fail, and logging that at the sensor's
-	 * output rate floods the console.
-	 */
-	ret = zbus_chan_pub(&baro_data_chan, &msg, K_NO_WAIT);
+	/* Publish the baro data to the z-bus channel */
+	ret = zbus_chan_pub(&baro_data_chan, &sample, K_NO_WAIT);
 	if (ret != 0) {
-		static int64_t last_report_ms;
-		static uint32_t suppressed;
-		int64_t now = k_uptime_get();
-
-		if (last_report_ms == 0 || (now - last_report_ms) >= 1000) {
-			LOG_ERR("Failed to publish baro data (%d), %u more since "
-				"the last report", ret, suppressed);
-			last_report_ms = now;
-			suppressed = 0;
-		} else {
-			suppressed++;
-		}
+		LOG_ERR_RATELIMIT("Failed to publish baro data (%d)", ret);
 	}
 	return ret;
 }
