@@ -65,7 +65,43 @@ config DATA_LOGGER_BIN_BACKEND_DISK
 	  not used and BOOST events are recorded but do not freeze the
 	  ring.
 
+config DATA_LOGGER_BIN_BACKEND_FS
+	bool "Filesystem file (linear, append)"
+	depends on FILE_SYSTEM
+	help
+	  Live log is an ordinary file on a mounted filesystem, written as
+	  the same sequence of fixed-size frames the other backends use.
+
+	  Pick this when losing the flight to an unexpected stop is the
+	  bigger risk.  The FLASH and DISK backends put the flight in a raw
+	  region that no host tool mounts, so it only becomes readable after
+	  the post-flight conversion pass; a watchdog reset, a freeze or a
+	  flat pack before that pass strands the data.  Here every committed
+	  frame is already a file on the card, so pulling the card is enough
+	  and DATA_LOGGER_CONVERT becomes optional.
+
+	  The cost is that writes go through the filesystem: each frame is an
+	  fs_write() plus FAT metadata rather than a bare sector write, and
+	  the log shares the volume with the text logs.  In exchange there is
+	  no ring, no writer thread and no raw region to keep in sync with
+	  the partition table.
+
+	  Re-arming appends to the existing file instead of opening a new
+	  one, and a file left ending mid-frame by a reset is truncated back
+	  to the last whole frame on the next open.
+
 endchoice
+
+config DATA_LOGGER_BIN_FS_PATH
+	string "Flight log file path (FS backend)"
+	depends on DATA_LOGGER_BIN_BACKEND_FS
+	default "/MMC:/DATA/flight_0.bin"
+	help
+	  Absolute path of the binary flight log.  Must match the file
+	  data_logger_init() opens, i.e.
+	  <DATA_LOGGER_BASE_PATH>/<name>_0.<ext> for the logger the
+	  application arms ("flight" on the sensor board).  Used by the
+	  converter to find the log after the writer has closed it.
 
 config DATA_LOGGER_DISK_AUTO_MKFS
 	bool "Auto-format the companion FAT volume on mismatch (DISK backend)"
@@ -243,9 +279,33 @@ config DATA_LOGGER_MOCK
 	  data_logger_mock_formatter must be defined by the test
 	  application.
 
+config DATA_LOGGER_CONVERT
+	bool "Post-flight conversion of the binary log"
+	depends on DATA_LOGGER_BIN
+	depends on FILE_SYSTEM
+	default n if DATA_LOGGER_BIN_BACKEND_FS
+	default y
+	help
+	  Build the converter (convert.c), its worker thread and the
+	  arm-time interlock that waits for a pending conversion before
+	  opening a new flight log.
+
+	  Mandatory for the FLASH and DISK backends: without it the flight
+	  stays in a raw region and nothing can read it off the card.
+
+	  Optional for DATA_LOGGER_BIN_BACKEND_FS, where the binary log is
+	  already a file on the volume while the flight is happening.
+	  Turning it off there drops the converter thread, its stack and the
+	  CSV/Influx formatters, and removes the post-landed pass that
+	  competes with the recorder for the card -- at the cost of having
+	  to decode the .bin off-target instead of finding a .csv beside it.
+
 config DATA_LOGGER_CONVERT_CSV
 	bool "Enable CSV conversion target"
 	default y
+	# Deliberately not "depends on DATA_LOGGER_CONVERT": this is a
+	# standalone formatter that can be driven directly through
+	# data_logger_init(), not only as a conversion target.
 	depends on FILE_SYSTEM
 	help
 	  Build the CSV formatter so data_logger_convert() can emit a
@@ -279,6 +339,7 @@ endif # DATA_LOGGER_CONVERT_CSV
 
 config DATA_LOGGER_CONVERT_INFLUX
 	bool "Enable InfluxDB Line Protocol conversion target"
+	# See DATA_LOGGER_CONVERT_CSV: usable as a formatter on its own.
 	depends on FILE_SYSTEM
 	help
 	  Build the InfluxDB line-protocol formatter so data_logger_convert()

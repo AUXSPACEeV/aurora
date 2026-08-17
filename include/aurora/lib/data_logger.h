@@ -122,6 +122,21 @@ struct data_logger_formatter {
 	 */
 	int (*on_event)(struct data_logger *logger, enum data_logger_event ev);
 
+	/**
+	 * @brief Reuse one file across init cycles instead of rotating.
+	 *
+	 * Normally @ref data_logger_init probes for the first free
+	 * @c <base>/<name>_N.<ext> so each session gets its own file.  A
+	 * formatter that sets this gets the stable @c _0 path every time and
+	 * is expected to append to whatever is already there.
+	 *
+	 * Used by the filesystem binary backend so re-arming continues the
+	 * existing flight log: a scrubbed launch followed by a real one
+	 * stays a single readable stream, and the recorder does not have to
+	 * find and create a new file at the moment of arming.
+	 */
+	bool append_mode;
+
 	/** File suffix */
 	char file_ext[8];
 
@@ -410,8 +425,10 @@ BUILD_ASSERT(sizeof(struct aurora_bin_record) == 32,
  * @param out_path  Destination path for the converted output.
  * @retval 0 on success, negative errno on failure.
  */
+#if defined(CONFIG_DATA_LOGGER_CONVERT)
 int data_logger_convert(const struct data_logger_formatter *out_fmt,
 			const char *out_path);
+#endif /* CONFIG_DATA_LOGGER_CONVERT */
 
 /** @} */
 
@@ -420,11 +437,14 @@ int data_logger_convert(const struct data_logger_formatter *out_fmt,
 extern struct data_logger sm_logger;
 extern atomic_t sm_logger_live;
 
+#if defined(CONFIG_DATA_LOGGER_CONVERT)
 extern struct k_sem convert_idle;
 extern struct k_sem convert_request;
 
 /**
- * @brief Ask the converter thread to translate the just-closed binary log.ve closed the binary logger first.
+ * @brief Ask the converter thread to translate the just-closed binary log.
+ *
+ * Close the binary logger first.
  */
 void data_logger_convert_request(void);
 
@@ -435,6 +455,13 @@ void data_logger_convert_request(void);
  * @retval false the flight recorder is free.
  */
 bool data_logger_convert_busy(void);
+#else
+/* No converter in the build: nothing ever owns the recorder after landing,
+ * so the arming interlock that waits on it is always satisfied.
+ */
+static inline void data_logger_convert_request(void) {}
+static inline bool data_logger_convert_busy(void) { return false; }
+#endif /* CONFIG_DATA_LOGGER_CONVERT */
 
 /* Decouple logging from the SM hot path: SM pushes datapoints into this
  * queue with K_NO_WAIT; a dedicated logger thread drains it and owns all
@@ -447,8 +474,11 @@ bool data_logger_convert_busy(void);
 /* How long SM→ARMED will wait for a pending conversion to finish. */
 #define LOG_ARM_CONVERT_TIMEOUT_MS 1500
 
+#if defined(CONFIG_DATA_LOGGER_CONVERT)
 void pick_convert_out_base(char *out, size_t out_sz);
 void converter_task(void *, void *, void *);
+#endif /* CONFIG_DATA_LOGGER_CONVERT */
+
 void log_enqueue(const struct datapoint *dp);
 void logger_task(void *, void *, void *);
 #endif /* AURORA_LIB_DATA_LOGGER_H_ */

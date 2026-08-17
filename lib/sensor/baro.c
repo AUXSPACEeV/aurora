@@ -74,10 +74,25 @@ static int fetch_and_send(const struct device *dev)
 		return ret;
 	}
 
-	/* Publish the baro data to the z-bus channel */
+	/* Publish the baro data to the z-bus channel.  Rate-limited for the
+	 * same reason as the IMU path in imu.c: a consumer that stops draining
+	 * makes every subsequent sample fail, and logging that at the sensor's
+	 * output rate floods the console.
+	 */
 	ret = zbus_chan_pub(&baro_data_chan, &msg, K_NO_WAIT);
 	if (ret != 0) {
-		LOG_ERR("Failed to publish baro data");
+		static int64_t last_report_ms;
+		static uint32_t suppressed;
+		int64_t now = k_uptime_get();
+
+		if (last_report_ms == 0 || (now - last_report_ms) >= 1000) {
+			LOG_ERR("Failed to publish baro data (%d), %u more since "
+				"the last report", ret, suppressed);
+			last_report_ms = now;
+			suppressed = 0;
+		} else {
+			suppressed++;
+		}
 	}
 	return ret;
 }

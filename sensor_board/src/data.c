@@ -30,8 +30,10 @@ LOG_MODULE_DECLARE(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 
 K_THREAD_DEFINE(logger_thread, CONFIG_DATA_LOGGER_LOGGER_STACK_SIZE, logger_task, NULL, NULL, NULL,
 		8, 0, 0);
+#if defined(CONFIG_DATA_LOGGER_CONVERT)
 K_THREAD_DEFINE(converter_thread, CONFIG_DATA_LOGGER_CONVERTER_STACK_SIZE, converter_task, NULL,
 		NULL, NULL, 9, 0, 0);
+#endif /* CONFIG_DATA_LOGGER_CONVERT */
 
 /* Latched (until reboot) when opening the flight log at ARM time fails.
  * Feeds log_flight_log_online() so the state machine drops back from ARMED
@@ -43,6 +45,10 @@ static atomic_t flight_recording_failed = ATOMIC_INIT(0);
 
 static void log_begin_flight(void)
 {
+#if defined(CONFIG_DATA_LOGGER_CONVERT)
+	/* Only meaningful when a converter can own the recorder after landing.
+	 * Without one there is nothing to wait for.
+	 */
 	if (k_sem_take(&convert_idle, K_MSEC(LOG_ARM_CONVERT_TIMEOUT_MS)) != 0) {
 		LOG_ERR("ARMED: prior conversion still running after %d ms — "
 				"flight will not be logged",
@@ -54,6 +60,7 @@ static void log_begin_flight(void)
 		return;
 	}
 	k_sem_give(&convert_idle);
+#endif /* CONFIG_DATA_LOGGER_CONVERT */
 
 	/* Deliberately no memset of sm_logger here since its state carries the
 	 * mutex that serialises logger_task against data_logger_close().

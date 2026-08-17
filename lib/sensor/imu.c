@@ -90,10 +90,29 @@ static int fetch_and_send(const struct device *dev)
 		return ret;
 	}
 
-	/* Publish the IMU data to the z-bus channel */
+	/* Publish the IMU data to the z-bus channel.
+	 *
+	 * Rate-limited: a consumer that stops draining fills the subscriber
+	 * pool, and from then on every single sample fails.  At the IMU's
+	 * output rate that is a hundred error lines a second, which costs
+	 * more CPU than the telemetry it is complaining about and pushes the
+	 * real messages out of the log.  Report the first one immediately,
+	 * then at most once a second with a count of what was suppressed.
+	 */
 	ret = zbus_chan_pub(&imu_data_chan, &msg, K_NO_WAIT);
 	if (ret != 0) {
-		LOG_ERR("Failed to publish IMU data");
+		static int64_t last_report_ms;
+		static uint32_t suppressed;
+		int64_t now = k_uptime_get();
+
+		if (last_report_ms == 0 || (now - last_report_ms) >= 1000) {
+			LOG_ERR("Failed to publish IMU data (%d), %u more since "
+				"the last report", ret, suppressed);
+			last_report_ms = now;
+			suppressed = 0;
+		} else {
+			suppressed++;
+		}
 	}
 	return ret;
 }
