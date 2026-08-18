@@ -11,22 +11,6 @@ config AURORA_SENSORS
 	help
 		This option enables functionality for the aurora sensor HAL.
 
-config AURORA_SENSOR_BUS_UNWEDGE
-	bool "Clear a stuck I2C sensor bus at boot"
-	depends on AURORA_SENSORS && I2C
-	default y
-	help
-	  Clock any slave that is holding SDA low off the bus before the sensor
-	  drivers probe it.
-
-config AURORA_SENSOR_BUS_UNWEDGE_PRIORITY
-	int "Bus unwedge init priority"
-	depends on AURORA_SENSOR_BUS_UNWEDGE
-	default 60
-	help
-	  POST_KERNEL init priority of the unwedge hook.  Must sit strictly
-	  between I2C_INIT_PRIORITY and SENSOR_INIT_PRIORITY.
-
 menu "Inertial Measurement Unit (IMU)"
 
 config IMU
