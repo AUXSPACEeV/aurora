@@ -76,7 +76,7 @@ What each piece does:
   Kconfig values from another target cannot bleed in.
 - `-b <board>`: the upstream Zephyr board target.
 - `-S sim`: applies the `sim` snippet, swapping real sensor drivers
-  for the `fake_sensors` backend.
+  for the synthetic flight profile.
 - `-S nodisk`: applies the `nodisk` snippet, disabling the flight
   data logger and its SD card requirement.
 - `sensor_board`: the AURORA application under

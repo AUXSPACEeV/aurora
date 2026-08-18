@@ -11,6 +11,49 @@ config AURORA_SENSORS
 	help
 		This option enables functionality for the aurora sensor HAL.
 
+config AURORA_FAKE_SENSORS
+	bool "Simulated IMU/baro sample source (no hardware)"
+	depends on AURORA_SENSORS
+	depends on AURORA_STATE_MACHINE
+	depends on SHELL
+	help
+	  Replace the hardware sample source in imu.c and baro.c with a
+	  synthetic flight profile. Only the source changes: the sensors are
+	  read on the same schedule and publish on the same zbus channels, so
+	  the whole data path, attitude tracker, filter and state machine can
+	  be exercised without real sensors. IMU_FREQUENCY and BARO_FREQUENCY
+	  set the rate as usual. Works on native_sim and on real hardware --
+	  use the `sim` snippet (`west build -S sim ...`) to layer it on top
+	  of any board. The `sim launch` shell command starts the flight.
+
+config AURORA_FAKE_SENSORS_REPLAY
+	bool "Replay a recorded flight instead of the synthetic profile"
+	depends on IMU && BARO
+	select AURORA_FAKE_SENSORS
+	help
+	  Swap the synthetic profile for playback of a real flight, embedded
+	  at build time from a recorded flights.csv. Pre-launch it holds the
+	  first recorded sample so attitude calibration converges as usual;
+	  `sim launch` then plays the recording back against its original
+	  timeline, each read returning the newest sample whose timestamp has
+	  passed. Implies AURORA_FAKE_SENSORS.
+
+config AURORA_FAKE_SENSORS_SYNTH
+	def_bool AURORA_FAKE_SENSORS && !AURORA_FAKE_SENSORS_REPLAY
+	help
+	  Internal switch: true when the simulated source should be the
+	  synthetic flight profile rather than a recorded flight.
+
+config AURORA_FAKE_SENSORS_REPLAY_INPUT
+	string "Path to flights.csv used by the replay source"
+	depends on AURORA_FAKE_SENSORS_REPLAY
+	default "flight_logs/multimeter/2026-05-03/flight1/flights.csv"
+	help
+	  Path (relative to the aurora module root, i.e. the directory that
+	  contains zephyr/module.yml) to the flights.csv file embedded by the
+	  replay generator. May be overridden in prj.conf or via
+	  -DCONFIG_AURORA_FAKE_SENSORS_REPLAY_INPUT=... to swap recordings.
+
 menu "Inertial Measurement Unit (IMU)"
 
 config IMU

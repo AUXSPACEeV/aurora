@@ -173,30 +173,44 @@ state machine and the data logger:
 
 ### Threads
 
-`sensor_board` adds two Zephyr threads of its own:
+`sensor_board` adds one Zephyr thread of its own:
 
 | Thread | Guard | Prio | Stack | Purpose |
 |---|---|---|---|---|
-| `sensor_polling` | `CONFIG_IMU \|\| CONFIG_BARO` | 7 | 4 KB | Reads every configured sensor and publishes each sample to its zbus channel. |
-| `state_machine` | `CONFIG_AURORA_STATE_MACHINE` | 6 | 4 KB | Runs at 10 Hz. Feeds sensor data into the state machine and fires pyro channels on state transitions. |
+| `state_machine` | `CONFIG_AURORA_STATE_MACHINE` | 6 | 4 KB | Reads every configured sensor as it comes due, runs the state machine off the result and fires pyro channels on state transitions. |
 
 One thread services all sensors rather than one thread per sensor, because
 they share an I2C bus whose controller driver may serialise concurrent
 transfers by *spinning* — two independent pollers would then burn CPU at
-each other on every colliding transfer, and a wedged slave would hold a
-core at priority 7 for the driver's whole timeout. Owning the bus from a
-single thread removes the collision outright and makes the fault path
-serial, so the per-sensor exponential back-off (100 ms → 2 s) can pace it.
+each other on every colliding transfer. Owning the bus from a single thread
+removes the collision outright. Running the state machine on that same
+thread removes the hand-off as well: the samples are used where they are
+read, and no zbus round-trip or message-subscriber pool sits in between.
 
-Each sensor is read either on a deadline, at `CONFIG_IMU_FREQUENCY` /
-`CONFIG_BARO_FREQUENCY`, or on its data-ready trigger where
-`CONFIG_IMU_TRIGGER` / `CONFIG_BARO_TRIGGER` is set and the driver supports
-one. Triggered or not, the transfer itself runs on `sensor_polling`: a
-trigger handler only records that a sample is waiting, so that a stalled bus
-cannot block the driver's own trigger thread, which the ST drivers create at
-a *cooperative* priority that nothing — the watchdog feeder included — could
-preempt. A sensor whose trigger cannot be installed logs a warning and falls
-back to being polled.
+Priority 6 is preemptible, and deliberately placed above the data loggers
+(8, 9) so an SD write stall cannot cost sensor samples, and above the
+watchdog feeder (10) — if the flight thread ever spins, the feeder starves
+and the board resets, which is the correct outcome.
+
+Each sensor is read on a deadline, at `CONFIG_IMU_FREQUENCY` /
+`CONFIG_BARO_FREQUENCY`. Where `CONFIG_IMU_TRIGGER` / `CONFIG_BARO_TRIGGER`
+is set and the driver supports one, the sensor's data-ready handler runs
+first, on the driver's own thread, and does the minimum the hardware
+demands: it reads the sample off the chip and raises a flag. Everything
+downstream of that — conversion, publishing, the attitude tracker, the state
+machine, the loggers — still runs on `state_machine`, which picks the sample
+up at its next deadline.
+
+The read cannot be deferred with the rest. `lsm6dso_handle_interrupt()`
+loops on `STATUS_REG` until both `XLDA` and `GDA` are clear, and only reading
+the output registers clears them, so a handler that raised the flag and
+returned would spin that thread forever — at a *cooperative* priority that
+nothing, the watchdog feeder included, can preempt. `SENSOR_CHAN_ALL` is what
+clears both; fetching only `SENSOR_CHAN_ACCEL_XYZ` leaves `GDA` set and hangs
+just the same.
+
+A sensor whose trigger cannot be installed logs a warning and falls back to
+being polled.
 
 ```{note}
 To get an overview of running threads, use the Zephyr-Shell builtin command

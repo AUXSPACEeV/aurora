@@ -4,21 +4,23 @@
 
 Convert a recorded AURORA flight CSV into a generated C source file that
 embeds the samples as constant arrays. The generated file is compiled into
-the firmware and consumed by the **replay backend** of `fake_sensors`, so
+the firmware and consumed by the **replay source** in `lib/sensor`, so
 that simulated runs (e.g. on `native_sim` or with the `sim` snippet) can be
 driven by *real* flight data instead of the analytic profile.
 
 ## Background
 
-When `CONFIG_AURORA_FAKE_SENSORS=y` is set, the IMU and baro polling
-threads are replaced by a synthetic data source. There are two backends:
+When `CONFIG_AURORA_FAKE_SENSORS=y` is set, `imu.c` and `baro.c` take
+their samples from a simulated source instead of the drivers. There are
+two of them:
 
-| Backend | Kconfig | What it publishes |
+| Source | Kconfig | What it publishes |
 |---|---|---|
 | Analytic profile | `AURORA_FAKE_SENSORS_SYNTH` | An ISA-troposphere ascent/descent curve generated on the fly. |
 | Replay | `AURORA_FAKE_SENSORS_REPLAY` | Samples from a previously recorded flight, embedded at build time. |
 
-The replay backend (`fake_sensors_replay.c`) expects three arrays:
+The replay source (in `lib/sensor/imu.c` and `lib/sensor/baro.c`, with the
+sample types declared in `lib/sensor/replay.h`) expects three arrays:
 
 ```c
 struct replay_imu_sample  { uint64_t t_ns; float x, y, z; };

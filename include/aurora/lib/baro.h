@@ -36,38 +36,44 @@ struct baro_data
 };
 
 /**
- * @brief Measure temperature and pressure from the barometric sensor and
- * publish the data to the z-bus.
+ * @brief Take one baro sample, publish it on the z-bus and hand it back.
  *
- * @param dev   Pointer to the barometric sensor device.
+ * In trigger mode the sample was already read off the sensor by the driver's
+ * data-ready handler; this converts and publishes it. Returns -EAGAIN when no
+ * new sample has arrived since the last call, which is not an error: the
+ * caller is polling faster than the sensor produces.
+ *
+ * @param dev Pointer to the barometric sensor device. Ignored by the
+ *            simulated sources.
+ * @param out Optional; receives a copy of the sample.
  *
  * @retval 0 on success.
- * @retval -EINVAL if @p dev is NULL
- * @retval -errno Other negative errno on failure.
+ * @retval -EAGAIN in trigger mode when no new sample is waiting.
+ * @retval -errno Negative errno on failure.
  */
-int baro_measure(const struct device *dev);
+int baro_measure(const struct device *dev, struct baro_data *out);
 
 /**
  * @brief Initialize the barometric pressure sensor.
  *
- * Checks device readiness and, with CONFIG_BARO_TRIGGER, installs
- * @p handler on the sensor's data-ready trigger.
+ * Checks device readiness and, with CONFIG_BARO_TRIGGER, installs the
+ * library's own data-ready handler.
  *
  * A device that is present but cannot deliver that trigger reports
  * -ENOTSUP: the device is usable, and the caller is expected to fall back
  * to polling it with baro_measure() rather than treat the barometer as
  * absent.
  *
- * @param dev     Pointer to the barometric sensor device.
- * @param handler Trigger handler function. Ignored unless
- *                CONFIG_BARO_TRIGGER is enabled.
+ * @param dev Pointer to the barometric sensor device. Ignored by the
+ *            simulated sources.
  *
  * @retval 0 on success.
- * @retval -ENODEV if @p dev is NULL.
- * @retval -ETIMEDOUT if the device is not ready.
+ * @retval -EINVAL if @p dev is NULL.
+ * @retval -ENODEV if the device is not ready.
  * @retval -ENOTSUP if the device is ready but has no data-ready trigger.
+ * @retval -ENODATA if a simulated source has no sample data.
  */
-int baro_init(const struct device *dev, sensor_trigger_handler_t handler);
+int baro_init(const struct device *dev);
 
 /**
  * @brief Set the ground-level reference pressure.

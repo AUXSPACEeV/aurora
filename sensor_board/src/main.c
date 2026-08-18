@@ -2,8 +2,8 @@
  * @file main.c
  * @brief Sensor board application entry point.
  *
- * Defines two Zephyr threads that run concurrently: one owns the sensor bus
- * and publishes samples, the other drives the flight state machine from them.
+ * One thread owns the flight: it reads each sensor as it comes due and runs
+ * the state machine off the result.
  *
  * Copyright (c) 2025-2026 Auxspace e.V.
  * SPDX-License-Identifier: Apache-2.0
@@ -11,16 +11,11 @@
 
 #include "data.h"
 
-#if defined(CONFIG_AURORA_FAKE_SENSORS)
-#include "fake_sensors.h"
-#endif /* CONFIG_AURORA_FAKE_SENSORS */
-
 #include <string.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/zbus/zbus.h>
 
 #include <zephyr/app_version.h>
 
@@ -36,6 +31,16 @@
 #if defined(CONFIG_BARO)
 #include <aurora/lib/baro.h>
 #endif /* CONFIG_BARO */
+
+#if defined(CONFIG_AURORA_FAKE_SENSORS)
+#include <aurora/lib/sim.h>
+#endif /* CONFIG_AURORA_FAKE_SENSORS */
+
+#if defined(CONFIG_AURORA_SIM_AUTOTEST)
+#include <math.h>
+#include <stdlib.h>
+#include <zephyr/logging/log_ctrl.h>
+#endif /* CONFIG_AURORA_SIM_AUTOTEST */
 
 #if defined(CONFIG_PYRO)
 #include <aurora/drivers/pyro.h>
@@ -99,365 +104,133 @@ static struct sm_thresholds state_cfg;
 
 LOG_MODULE_REGISTER(main, CONFIG_SENSOR_BOARD_LOG_LEVEL);
 
-ZBUS_MSG_SUBSCRIBER_DEFINE(sm_sub);
-
-#if defined (CONFIG_IMU)
-ZBUS_CHAN_ADD_OBS(imu_data_chan, sm_sub, 1);
-#endif
-
-#if defined (CONFIG_BARO)
-ZBUS_CHAN_ADD_OBS(baro_data_chan, sm_sub, 1);
-#endif
-
-bool baro_active = false; /**< True once the barometer thread has initialized. */
-bool imu_active = false;  /**< True once the IMU thread has initialized. */
-static bool sm_active = false; /**< True once the state machine thread has initialized. */
-
 /* ============================================================
- *                     SENSOR TASK
+ *                     SENSORS
  * ============================================================ */
-#if defined(CONFIG_IMU) || defined(CONFIG_BARO)
-/* One thread services every sensor, in turn, rather than one thread
- * per sensor.
+
+/* Every sensor is read from the state machine thread below, one at a time.
  *
  * The sensors share a single I2C controller, and a controller driver may
- * serialise concurrent transfers by spinning rather than blocking: the
- * esp32 controller opens i2c_esp32_transfer() with a k_busy_wait loop on its
- * bus-busy flag lasting up to I2C_TRANSFER_TIMEOUT_MSEC (500 ms), and it does
- * so before taking its own transfer semaphore.
- * That loop does not yield, so with one poller per sensor the two spend the
- * overlap of every colliding transfer burning CPU at each other instead of
- * sleeping.
- * And a slave that wedges SDA turns each attempt into 500 ms during which
- * nothing of lower priority is scheduled at all, the watchdog feeder included.
+ * serialise concurrent transfers by spinning rather than blocking: the esp32
+ * controller opens i2c_esp32_transfer() with a k_busy_wait loop on its
+ * bus-busy flag lasting up to 500 ms, before taking its own transfer
+ * semaphore.  That loop does not yield, so a second poller would spend the
+ * overlap of every colliding transfer burning CPU rather than sleeping.
+ * Owning the bus from one thread removes the collision outright.
  *
- * Owning the bus from a single thread removes the collision outright, and
- * makes the fault path serial so the back-off below can actually pace it.
- *
- * A sensor driven by a data-ready trigger is the exception: it is read from
- * its own trigger handler and this thread does not schedule it at all.  That
- * is forced by the driver, not chosen.  The ST drivers' interrupt handler
- * loops until the sensor reports no sample waiting, and nothing but reading
- * the output registers clears that -- a handler that merely signalled this
- * thread and returned would leave STATUS_REG's data-ready bit set and spin
- * lsm6dso_handle_interrupt() forever, on a thread the driver creates at a
- * *cooperative* priority (K_PRIO_COOP(CONFIG_LSM6DSO_THREAD_PRIORITY)) that
- * nothing below it, the watchdog feeder included, could ever preempt.
- *
- * The cost is that a triggered sensor's transfers run at that cooperative
- * priority, where a stalled bus cannot be paced by the back-off below.  It
- * is the reason to think twice about CONFIG_IMU_TRIGGER on a shared bus.
- *
- * CONFIG_AURORA_FAKE_SENSORS swaps the sample source for a simulated one
- * (see fake_sensors.h) and changes nothing else: same thread, same
- * priority, same schedule as a hardware build.
+ * A sensor driven by a data-ready trigger is read on the driver's own thread
+ * instead -- forced by the driver, not chosen; see the handler in imu.c -- but
+ * only far enough to get the sample off the chip.  Everything downstream of
+ * that still runs here.
  */
-#if !defined(CONFIG_AURORA_FAKE_SENSORS)
+
+/** Sleep cap when no sensor has a deadline, e.g. every one failed to init. */
+#define SENSOR_IDLE_SLEEP_MS 1000
+
 #if defined(CONFIG_IMU)
-/* Build-time dependency: the sensor task fetches its device from the
- * 'auxspace,imu' chosen node. */
+#define IMU_PERIOD_MS MAX(1, 1000 / CONFIG_IMU_FREQUENCY)
+
+#if defined(CONFIG_AURORA_FAKE_SENSORS)
+#define IMU_DEV NULL
+#else
 #if !DT_HAS_CHOSEN(auxspace_imu)
 #error "CONFIG_IMU requires DT chosen 'auxspace,imu' to point at an IMU sensor node."
 #endif
 BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_imu), okay),
 	     "the 'auxspace,imu' chosen node must have status \"okay\"");
+#define IMU_DEV DEVICE_DT_GET(DT_CHOSEN(auxspace_imu))
+#endif /* CONFIG_AURORA_FAKE_SENSORS */
+
+static bool imu_ok;
 #endif /* CONFIG_IMU */
 
 #if defined(CONFIG_BARO)
-/* Likewise for the barometer's 'auxspace,baro' chosen node. */
+#define BARO_PERIOD_MS MAX(1, 1000 / CONFIG_BARO_FREQUENCY)
+
+#if defined(CONFIG_AURORA_FAKE_SENSORS)
+#define BARO_DEV NULL
+#else
 #if !DT_HAS_CHOSEN(auxspace_baro)
 #error "CONFIG_BARO requires DT chosen 'auxspace,baro' to point at a baro sensor node."
 #endif
 BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_baro), okay),
 	     "the 'auxspace,baro' chosen node must have status \"okay\"");
+#define BARO_DEV DEVICE_DT_GET(DT_CHOSEN(auxspace_baro))
+#endif /* CONFIG_AURORA_FAKE_SENSORS */
+
+static bool baro_ok;
 #endif /* CONFIG_BARO */
-#endif /* !CONFIG_AURORA_FAKE_SENSORS */
-
-/* Retry spacing after a failed fetch.
- *
- * A wedged bus costs up to 500 ms of non-yielding busy-wait per attempt (see
- * above), so retrying at the nominal poll rate would hold a CPU for ~83% of
- * the time the wedge lasts and starve the flight state machine, the loggers
- * and the watchdog feeder.  Doubling the gap bounds that duty cycle to a
- * level the feeder always survives, and as a side effect spaces attempts out
- * past AURORA_BUS_RECOVER_MIN_INTERVAL_MS so the bus-recovery call in the
- * sensor wrappers is actually reached instead of being rate-limited away.
- */
-#define SENSOR_BACKOFF_MIN_MS 100
-#define SENSOR_BACKOFF_MAX_MS 2000
-
-/* Upper bound on one sleep, not a poll rate.  The loop sleeps until the
- * earliest slot deadline, and this is only the starting value that search
- * minimises against -- at CONFIG_IMU_FREQUENCY=100 the IMU slot pulls it
- * straight down to 10 ms.  It survives only when no slot has a deadline at
- * all: every sensor dead after a failed init, or every one of them driven
- * by a trigger, which wakes the loop on its own.  Either way this parks it
- * at 1 Hz rather than letting it spin.
- */
-#define SENSOR_MAX_SLEEP_MS 1000
-
-/** One sensor and the schedule it is read on. */
-struct sensor_slot {
-	const struct device *dev;            /**< NULL for simulated sources. */
-	int (*fetch)(const struct device *); /**< Sample and publish. */
-	const char *name;                    /**< For diagnostics. */
-	uint32_t period_ms;                  /**< Nominal poll period. */
-	int64_t due_ms;                      /**< Earliest next fetch, uptime ms. */
-	uint32_t backoff_ms;                 /**< 0 while healthy. */
-	bool active;                         /**< False if init failed. */
-	bool triggered;                      /**< Paced by data-ready, not by period_ms. */
-};
-
-enum {
-#if defined(CONFIG_IMU)
-	SLOT_IMU,
-#endif
-#if defined(CONFIG_BARO)
-	SLOT_BARO,
-#endif
-	SLOT_COUNT,
-};
-
-/* Where a slot's samples come from.  A simulated build reads the backend
- * behind fake_sensors.h instead of the driver, and is otherwise identical.
- */
-#if defined(CONFIG_AURORA_FAKE_SENSORS)
-#define SLOT_IMU_FETCH  fake_imu_poll
-#define SLOT_BARO_FETCH fake_baro_measure
-#else
-#define SLOT_IMU_FETCH  imu_poll
-#define SLOT_BARO_FETCH baro_measure
-#endif
-
-/* File-scope rather than automatic: one thread owns this, and it keeps the
- * schedule off a stack that on Xtensa also absorbs register-window spills.
- */
-static struct sensor_slot sensor_slots[SLOT_COUNT] = {
-#if defined(CONFIG_IMU)
-	[SLOT_IMU] = {
-		.fetch = SLOT_IMU_FETCH,
-		.name = "IMU",
-		.period_ms = MAX(1, 1000 / CONFIG_IMU_FREQUENCY),
-	},
-#endif
-#if defined(CONFIG_BARO)
-	[SLOT_BARO] = {
-		.fetch = SLOT_BARO_FETCH,
-		.name = "baro",
-		.period_ms = MAX(1, 1000 / CONFIG_BARO_FREQUENCY),
-	},
-#endif
-};
 
 /**
- * @brief Advance a slot's deadline after an attempt.
+ * @brief Bring every configured sensor up.
  *
- * @param slot Slot that was just read.
- * @param now  Uptime in ms, sampled after the fetch returned.
- * @param ok   Whether the fetch succeeded.
+ * A sensor that fails to initialize is left out rather than taking the others
+ * down with it; one that comes up but cannot deliver its data-ready trigger
+ * falls back to being polled, which is degraded but still flyable.
  */
-static void sensor_slot_reschedule(struct sensor_slot *slot, int64_t now, bool ok)
-{
-	if (!ok) {
-		slot->backoff_ms = (slot->backoff_ms == 0)
-					   ? SENSOR_BACKOFF_MIN_MS
-					   : MIN(slot->backoff_ms * 2U,
-						 (uint32_t)SENSOR_BACKOFF_MAX_MS);
-		slot->due_ms = now + slot->backoff_ms;
-		return;
-	}
-
-	if (slot->backoff_ms != 0) {
-		LOG_INF("%s recovered after %u ms back-off", slot->name, slot->backoff_ms);
-		slot->backoff_ms = 0;
-	}
-
-	slot->due_ms += slot->period_ms;
-	if (slot->due_ms <= now) {
-		slot->due_ms = now + slot->period_ms;
-	}
-}
-
-#if defined(CONFIG_IMU) && defined(CONFIG_IMU_TRIGGER)
-/**
- * @brief Data-ready handler for the IMU.
- *
- * Reads and publishes the waiting sample right here, on the driver's trigger
- * thread.  Deferring it is not an option: see the note at the top of this
- * section on what an ST driver does when its handler returns without having
- * cleared the sensor's data-ready bit.
- */
-static void trigger_handler_imu(const struct device *dev,
-				const struct sensor_trigger *trigger)
-{
-	ARG_UNUSED(trigger);
-
-	(void)SLOT_IMU_FETCH(dev);
-}
-#define IMU_TRIGGER_HANDLER trigger_handler_imu
-#else
-#define IMU_TRIGGER_HANDLER NULL
-#endif /* CONFIG_IMU && CONFIG_IMU_TRIGGER */
-
-#if defined(CONFIG_BARO) && defined(CONFIG_BARO_TRIGGER)
-/** @brief Data-ready handler for the barometer. See trigger_handler_imu(). */
-static void trigger_handler_baro(const struct device *dev,
-				 const struct sensor_trigger *trigger)
-{
-	ARG_UNUSED(trigger);
-
-	(void)SLOT_BARO_FETCH(dev);
-}
-#define BARO_TRIGGER_HANDLER trigger_handler_baro
-#else
-#define BARO_TRIGGER_HANDLER NULL
-#endif /* CONFIG_BARO && CONFIG_BARO_TRIGGER */
-
-/**
- * @brief Bring every configured sensor up and mark the slots it may read.
- *
- * A sensor that fails to initialize leaves its slot inactive rather than
- * taking the others down with it; one that comes up but cannot deliver its
- * data-ready trigger falls back to being polled at its configured
- * frequency, which is degraded but still flyable.
- */
-static void sensor_slots_init(void)
+static void sensors_init(void)
 {
 #if defined(CONFIG_IMU)
-	struct sensor_slot *imu = &sensor_slots[SLOT_IMU];
-
-#if defined(CONFIG_AURORA_FAKE_SENSORS)
-	imu->active = (fake_imu_init() == 0);
-#else
-	imu->dev = DEVICE_DT_GET(DT_CHOSEN(auxspace_imu));
-
-	int imu_rc = imu_init(imu->dev, IMU_TRIGGER_HANDLER);
+	int imu_rc = imu_init(IMU_DEV);
 
 	if (imu_rc == -ENOTSUP) {
 		LOG_WRN("IMU data-ready trigger unavailable; polling at %d Hz",
 			CONFIG_IMU_FREQUENCY);
 		imu_rc = 0;
-	} else if (imu_rc == 0) {
-		imu->triggered = IS_ENABLED(CONFIG_IMU_TRIGGER);
 	}
 
-	imu->active = (imu_rc == 0);
-	if (!imu->active) {
-		imu->dev = NULL;
-	}
-#endif /* CONFIG_AURORA_FAKE_SENSORS */
-
-	imu_active = imu->active;
-	if (imu->active) {
-		LOG_INF("IMU ready (%s)", imu->triggered ? "data-ready trigger" : "polled");
+	imu_ok = (imu_rc == 0);
+	if (imu_ok) {
+		LOG_INF("IMU ready");
 	} else {
 		LOG_ERR("IMU not ready!");
 	}
 #endif /* CONFIG_IMU */
 
 #if defined(CONFIG_BARO)
-	struct sensor_slot *baro = &sensor_slots[SLOT_BARO];
-
-#if defined(CONFIG_AURORA_FAKE_SENSORS)
-	baro->active = (fake_baro_init() == 0);
-#else
-	baro->dev = DEVICE_DT_GET(DT_CHOSEN(auxspace_baro));
-
-	int baro_rc = baro_init(baro->dev, BARO_TRIGGER_HANDLER);
+	int baro_rc = baro_init(BARO_DEV);
 
 	if (baro_rc == -ENOTSUP) {
 		LOG_WRN("Baro data-ready trigger unavailable; polling at %d Hz",
 			CONFIG_BARO_FREQUENCY);
 		baro_rc = 0;
-	} else if (baro_rc == 0) {
-		baro->triggered = IS_ENABLED(CONFIG_BARO_TRIGGER);
 	}
 
-	baro->active = (baro_rc == 0);
-	if (!baro->active) {
-		baro->dev = NULL;
-	}
-#endif /* CONFIG_AURORA_FAKE_SENSORS */
-
-	baro_active = baro->active;
-	if (baro->active) {
-		LOG_INF("Baro ready (%s)", baro->triggered ? "data-ready trigger" : "polled");
+	baro_ok = (baro_rc == 0);
+	if (baro_ok) {
+		LOG_INF("Baro ready");
 	} else {
 		LOG_ERR("Baro not ready!");
 	}
 #endif /* CONFIG_BARO */
 }
 
-/**
- * @brief Sensor thread.
- *
- * Initializes every configured sensor, then reads the ones that are paced by
- * a deadline as each comes due, publishing every sample to its zbus channel.
- * Sensors paced by a data-ready trigger publish from their own handler and
- * are only initialized here.
- */
-void sensor_task(void *, void *, void *)
-{
-	sensor_slots_init();
-
-	while (1) {
-		int64_t now = k_uptime_get();
-		/* Seed for the "earliest deadline" search below. */
-		int64_t next_due = now + SENSOR_MAX_SLEEP_MS;
-
-		for (size_t i = 0; i < SLOT_COUNT; i++) {
-			struct sensor_slot *slot = &sensor_slots[i];
-
-			/* A triggered slot is driven from its own handler and
-			 * keeps no deadline here, so it must not take part in
-			 * the search below either: its permanently-past
-			 * due_ms would collapse every sleep to nothing.
-			 */
-			if (!slot->active || slot->triggered) {
-				continue;
-			}
-
-			if (slot->due_ms <= now) {
-				bool ok = (slot->fetch(slot->dev) == 0);
-
-				/* A single fetch can take hundreds of ms on a
-				 * sick bus, so re-read the clock instead of
-				 * pacing the remaining slots off a stale one.
-				 */
-				now = k_uptime_get();
-				sensor_slot_reschedule(slot, now, ok);
-			}
-
-			if (slot->due_ms < next_due) {
-				next_due = slot->due_ms;
-			}
-		}
-
-		if (next_due <= now) {
-			/* Unreachable: every slot reaching the search above
-			 * has just advanced its own deadline past `now`.  Kept
-			 * as a floor because the alternative is a spin at
-			 * priority 7, which starves every thread below it --
-			 * the watchdog feeder at priority 10 included -- until
-			 * the hardware watchdog resets the board.
-			 */
-			next_due = now + 1;
-		}
-
-		/* Absolute deadline, so a slow fetch eats into this sleep
-		 * instead of adding to the period.
-		 */
-		k_sleep(K_TIMEOUT_ABS_MS(next_due));
-	}
-}
-
-K_THREAD_DEFINE(sensor_polling, 4096, sensor_task, NULL, NULL, NULL, 7, 0, 0);
-#endif /* CONFIG_IMU || CONFIG_BARO */
-
 /* ============================================================
  *                     State machine TASK
  * ============================================================ */
 #if defined(CONFIG_AURORA_STATE_MACHINE)
+
+/* Flight inputs derived from the samples.  File-scope because exactly one
+ * thread owns them, which is also what lets the helpers below take no
+ * arguments.
+ */
+static double altitude;
+static double acceleration;
+static double accel_vert;
+static double orientation[3];
+static bool imu_ready;
+static bool baro_ready;
+/* No-IMU builds have nothing to calibrate, so treat calibration as instantly
+ * satisfied; CONFIG_IMU builds overwrite this from the attitude tracker.
+ */
+static bool calibrated = true;
+
+#if defined(CONFIG_IMU)
+static struct attitude attitude_state;
+static int64_t last_imu_ns;
+static bool calibration_started_notified;
+static bool calibration_notified;
+#endif /* CONFIG_IMU */
 
 #if defined(CONFIG_AURORA_SIM_AUTOTEST)
 /**
@@ -489,6 +262,67 @@ static bool is_valid_transition(enum sm_state from, enum sm_state to)
 	default: return false;
 	}
 }
+
+/**
+ * @brief Drive and adjudicate an unattended simulated flight.
+ *
+ * Launches as soon as attitude calibration converges, then exits the process
+ * on the outcome so CI can read it off the exit code.  Runs on the state
+ * machine thread: the flight it is watching cannot advance without it.
+ */
+static void autotest_step(enum sm_state state)
+{
+	static bool launched;
+	static int64_t deadline;
+
+	if (!launched) {
+		if (!calibrated) {
+			return;
+		}
+
+		LOG_INF("autolaunch: calibration complete, launching");
+		sim_launch();
+		deadline = k_uptime_get() + CONFIG_AURORA_SIM_AUTOLAUNCH_TIMEOUT_MS;
+		launched = true;
+		return;
+	}
+
+	if (state == SM_LANDED) {
+#if !defined(CONFIG_AURORA_FAKE_SENSORS_REPLAY)
+		/* The synthetic rocket stays vertical and spins about its up
+		 * axis, so yaw and pitch must have held while roll moved.
+		 */
+		LOG_INF("autolaunch: orientation yaw=%.2f pitch=%.2f roll=%.2f",
+			orientation[0], orientation[1], orientation[2]);
+		__ASSERT(fabs(orientation[0]) < 5.0,
+			 "autolaunch: yaw drift %.2f deg exceeds 5 deg",
+			 orientation[0]);
+		__ASSERT(fabs(orientation[1]) < 5.0,
+			 "autolaunch: pitch drift %.2f deg exceeds 5 deg",
+			 orientation[1]);
+		__ASSERT(fabs(orientation[2]) > 1.0,
+			 "autolaunch: roll did not integrate (%.2f deg)",
+			 orientation[2]);
+#endif /* !CONFIG_AURORA_FAKE_SENSORS_REPLAY */
+		LOG_INF("autolaunch: LANDED - simulation complete");
+		log_flush();
+		exit(0);
+	}
+
+	if (state == SM_ERROR) {
+		/* The __ASSERT in the error handler likely fires first */
+		LOG_ERR("autolaunch: ERROR state - simulation failed");
+		log_flush();
+		exit(1);
+	}
+
+	if (k_uptime_get() >= deadline) {
+		LOG_ERR("autolaunch: timeout after %d ms without landing",
+			CONFIG_AURORA_SIM_AUTOLAUNCH_TIMEOUT_MS);
+		log_flush();
+		exit(1);
+	}
+}
 #endif /* CONFIG_AURORA_SIM_AUTOTEST */
 
 /* Re-signal interval while the state machine is held in SM_ERROR: the
@@ -496,7 +330,6 @@ static bool is_valid_transition(enum sm_state from, enum sm_state to)
  * stays audible in the field without flooding the queue or the console.
  */
 #define SM_ERROR_RESIGNAL_MS 5000
-#define SM_DRAIN_LIMIT 32
 
 /**
  * @brief Error handler for the state machine.
@@ -543,42 +376,33 @@ int state_machine_error_handler(enum sm_error_reason reason, void *args)
 	return 0;
 }
 
+#if defined(CONFIG_IMU)
 /**
- * @brief Processes raw IMU data to update orientation, acceleration, and attitude filtering.
+ * @brief Turn a raw IMU sample into orientation, acceleration and attitude.
  *
- * Calculates delta-time since the last sample, converts raw sensor data to double precision,
- * and updates the attitude estimation filter. Handles sensor calibration tracking while the
- * system is in the IDLE state, and computes vertical acceleration once calibrated.
+ * Tracks calibration while the vehicle is IDLE, and computes earth-frame
+ * vertical acceleration once calibrated.
  *
- * @param[in,out] last_imu_ns         Pointer to the timestamp of the last processed IMU sample.
- * @param[in,out] attitude_state      Pointer to the internal attitude estimation filter state.
- * @param[in]     imu_data            Pointer to the incoming raw IMU message buffer.
- * @param[out]    orientation         Array where the calculated orientation [pitch, roll, yaw] is stored.
- * @param[out]    acceleration        Pointer where the scalar acceleration magnitude is stored.
- * @param[out]    accel_vert          Pointer where the earth-frame vertical acceleration is stored.
- * @param[out]    imu_ready           Pointer set to true once fresh orientation and acceleration are available.
- * @param[in,out] calibration_started_notified Pointer tracking whether the user has been notified of the start.
- * @param[in,out] calibration_notified Pointer tracking whether the user has been notified of completion.
+ * @param imu_data Incoming raw IMU sample.
  */
-static void handle_imu(int64_t *last_imu_ns, struct attitude *attitude_state, struct imu_data *imu_data,
-	double orientation[3], double *acceleration, double *accel_vert, bool *imu_ready,
-	bool *calibration_started_notified, bool *calibration_notified)
+static void handle_imu(const struct imu_data *imu_data)
 {
 	int64_t now_ns = (k_uptime_ticks() * NSEC_PER_SEC) / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
 	/* Delta-time since the last sample, clamped to a sane range; 0.0 on the
-	 * first sample or after a discontinuity. Shared by orientation
-	 * integration and the attitude update below.
+	 * first sample or after a discontinuity.
 	 */
-	double dt_s = (*last_imu_ns != 0) ? (double)(now_ns - *last_imu_ns) / 1e9 : 0.0;
+	double dt_s = (last_imu_ns != 0) ? (double)(now_ns - last_imu_ns) / 1e9 : 0.0;
+
 	if (dt_s < 0.0 || dt_s > 1.0) {
 		dt_s = 0.0;
 	}
 
-	const double *bias_for_orient = attitude_is_calibrated(attitude_state) ? attitude_state->gyro_bias : NULL;
+	const double *bias_for_orient =
+		attitude_is_calibrated(&attitude_state) ? attitude_state.gyro_bias : NULL;
 
 	if (imu_sensor_value_to_orientation(imu_data, dt_s, bias_for_orient, orientation) == 0
-		&& imu_sensor_value_to_acceleration(imu_data, acceleration) == 0) {
-		*imu_ready = true;
+	    && imu_sensor_value_to_acceleration(imu_data, &acceleration) == 0) {
+		imu_ready = true;
 	}
 
 	double accel_b[ATTITUDE_NUM_AXES] = {
@@ -592,50 +416,49 @@ static void handle_imu(int64_t *last_imu_ns, struct attitude *attitude_state, st
 		sensor_value_to_double(&imu_data->gyro[2]),
 	};
 
-	if (!attitude_is_calibrated(attitude_state)) {
+	if (!attitude_is_calibrated(&attitude_state)) {
 		if (sm_get_state() == SM_IDLE) {
-			attitude_calibrate_sample(attitude_state, accel_b, gyro_b);
+			attitude_calibrate_sample(&attitude_state, accel_b, gyro_b);
 #if defined(CONFIG_AURORA_NOTIFY)
-			if (!(*calibration_started_notified) &&
-			    attitude_state->cal_samples > 0) {
+			if (!calibration_started_notified &&
+			    attitude_state.cal_samples > 0) {
 				notify_calibration_start();
-				*calibration_started_notified = true;
+				calibration_started_notified = true;
 			}
 #endif /* CONFIG_AURORA_NOTIFY */
-			if (attitude_calibrate_converged(attitude_state)) {
-				if (attitude_calibrate_finish(attitude_state) == 0) {
+			if (attitude_calibrate_converged(&attitude_state) &&
+			    attitude_calibrate_finish(&attitude_state) == 0) {
 #if defined(CONFIG_AURORA_STATE_MACHINE_RETAIN)
-					/* Snapshot it now, while the vehicle is
-					 * still stationary and the result is
-					 * known good.  Calibration only runs in
-					 * SM_IDLE, so a board that reboots into
-					 * a flight state can never redo this --
-					 * it has to be handed the old answer.
-					 */
-					(void)sm_retain_save_blob(attitude_state,
-								  sizeof(*attitude_state));
+				/* Snapshot it now, while the vehicle is still
+				 * stationary and the result is known good.
+				 * Calibration only runs in SM_IDLE, so a board
+				 * that reboots into a flight state can never
+				 * redo this -- it has to be handed the old
+				 * answer.
+				 */
+				(void)sm_retain_save_blob(&attitude_state,
+							  sizeof(attitude_state));
 #endif /* CONFIG_AURORA_STATE_MACHINE_RETAIN */
 #if defined(CONFIG_AURORA_NOTIFY)
-					if (!(*calibration_notified)) {
-						notify_calibration_complete();
-						*calibration_notified = true;
-					}
-#endif /* CONFIG_AURORA_NOTIFY */
-#if defined(CONFIG_AURORA_FAKE_SENSORS)
-					fake_sensors_on_calibrated();
-#endif /* CONFIG_AURORA_FAKE_SENSORS */
+				if (!calibration_notified) {
+					notify_calibration_complete();
+					calibration_notified = true;
 				}
+#endif /* CONFIG_AURORA_NOTIFY */
 			}
 		}
-		*accel_vert = 0.0;
+		accel_vert = 0.0;
 	} else if (dt_s > 0.0) {
 		double a_v;
-		if (attitude_update(attitude_state, accel_b, gyro_b, dt_s, &a_v) == 0) {
-			*accel_vert = a_v;
+
+		if (attitude_update(&attitude_state, accel_b, gyro_b, dt_s, &a_v) == 0) {
+			accel_vert = a_v;
 		}
 	}
-	*last_imu_ns = now_ns;
+
+	last_imu_ns = now_ns;
 }
+#endif /* CONFIG_IMU */
 
 /**
  * @brief Handles pyrotechnic channel actions based on flight state transitions.
@@ -696,28 +519,26 @@ static void handle_pyro(enum sm_state state, enum sm_state *pyro_state, const st
 #endif /* CONFIG_PYRO */
 }
 
-static void handle_state_transition(enum sm_state prev_state, enum sm_state state, struct attitude *attitude_state,
-	int64_t *last_imu_ns, bool *calibration_started_notified, bool *calibration_notified,
-	double orientation[3])
+static void handle_state_transition(enum sm_state prev_state, enum sm_state state)
 {
-#if defined(CONFIG_AURORA_FAKE_SENSORS) && defined(CONFIG_AURORA_SIM_AUTOTEST)
+#if defined(CONFIG_AURORA_SIM_AUTOTEST)
 	__ASSERT(is_valid_transition(prev_state, state),
 		"Invalid SM transition: %s -> %s",
 		sm_state_str(prev_state),
 		sm_state_str(state));
-#endif /* CONFIG_AURORA_FAKE_SENSORS */
+#endif /* CONFIG_AURORA_SIM_AUTOTEST */
 #if defined(CONFIG_AURORA_NOTIFY)
 	notify_state_change(prev_state, state);
 #endif /* CONFIG_AURORA_NOTIFY */
 #if defined(CONFIG_IMU)
-			/* On return to IDLE, discard calibration so a re-arm
-			 * triggers a fresh stationary calibration window.
-			 */
+	/* On return to IDLE, discard calibration so a re-arm triggers a fresh
+	 * stationary calibration window.
+	 */
 	if (state == SM_IDLE) {
-		attitude_init(attitude_state);
-		*last_imu_ns = 0;
-		*calibration_started_notified = false;
-		*calibration_notified = false;
+		attitude_init(&attitude_state);
+		last_imu_ns = 0;
+		calibration_started_notified = false;
+		calibration_notified = false;
 		orientation[2] = 0.0;
 	}
 #endif /* CONFIG_IMU */
@@ -725,49 +546,19 @@ static void handle_state_transition(enum sm_state prev_state, enum sm_state stat
 }
 
 /**
- * @brief State machine thread.
- *
- * Waits for IMU and barometer readiness, then runs the flight state machine
- * at 10 Hz. Fires pyro channels on the appropriate state transitions.
+ * @brief Flight thread: reads every sensor and runs the state machine off it.
  */
 void state_machine_task(void *, void *, void *)
 {
 	enum sm_state state;
 	enum sm_state prev_state = SM_IDLE;
-	const struct zbus_channel *data_chan;
-	union {
-		struct imu_data imu;
-		struct baro_data baro;
-	} msg_buf;
-	double altitude = 0.0;
-	double acceleration = 0.0;
-	double accel_vert = 0.0;
-	double orientation[] = {0.0, 0.0, 0.0};
-	bool baro_ready = false;
-	bool imu_ready = false;
-	/* No-IMU builds have nothing to calibrate, so treat calibration as
-	 * instantly satisfied; CONFIG_IMU builds override this below from
-	 * the real attitude tracker each iteration.
-	 */
-	bool calibrated = true;
 
 	struct sm_error_handling_args sm_error_handler = {
 		.cb = &state_machine_error_handler,
 		.args = NULL,
 	};
 
-	struct sm_inputs inputs = {
-		.armed = 1,
-		.acceleration = acceleration,
-		.accel_vert = accel_vert,
-	};
-	memcpy(inputs.orientation, orientation, sizeof(inputs.orientation));
 #if defined(CONFIG_IMU)
-	static struct attitude attitude_state;
-	int64_t last_imu_ns = 0;
-	bool calibration_started_notified = false;
-	bool calibration_notified = false;
-
 	attitude_init(&attitude_state);
 #endif /* CONFIG_IMU */
 
@@ -782,13 +573,14 @@ void state_machine_task(void *, void *, void *)
 #else
 	const struct device *pyro0 = NULL;
 	enum sm_state pyro_state = SM_IDLE;
-#endif /*.CONFIG_PYRO */
+#endif /* CONFIG_PYRO */
+
+	sensors_init();
 
 	/* Per-vehicle thresholds with Kconfig fallbacks */
 	sm_config_load(&state_cfg);
 
 	sm_init(&state_cfg, &sm_error_handler);
-	sm_active = true;
 
 #if defined(CONFIG_IMU) && defined(CONFIG_AURORA_STATE_MACHINE_RETAIN)
 	if (sm_retain_recovered()) {
@@ -807,9 +599,7 @@ void state_machine_task(void *, void *, void *)
 #if defined(CONFIG_AURORA_STATE_MACHINE_RETAIN)
 	/* Replay the IDLE => resumed edge for the consumers that are driven by
 	 * transitions and therefore still believe the vehicle is IDLE after a
-	 * silent restore.  Must stay ahead of the sensor gate below: a sensor
-	 * that does not survive the warm reset parks this task there forever,
-	 * and the flight would then run unannounced and unrecorded.
+	 * silent restore.
 	 *
 	 * Deliberately narrower than handle_state_transition(): replaying its
 	 * log lifecycle wholesale would, on a recovery into LANDED, schedule a
@@ -837,120 +627,147 @@ void state_machine_task(void *, void *, void *)
 	}
 #endif /* CONFIG_AURORA_STATE_MACHINE_RETAIN */
 
-	/* TODO: Add idling */
-	while (!baro_active || !imu_active) {
-		k_sleep(K_MSEC(100));
-	}
+	int64_t now = k_uptime_get();
+#if defined(CONFIG_IMU)
+	int64_t imu_due = now;
+	struct imu_data imu_msg;
+#endif /* CONFIG_IMU */
+#if defined(CONFIG_BARO)
+	int64_t baro_due = now;
+	struct baro_data baro_msg;
+#endif /* CONFIG_BARO */
 
 	while (1) {
-		/* Block until at least one message arrives */
-		if (zbus_sub_wait_msg(&sm_sub, &data_chan, &msg_buf, K_FOREVER) != 0) {
-			continue;
-		}
+		now = k_uptime_get();
+		/* Seed for the "earliest deadline" search below. */
+		int64_t next_due = now + SENSOR_IDLE_SLEEP_MS;
 
-		/* Process the first message, then drain any queued messages
-		 * so we always work with the latest sensor data.
-		 */
-		unsigned int drained = 0;
-
-		do {
-			if (data_chan == &imu_data_chan) {
-				WDT_KICK(AURORA_WDT_SRC_IMU);
 #if defined(CONFIG_IMU)
-				handle_imu(&last_imu_ns,
-					&attitude_state,
-					&msg_buf.imu,
-					orientation,
-					&acceleration,
-					&accel_vert,
-					&imu_ready,
-					&calibration_started_notified,
-					&calibration_notified);
-				log_imu_data(&msg_buf.imu);
-#endif
-#if defined(CONFIG_BARO)
-			} else if (data_chan == &baro_data_chan) {
-				WDT_KICK(AURORA_WDT_SRC_BARO);
-				log_baro_data(&msg_buf.baro);
-
-				if (baro_sensor_value_to_altitude(&msg_buf.baro.pressure, &altitude) == 0) {
-					baro_ready = true;
+		if (imu_ok) {
+			if (now >= imu_due) {
+				/* -EAGAIN only means a triggered sensor has
+				 * nothing new; a real sample is handled here.
+				 */
+				if (imu_poll(IMU_DEV, &imu_msg) == 0) {
+					WDT_KICK(AURORA_WDT_SRC_IMU);
+					handle_imu(&imu_msg);
+					log_imu_data(&imu_msg);
 				}
-#endif
-			}
-		} while (++drained < SM_DRAIN_LIMIT &&
-			 zbus_sub_wait_msg(&sm_sub, &data_chan, &msg_buf, K_NO_WAIT) == 0);
 
-		/* This check is necessary to avoid updating the state machine
-		 * with uninitialized sensor data durring startup. This ensures
-		 * that updates to the state machine only after both the
-		 * barometer and IMU have reported valid data at least once.
-		 * The parameters don't have to be reset because the kalman filter
-		 * used inside the state machine can handle updates to a single
-		 * sensor (e.g. just the barometer. After receiving the first
-		 * valid values from all sensors the ZBUS messages ensure
-		 * that the state machine is only updated when at least
-		 * one of the sensors has sent a new value.
-		 */
-		if (!baro_ready || !imu_ready) {
-			continue;
+				/* A single read can take hundreds of ms on a
+				 * sick bus, so re-read the clock rather than
+				 * pacing the barometer off a stale one.
+				 */
+				now = k_uptime_get();
+				imu_due += IMU_PERIOD_MS;
+				if (imu_due <= now) {
+					imu_due = now + IMU_PERIOD_MS;
+				}
+			}
+
+			next_due = MIN(next_due, imu_due);
 		}
+#endif /* CONFIG_IMU */
+
+#if defined(CONFIG_BARO)
+		if (baro_ok) {
+			if (now >= baro_due) {
+				if (baro_measure(BARO_DEV, &baro_msg) == 0) {
+					WDT_KICK(AURORA_WDT_SRC_BARO);
+					log_baro_data(&baro_msg);
+
+					if (baro_sensor_value_to_altitude(
+						    &baro_msg.pressure, &altitude) == 0) {
+						baro_ready = true;
+					}
+				}
+
+				now = k_uptime_get();
+				baro_due += BARO_PERIOD_MS;
+				if (baro_due <= now) {
+					baro_due = now + BARO_PERIOD_MS;
+				}
+			}
+
+			next_due = MIN(next_due, baro_due);
+		}
+#endif /* CONFIG_BARO */
 
 #if defined(CONFIG_IMU)
 		calibrated = attitude_is_calibrated(&attitude_state) > 0;
 #endif /* CONFIG_IMU */
 
-		inputs = (struct sm_inputs){
-			.armed = 1,
-			.log_ready = log_flight_log_online(),
-			.log_busy = log_flight_log_busy(),
-			.calibrated = calibrated,
-			.acceleration = acceleration,
-			.accel_vert = accel_vert,
-			.altitude = altitude,
-		};
-		memcpy(inputs.orientation, orientation, sizeof(inputs.orientation));
-
-		sm_update(&inputs);
-		state = sm_get_state();
-
-		/* Deliberately here and not at the top of the loop: reaching
-		 * this point means both sensors delivered and the machine
-		 * actually advanced.  A kick at the loop head would keep
-		 * looking alive while the baro-or-imu gate above spins.
+		/* Hold the state machine until both sensors have reported once,
+		 * so it is never updated with uninitialized data during
+		 * startup.  After that the Kalman filter inside it copes fine
+		 * with an update carrying only one fresh sensor.
 		 */
-		WDT_KICK(AURORA_WDT_SRC_STATE);
+		if (baro_ready && imu_ready) {
+			struct sm_inputs inputs = {
+				.armed = 1,
+				.log_ready = log_flight_log_online(),
+				.log_busy = log_flight_log_busy(),
+				.calibrated = calibrated,
+				.acceleration = acceleration,
+				.accel_vert = accel_vert,
+				.altitude = altitude,
+			};
+			memcpy(inputs.orientation, orientation, sizeof(inputs.orientation));
 
-		/*update pad link data*/
-		update_pad_link_data();
+			sm_update(&inputs);
+			state = sm_get_state();
 
-		log_flight_telemetry();
-		log_vbat_telemetry();
+			/* Deliberately here and not at the top of the loop:
+			 * reaching this point means both sensors delivered and
+			 * the machine actually advanced.  A kick at the loop
+			 * head would keep looking alive while the gate above
+			 * waits for a sensor that never comes back.
+			 */
+			WDT_KICK(AURORA_WDT_SRC_STATE);
 
-		if (state != prev_state) {
-#if defined(CONFIG_IMU)
-			handle_state_transition(prev_state,
-				state,
-				&attitude_state,
-				&last_imu_ns,
-				&calibration_started_notified,
-				&calibration_notified,
-				orientation);
-#else
-			handle_state_transition(prev_state, state, NULL, NULL, NULL, NULL, orientation);
-#endif
-			prev_state = state;
+			/* update pad link data */
+			update_pad_link_data();
+
+			log_flight_telemetry();
+			log_vbat_telemetry();
+
+			if (state != prev_state) {
+				handle_state_transition(prev_state, state);
+				prev_state = state;
+			}
+
+			/* reset the measurements */
+			baro_ready = false;
+			imu_ready = false;
+
+			handle_pyro(state, &pyro_state, pyro0);
 		}
 
-		/* reset the measurements */
-		baro_ready = false;
-		imu_ready = false;
+#if defined(CONFIG_AURORA_SIM_AUTOTEST)
+		autotest_step(sm_get_state());
+#endif /* CONFIG_AURORA_SIM_AUTOTEST */
 
-		handle_pyro(state, &pyro_state, pyro0);
+		if (next_due <= now) {
+			/* Unreachable: every sensor reaching the search above
+			 * has just advanced its own deadline past `now`.  Kept
+			 * as a floor because the alternative is a spin that
+			 * starves every thread below this one.
+			 */
+			next_due = now + 1;
+		}
+
+		/* Absolute deadline, so a slow read eats into this sleep
+		 * instead of adding to the period.
+		 */
+		k_sleep(K_TIMEOUT_ABS_MS(next_due));
 	}
 }
 
-/* Create the State machine task */
+/* Preemptible on purpose, and placed above the loggers (8, 9) so an SD stall
+ * cannot cost sensor samples, below the drivers' cooperative trigger threads,
+ * and above the watchdog feeder (10) -- if this thread ever spins, the feeder
+ * starves and the board resets, which is the correct outcome.
+ */
 K_THREAD_DEFINE(state_machine, 4096, state_machine_task, NULL, NULL, NULL, 6, 0, 0);
 #endif /* CONFIG_AURORA_STATE_MACHINE */
 
