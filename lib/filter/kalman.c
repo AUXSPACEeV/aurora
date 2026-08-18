@@ -42,16 +42,16 @@ LOG_MODULE_REGISTER(kalman, CONFIG_AURORA_FILTER_LOG_LEVEL);
 int filter_init(struct filter *filter)
 {
 	if (filter == NULL)
-	return -EINVAL;
+		return -EINVAL;
 
 	const double q_alt =
-	((double)CONFIG_FILTER_Q_ALT_MILLISCALE) / FILTER_SCALE_DIVISOR;
+		((double)CONFIG_FILTER_Q_ALT_MILLISCALE) / FILTER_SCALE_DIVISOR;
 
 	const double q_vel =
-	((double)CONFIG_FILTER_Q_VEL_MILLISCALE) / FILTER_SCALE_DIVISOR;
+		((double)CONFIG_FILTER_Q_VEL_MILLISCALE) / FILTER_SCALE_DIVISOR;
 
 	const double r_meas =
-	((double)CONFIG_FILTER_R_MILLISCALE) / FILTER_SCALE_DIVISOR;
+		((double)CONFIG_FILTER_R_MILLISCALE) / FILTER_SCALE_DIVISOR;
 
 	filter->state[0] = 0.0;
 	filter->state[1] = 0.0;
@@ -81,13 +81,16 @@ int filter_init(struct filter *filter)
 int filter_predict(struct filter *filter, int64_t dt, double a_vert)
 {
 	if (filter == NULL || dt <= 0)
-	return -EINVAL;
+		return -EINVAL;
+
+	if (!isfinite(a_vert))
+		return -EDOM;
 
 	const double dt_s = (double)dt / 1e9;
 
 	/* Clamp dt to prevent filter explosion */
 	if (dt_s > 1.0)
-	return -EINVAL;
+		return -EINVAL;
 
 	/* State prediction with a_vert as control input
 	 * (F unchanged; B = [0.5*dt^2, dt]^T applied to a_vert) */
@@ -122,6 +125,9 @@ int filter_update(struct filter *filter, double z)
 	if (filter == NULL)
 	return -EINVAL;
 
+	if (!isfinite(z))
+		return -EDOM;
+
 	/* Innovation */
 	double y = z - filter->state[0];
 
@@ -129,7 +135,7 @@ int filter_update(struct filter *filter, double z)
 	double S = filter->covariance[0][0] + filter->noise_m;
 
 	if (fabs(S) < 1e-12)
-	return -EDOM;
+		return -EDOM;
 
 	filter->updates_since_init++;
 
@@ -171,17 +177,17 @@ int filter_update(struct filter *filter, double z)
 int filter_detect_apogee(struct filter *filter)
 {
 	if (filter == NULL)
-	return -EINVAL;
+		return -EINVAL;
 
 	const double altitude = filter->state[0];
 	const double velocity = filter->state[1];
 
 	/* Always track peak, even after latching, so a re-init starts fresh. */
 	if (altitude > filter->peak_altitude)
-	filter->peak_altitude = altitude;
+		filter->peak_altitude = altitude;
 
 	if (filter->apogee_latched)
-	return 0;
+		return 0;
 
 	/* Velocity is the leading indicator at apogee, so fire as soon as
 	 * the filter's velocity estimate goes non-positive and altitude
@@ -192,17 +198,17 @@ int filter_detect_apogee(struct filter *filter)
 	const int velocity_ok = velocity <= 0.0;
 	const int descent_ok = altitude < filter->peak_altitude;
 	const int inertial_ok =
-	fabs(filter->last_accel_vert) < FILTER_APOGEE_ACCEL_BAND;
+		fabs(filter->last_accel_vert) < FILTER_APOGEE_ACCEL_BAND;
 
 	if (velocity_ok && descent_ok && inertial_ok) {
-	filter->consecutive_apogee++;
+		filter->consecutive_apogee++;
 	} else {
-	filter->consecutive_apogee = 0;
+		filter->consecutive_apogee = 0;
 	}
 
 	if (filter->consecutive_apogee >= CONFIG_FILTER_APOGEE_DEBOUNCE_SAMPLES) {
-	filter->apogee_latched = 1;
-	return 1;
+		filter->apogee_latched = 1;
+		return 1;
 	}
 
 	return 0;

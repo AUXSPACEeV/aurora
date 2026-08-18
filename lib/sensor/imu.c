@@ -20,8 +20,6 @@
 #include <aurora/lib/data_logger.h>
 #include <aurora/lib/imu.h>
 
-#include "bus_recover.h"
-
 #ifndef M_PI
 #define M_PI ((double)3.1415926535)
 #endif
@@ -60,7 +58,6 @@ static inline double out_ev(const struct sensor_value *val)
  * @return 0 on success, -errno on failure.
  */
 static struct imu_data sample;
-static int64_t last_recover_ms;
 
 static int fetch_and_send(const struct device *dev)
 {
@@ -69,13 +66,6 @@ static int fetch_and_send(const struct device *dev)
 	ret = sensor_sample_fetch(dev);
 	if (ret != 0) {
 		LOG_ERR_RATELIMIT("Failed to fetch sensor data (%d)", ret);
-		/* A wedged I2C bus costs 500 ms of non-yielding busy-wait per
-		 * transfer on a cooperative-priority thread; see bus_recover.h.
-		 */
-		if (aurora_i2c_bus_recover(IMU_I2C_BUS, ret, &last_recover_ms)) {
-			LOG_WRN_RATELIMIT("recovered stuck I2C bus after IMU "
-					  "fetch (%d)", ret);
-		}
 		return ret;
 	}
 

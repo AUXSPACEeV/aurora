@@ -21,9 +21,6 @@
 #include <aurora/lib/baro.h>
 #include <aurora/lib/data_logger.h>
 
-#include "bus_recover.h"
-
-/* See imu.c: same stuck-bus recovery, resolved from the baro's chosen node. */
 #if DT_HAS_CHOSEN(auxspace_baro) && DT_ON_BUS(DT_CHOSEN(auxspace_baro), i2c)
 #define BARO_I2C_BUS DEVICE_DT_GET(DT_BUS(DT_CHOSEN(auxspace_baro)))
 #else
@@ -47,7 +44,6 @@ ZBUS_CHAN_DEFINE(baro_data_chan,
  * @return 0 on success, -errno on failure.
  */
 static struct baro_data sample;
-static int64_t last_recover_ms;
 
 static int fetch_and_send(const struct device *dev)
 {
@@ -56,10 +52,6 @@ static int fetch_and_send(const struct device *dev)
 	ret = sensor_sample_fetch(dev);
 	if (ret != 0) {
 		LOG_ERR_RATELIMIT("Failed to fetch sensor data (%d)", ret);
-		if (aurora_i2c_bus_recover(BARO_I2C_BUS, ret, &last_recover_ms)) {
-			LOG_WRN_RATELIMIT("recovered stuck I2C bus after baro "
-					  "fetch (%d)", ret);
-		}
 		return ret;
 	}
 
@@ -201,11 +193,25 @@ int baro_sensor_value_to_altitude(const struct sensor_value *press, double *alti
 
 	double press_kpa = (double)press->val1 + (double)press->val2 / 1e6;
 
+	if (!isfinite(press_kpa)) {
+		LOG_WRN_RATELIMIT("implausible pressure %.3f kPa; sample dropped",
+				  press_kpa);
+		return -EDOM;
+	}
+
 	if (baro_set_reference(press_kpa) != 0) {
 		return -EINVAL;
 	}
 
-	*altitude_out = baro_pressure_to_altitude(press_kpa);
+	double altitude = baro_pressure_to_altitude(press_kpa);
+
+	if (!isfinite(altitude)) {
+		LOG_WRN_RATELIMIT("non-finite altitude from %.3f kPa; sample dropped",
+				  press_kpa);
+		return -EDOM;
+	}
+
+	*altitude_out = altitude;
 	return 0;
 }
 
