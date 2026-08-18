@@ -91,36 +91,40 @@ static int fetch_and_send(const struct device *dev)
 
 #if defined(CONFIG_IMU_TRIGGER)
 /**
- * @brief Data-ready trigger callback for the IMU.
- *
- * @param dev  Pointer to the IMU device.
- * @param trig Pointer to the sensor trigger descriptor.
- */
-static void trigger_handler(const struct device *dev,
-			    const struct sensor_trigger *trig)
-{
-	fetch_and_send(dev);
-}
-
-/**
  * @brief Configure the IMU to run in data-ready trigger mode.
  *
- * @param dev Pointer to the IMU device.
+ * Only the accelerometer's data-ready line is subscribed to, deliberately.
+ * The handler's fetch reads accelerometer and gyroscope together and both
+ * run at the same ODR, so adding the gyroscope's own trigger would double
+ * the interrupt and bus load to deliver the same samples.  It is also the
+ * accelerometer channel that must be named: a driver is free to reject
+ * SENSOR_CHAN_ALL here, and the LSM6DSO family does, with -ENOTSUP.
+ *
+ * @param dev     Pointer to the IMU device.
+ * @param handler Trigger handler function.
+ *
+ * @retval 0 on success.
+ * @retval -ENOTSUP if the device cannot deliver a data-ready trigger.
  */
-static void run_trigger_mode(const struct device *dev)
+static int run_trigger_mode(const struct device *dev, sensor_trigger_handler_t handler)
 {
-	static struct sensor_trigger trig;
+	static const struct sensor_trigger trig = {
+		.type = SENSOR_TRIG_DATA_READY,
+		.chan = SENSOR_CHAN_ACCEL_XYZ,
+	};
+	int ret = sensor_trigger_set(dev, &trig, handler);
 
-	trig.type = SENSOR_TRIG_DATA_READY;
-	trig.chan = SENSOR_CHAN_ACCEL_XYZ;
-
-	if (sensor_trigger_set(dev, &trig, trigger_handler) != 0) {
-		LOG_ERR("Could not set sensor type and channel");
-		return;
+	if (ret != 0) {
+		LOG_ERR("%s: could not install the data-ready trigger (%d)",
+			dev->name, ret);
+		return -ENOTSUP;
 	}
+
+	return 0;
 }
 
-#else
+#endif /* CONFIG_IMU_TRIGGER */
+
 /* imu_poll – see imu.h */
 int imu_poll(const struct device *dev)
 {
@@ -129,11 +133,15 @@ int imu_poll(const struct device *dev)
 
 	return fetch_and_send(dev);
 }
-#endif /* CONFIG_IMU_TRIGGER */
 
 /* imu_init – see imu.h */
-int imu_init(const struct device *dev)
+int imu_init(const struct device *dev, sensor_trigger_handler_t handler)
 {
+	if (dev == NULL) {
+		LOG_ERR("IMU device is NULL");
+		return -EINVAL;
+	}
+
 	if (!device_is_ready(dev)) {
 		LOG_ERR("%s: device not ready", dev->name);
 		return -ENODEV;
@@ -141,10 +149,10 @@ int imu_init(const struct device *dev)
 
 #if defined(CONFIG_IMU_TRIGGER)
 	LOG_DBG("Enabling IMU in trigger mode");
-	run_trigger_mode(dev);
-#endif
-
+	return run_trigger_mode(dev, handler);
+#else
 	return 0;
+#endif
 }
 
 /* imu_sensor_value_to_acceleration – see imu.h */

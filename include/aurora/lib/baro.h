@@ -35,7 +35,6 @@ struct baro_data
 	struct sensor_value pressure;  /**< Latest pressure reading */
 };
 
-#if !defined(CONFIG_BARO_TRIGGER)
 /**
  * @brief Measure temperature and pressure from the barometric sensor and
  * publish the data to the z-bus.
@@ -47,20 +46,28 @@ struct baro_data
  * @retval -errno Other negative errno on failure.
  */
 int baro_measure(const struct device *dev);
-#endif /* CONFIG_BARO_TRIGGER */
 
 /**
  * @brief Initialize the barometric pressure sensor.
  *
- * Checks device readiness and configures the oversampling rate.
+ * Checks device readiness and, with CONFIG_BARO_TRIGGER, installs
+ * @p handler on the sensor's data-ready trigger.
  *
- * @param dev Pointer to the barometric sensor device.
+ * A device that is present but cannot deliver that trigger reports
+ * -ENOTSUP: the device is usable, and the caller is expected to fall back
+ * to polling it with baro_measure() rather than treat the barometer as
+ * absent.
+ *
+ * @param dev     Pointer to the barometric sensor device.
+ * @param handler Trigger handler function. Ignored unless
+ *                CONFIG_BARO_TRIGGER is enabled.
  *
  * @retval 0 on success.
+ * @retval -ENODEV if @p dev is NULL.
  * @retval -ETIMEDOUT if the device is not ready.
- * @retval -EIO if oversampling configuration fails.
+ * @retval -ENOTSUP if the device is ready but has no data-ready trigger.
  */
-int baro_init(const struct device *dev);
+int baro_init(const struct device *dev, sensor_trigger_handler_t handler);
 
 /**
  * @brief Set the ground-level reference pressure.

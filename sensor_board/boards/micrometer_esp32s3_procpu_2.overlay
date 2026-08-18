@@ -17,7 +17,7 @@
 
 &bmp581_0 {
 	status = "okay";
-	odr = <BMP581_DT_ODR_50_HZ>;
+	odr = <BMP581_DT_ODR_5_HZ>;
 };
 
 &vbatt {

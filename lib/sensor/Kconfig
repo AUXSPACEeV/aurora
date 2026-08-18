@@ -32,7 +32,7 @@ config IMU_TRIGGER
 # Only show frequency options when IMU is enabled
 config IMU_FREQUENCY
 	int "IMU update frequency (Hz)"
-	depends on IMU && !IMU_TRIGGER
+	depends on IMU
 	default 100
 	range 1 1000
 
@@ -141,7 +141,7 @@ config BARO_TRIGGER
 # Only show frequency options when BARO is enabled
 config BARO_FREQUENCY
 	int "BARO update frequency (Hz)"
-	depends on BARO && !BARO_TRIGGER
+	depends on BARO
 	default 100
 	range 1 1000
 

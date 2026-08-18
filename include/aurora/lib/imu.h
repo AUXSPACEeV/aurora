@@ -38,7 +38,6 @@ struct imu_data
 	struct sensor_value gyro[IMU_NUM_AXES];  /**< Latest gyroscope readings (x, y, z). */
 };
 
-#if !defined(CONFIG_IMU_TRIGGER)
 /**
  * @brief Poll the IMU for acceleration data and sends it over the z-bus.
  *
@@ -48,7 +47,6 @@ struct imu_data
  * @retval -errno Negative errno on failure.
  */
 int imu_poll(const struct device *dev);
-#endif /* CONFIG_IMU_TRIGGER */
 
 /**
  * @brief Set the IMU accelerometer and gyroscope sampling frequency.
@@ -64,14 +62,23 @@ int imu_set_sampling_freq(const struct device *dev, int sampling_rate_hz);
 /**
  * @brief Initialize the IMU device.
  *
- * Checks device readiness and configures the sampling frequency.
+ * Checks device readiness and, with CONFIG_IMU_TRIGGER, installs @p handler
+ * on the accelerometer's data-ready trigger.
  *
- * @param dev Pointer to the IMU device.
+ * A device that is present but cannot deliver that trigger reports
+ * -ENOTSUP: the device is usable, and the caller is expected to fall back
+ * to polling it with imu_poll() rather than treat the IMU as absent.
+ *
+ * @param dev     Pointer to the IMU device.
+ * @param handler Sensor trigger handler function. Ignored unless
+ *                CONFIG_IMU_TRIGGER is enabled.
  *
  * @retval 0 on success.
+ * @retval -EINVAL if @p dev is NULL.
  * @retval -ENODEV if the device is not ready.
+ * @retval -ENOTSUP if the device is ready but has no data-ready trigger.
  */
-int imu_init(const struct device *dev);
+int imu_init(const struct device *dev, sensor_trigger_handler_t handler);
 
 /**
  * @brief calculate the average acceleration from IMU sensor values in m/s^2.
