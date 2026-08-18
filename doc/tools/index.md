@@ -29,7 +29,7 @@ sync_defconfig
 
 | Script | Purpose |
 |---|---|
-| [`gen_flight_replay.py`](gen_flight_replay.md) | Convert a recorded `flights.csv` into a generated C source file consumed by the `fake_sensors` replay backend. |
+| [`gen_flight_replay.py`](gen_flight_replay.md) | Convert a recorded `flights.csv` into a generated C source file consumed by the replay sample source in `lib/sensor`. |
 | [`pad_link_central_example.py`](pad_link_central_example.md) | Reference BLE central for the pad-link library — scans, connects, and prints SM state and computed kinematics from a rocket. |
 | [`plot_flight_data.py`](plot_flight_data.md) | Plot recorded or simulated flight data — standalone CLI for telemetry logs, importable plotting module for `sim_flight_kalman`. |
 | [`rec_zephyr.py`](rec_zephyr.md) | MicroPython ground-station receiver for HC-12 telemetry — runs on a Raspberry Pi Pico and prints decoded state-machine frames to the REPL. |

@@ -147,7 +147,7 @@ def main():
         "#include <stddef.h>\n"
         "#include <stdint.h>\n"
         "#include <zephyr/sys/util.h>\n"
-        '#include "fake_sensors_replay.h"\n'
+        '#include "replay.h"\n'
     )
 
     body = "\n\n".join([

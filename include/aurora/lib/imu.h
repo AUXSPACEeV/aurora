@@ -39,46 +39,41 @@ struct imu_data
 };
 
 /**
- * @brief Poll the IMU for acceleration data and sends it over the z-bus.
+ * @brief Take one IMU sample, publish it on the z-bus and hand it back.
  *
- * @param dev             Pointer to the IMU device.
+ * In trigger mode the sample was already read off the sensor by the driver's
+ * data-ready handler; this converts and publishes it. Returns -EAGAIN when no
+ * new sample has arrived since the last call, which is not an error: the
+ * caller is polling faster than the sensor produces.
  *
- * @retval 0 on success.
- * @retval -errno Negative errno on failure.
- */
-int imu_poll(const struct device *dev);
-
-/**
- * @brief Set the IMU accelerometer and gyroscope sampling frequency.
- *
- * @param dev              Pointer to the IMU device.
- * @param sampling_rate_hz Desired sampling rate in Hertz.
+ * @param dev Pointer to the IMU device. Ignored by the simulated sources.
+ * @param out Optional; receives a copy of the sample.
  *
  * @retval 0 on success.
+ * @retval -EAGAIN in trigger mode when no new sample is waiting.
  * @retval -errno Negative errno on failure.
  */
-int imu_set_sampling_freq(const struct device *dev, int sampling_rate_hz);
+int imu_poll(const struct device *dev, struct imu_data *out);
 
 /**
- * @brief Initialize the IMU device.
+ * @brief Initialize the IMU.
  *
- * Checks device readiness and, with CONFIG_IMU_TRIGGER, installs @p handler
- * on the accelerometer's data-ready trigger.
+ * Checks device readiness and, with CONFIG_IMU_TRIGGER, installs the
+ * library's own data-ready handler.
  *
  * A device that is present but cannot deliver that trigger reports
  * -ENOTSUP: the device is usable, and the caller is expected to fall back
  * to polling it with imu_poll() rather than treat the IMU as absent.
  *
- * @param dev     Pointer to the IMU device.
- * @param handler Sensor trigger handler function. Ignored unless
- *                CONFIG_IMU_TRIGGER is enabled.
+ * @param dev Pointer to the IMU device. Ignored by the simulated sources.
  *
  * @retval 0 on success.
  * @retval -EINVAL if @p dev is NULL.
  * @retval -ENODEV if the device is not ready.
  * @retval -ENOTSUP if the device is ready but has no data-ready trigger.
+ * @retval -ENODATA if a simulated source has no sample data.
  */
-int imu_init(const struct device *dev, sensor_trigger_handler_t handler);
+int imu_init(const struct device *dev);
 
 /**
  * @brief calculate the average acceleration from IMU sensor values in m/s^2.
