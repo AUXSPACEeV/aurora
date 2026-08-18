@@ -173,20 +173,30 @@ state machine and the data logger:
 
 ### Threads
 
-`sensor_board` uses up to three additional Zephyr threads
-(all priority 5, 2 KB stack):
+`sensor_board` adds two Zephyr threads of its own:
 
-| Thread | Guard | Purpose |
-|---|---|---|
-| `imu_task` | `CONFIG_IMU` | Polls IMU at the configured frequency, updates orientation and acceleration globals. |
-| `baro_task` | `CONFIG_BARO` | Measures pressure/temperature, computes altitude. |
-| `state_machine_task` | `CONFIG_AURORA_STATE_MACHINE` | Runs at 10 Hz. Feeds sensor data into the state machine and fires pyro channels on state transitions. |
+| Thread | Guard | Prio | Stack | Purpose |
+|---|---|---|---|---|
+| `sensor_polling` | `CONFIG_IMU \|\| CONFIG_BARO` | 7 | 4 KB | Reads every configured sensor and publishes each sample to its zbus channel. |
+| `state_machine` | `CONFIG_AURORA_STATE_MACHINE` | 6 | 4 KB | Runs at 10 Hz. Feeds sensor data into the state machine and fires pyro channels on state transitions. |
 
-When sensors are configured to use active polling, `baro_task` and `imu_task`
-run the whole lifetime of the application.
-When baro, imu or both are using interrupt triggers, `baro_task` and `imu_task`
-complete after initialisation and the generic sensor trigger threads are
-running.
+One thread services all sensors rather than one thread per sensor, because
+they share an I2C bus whose controller driver may serialise concurrent
+transfers by *spinning* — two independent pollers would then burn CPU at
+each other on every colliding transfer, and a wedged slave would hold a
+core at priority 7 for the driver's whole timeout. Owning the bus from a
+single thread removes the collision outright and makes the fault path
+serial, so the per-sensor exponential back-off (100 ms → 2 s) can pace it.
+
+Each sensor is read either on a deadline, at `CONFIG_IMU_FREQUENCY` /
+`CONFIG_BARO_FREQUENCY`, or on its data-ready trigger where
+`CONFIG_IMU_TRIGGER` / `CONFIG_BARO_TRIGGER` is set and the driver supports
+one. Triggered or not, the transfer itself runs on `sensor_polling`: a
+trigger handler only records that a sample is waiting, so that a stalled bus
+cannot block the driver's own trigger thread, which the ST drivers create at
+a *cooperative* priority that nothing — the watchdog feeder included — could
+preempt. A sensor whose trigger cannot be installed logs a warning and falls
+back to being polled.
 
 ```{note}
 To get an overview of running threads, use the Zephyr-Shell builtin command
@@ -236,9 +246,12 @@ state machine.
 
 When built with `CONFIG_AURORA_FAKE_SENSORS=y` (typically together with the
 `native_sim` board target), `sensor_board` replaces the real IMU and baro
-polling threads with a synthetic data source. The fake threads publish on
-the same zbus channels (`imu_data_chan`, `baro_data_chan`) at the same
-cadence as the real drivers, so the state machine, filter, data logger and
+*drivers* with a synthetic data source. Only the sample source changes: the
+sensor thread still owns the schedule and reads the fake backend through the
+same slot table it uses for hardware, at `CONFIG_IMU_FREQUENCY` /
+`CONFIG_BARO_FREQUENCY`, publishing on the same zbus channels
+(`imu_data_chan`, `baro_data_chan`). The thread layout of a simulated build
+therefore matches a real one, and the state machine, filter, data logger and
 pyro logic run unchanged.
 
 Two backends sit behind the same shell interface:
@@ -296,11 +309,18 @@ and (if a sibling `state_audit` file is present) the trimmed
 `[BOOST - 4 s, LANDED + 4 s]` window, into a generated `replay_data.c`
 that is linked into the firmware.
 
-Before launch, the replay threads keep the rocket "pad-stationary" by
-republishing the very first recorded sample, so attitude calibration
-converges as it would on the real hardware. Issuing `sim launch` from the
-shell (or letting `CONFIG_AURORA_SIM_AUTOTEST=y` do it automatically) then
-starts the playback.
+Before launch, the replay backend keeps the rocket "pad-stationary" by
+returning the very first recorded sample, so attitude calibration converges
+as it would on the real hardware. Issuing `sim launch` from the shell (or
+letting `CONFIG_AURORA_SIM_AUTOTEST=y` do it automatically) then starts the
+playback.
+
+Playback follows the recording's own timeline: every fetch returns the
+newest sample whose timestamp has already passed, exactly as reading a real
+sensor returns whatever it holds at that instant. Sampling faster than the
+recording repeats samples, sampling slower skips them, so keep
+`CONFIG_IMU_FREQUENCY` / `CONFIG_BARO_FREQUENCY` at or above the rate the
+flight was recorded at to see all of it.
 
 ## Supported Boards and Shields
 

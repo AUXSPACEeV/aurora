@@ -2,12 +2,14 @@
  * @file fake_sensors.c
  * @brief Synthetic IMU and baro data source for sim-based testing.
  *
- * When CONFIG_AURORA_FAKE_SENSORS is enabled, replaces the real polling
- * threads in main.c with a canned flight profile generator. Publishes on
- * the same zbus channels (imu_data_chan, baro_data_chan) at the same
- * cadence and priorities, so downstream code (attitude, Kalman filter,
- * state machine, data logger) runs unchanged. Works on native_sim and on
- * real hardware targets; layer via the `sim` snippet (-S sim).
+ * When CONFIG_AURORA_FAKE_SENSORS_SYNTH is enabled, this stands in for the
+ * IMU and baro drivers: it answers a fetch with a sample off a canned flight
+ * profile and publishes it on the same zbus channels (imu_data_chan,
+ * baro_data_chan) the real wrappers use, so downstream code (attitude,
+ * Kalman filter, state machine, data logger) runs unchanged. It supplies no
+ * threads of its own -- main.c's sensor thread reads it on the same schedule
+ * it would read hardware on. Works on native_sim and on real hardware
+ * targets; layer via the `sim` snippet (-S sim).
  *
  * The profile is kicked off by the shell command `sim launch` and can
  * be returned to pad-stationary with `sim reset`. Altitude and pressure
@@ -17,6 +19,8 @@
  * Copyright (c) 2025-2026 Auxspace e.V.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+#include "fake_sensors.h"
 
 #include "aurora/lib/state/state.h"
 #include <math.h>
@@ -36,12 +40,6 @@
 #endif
 
 LOG_MODULE_REGISTER(fake_sensors, CONFIG_SENSOR_BOARD_LOG_LEVEL);
-
-/* baro_active / imu_active are owned by main.c; the state machine waits on
- * them before entering its loop.
- */
-extern bool baro_active;
-extern bool imu_active;
 
 /* -------- Flight profile constants -------- */
 
@@ -70,9 +68,7 @@ extern bool imu_active;
 static struct k_spinlock cal_lock;
 static bool calibration_done;
 
-/**
- * @brief Notify the automatic launch sequence that attitude calibration is complete.
- */
+/* fake_sensors_on_calibrated - see fake_sensors.h */
 void fake_sensors_on_calibrated(void)
 {
 	k_spinlock_key_t key = k_spin_lock(&cal_lock);
@@ -184,82 +180,75 @@ static double flight_time_seconds(void)
 	return (double)(k_ticks_to_ns_floor64(k_uptime_ticks()) - launch) / 1000000000.0;
 }
 
-/* -------- Synthetic IMU thread -------- */
+/* -------- Synthetic IMU interface -------- */
 
-static void fake_imu_task(void *, void *, void *)
+/* fake_imu_init - see fake_sensors.h */
+int fake_imu_init(void)
 {
-	const int hz = CONFIG_IMU_FREQUENCY;
-	const uint64_t period_ns = 1000000000 / hz;
-
-	LOG_INF("Fake IMU running at %d Hz", hz);
-	imu_active = true;
-
-	while (1) {
-		uint64_t start = k_ticks_to_ns_floor64(k_uptime_ticks());
-		double altitude, accel_vert;
-		profile_sample(flight_time_seconds(), &altitude, &accel_vert);
-
-		/* Inject a constant roll rate about the configured up axis once
-		 * the flight is in progress (t_s >= 0).  Pre-launch the gyro
-		 * stays at zero so the attitude calibration window captures a
-		 * zero bias.
-		 */
-		const double t_s = flight_time_seconds();
-		double gyro_axes[3] = {0.0, 0.0, 0.0};
-		if (t_s >= 0.0) {
-			gyro_axes[CONFIG_IMU_UP_AXIS_INDEX] =
-				ROLL_RATE_DPS * (M_PI / 180.0) *
-				(double)CONFIG_IMU_UP_AXIS_SIGN;
-		}
-
-		struct imu_data msg = {0};
-		set_sensor_value_double(&msg.accel[0], 0.0);
-		set_sensor_value_double(&msg.accel[1], accel_vert);
-		set_sensor_value_double(&msg.accel[2], 0.0);
-		set_sensor_value_double(&msg.gyro[0], gyro_axes[0]);
-		set_sensor_value_double(&msg.gyro[1], gyro_axes[1]);
-		set_sensor_value_double(&msg.gyro[2], gyro_axes[2]);
-
-		(void)zbus_chan_pub(&imu_data_chan, &msg, K_NO_WAIT);
-		uint64_t delta = k_ticks_to_ns_floor64(k_uptime_ticks()) - start;
-
-		k_sleep(K_NSEC(period_ns - delta));
-	}
+	LOG_INF("Fake IMU ready, sampled at %d Hz", CONFIG_IMU_FREQUENCY);
+	return 0;
 }
 
-K_THREAD_DEFINE(imu_polling, 2048, fake_imu_task, NULL, NULL, NULL,
-		5, 0, 0);
-
-/* -------- Synthetic baro thread -------- */
-
-static void fake_baro_task(void *, void *, void *)
+/* fake_imu_poll - see fake_sensors.h */
+int fake_imu_poll(const struct device *dev)
 {
-	const int hz = CONFIG_BARO_FREQUENCY;
-	const uint64_t period_ns = 1000000000 / hz;
+	ARG_UNUSED(dev);
 
-	LOG_INF("Fake baro running at %d Hz", hz);
-	baro_active = true;
+	const double t_s = flight_time_seconds();
+	double altitude, accel_vert;
 
-	while (1) {
-		uint64_t start = k_ticks_to_ns_floor64(k_uptime_ticks());
-		double altitude, accel_vert;
-		profile_sample(flight_time_seconds(), &altitude, &accel_vert);
+	profile_sample(t_s, &altitude, &accel_vert);
 
-		struct baro_data msg = {0};
-		set_sensor_value_double(&msg.temperature, 20.0);
-		set_sensor_value_double(&msg.pressure,
-				       altitude_to_pressure_kpa(altitude));
+	/* Inject a constant roll rate about the configured up axis once the
+	 * flight is in progress (t_s >= 0).  Pre-launch the gyro stays at
+	 * zero so the attitude calibration window captures a zero bias.
+	 */
+	double gyro_axes[3] = {0.0, 0.0, 0.0};
 
-		(void)zbus_chan_pub(&baro_data_chan, &msg, K_NO_WAIT);
-
-		uint64_t delta = k_ticks_to_ns_floor64(k_uptime_ticks()) - start;
-
-		k_sleep(K_NSEC(period_ns - delta));
+	if (t_s >= 0.0) {
+		gyro_axes[CONFIG_IMU_UP_AXIS_INDEX] =
+			ROLL_RATE_DPS * (M_PI / 180.0) *
+			(double)CONFIG_IMU_UP_AXIS_SIGN;
 	}
+
+	struct imu_data msg = {0};
+
+	set_sensor_value_double(&msg.accel[0], 0.0);
+	set_sensor_value_double(&msg.accel[1], accel_vert);
+	set_sensor_value_double(&msg.accel[2], 0.0);
+	set_sensor_value_double(&msg.gyro[0], gyro_axes[0]);
+	set_sensor_value_double(&msg.gyro[1], gyro_axes[1]);
+	set_sensor_value_double(&msg.gyro[2], gyro_axes[2]);
+
+	return zbus_chan_pub(&imu_data_chan, &msg, K_NO_WAIT);
 }
 
-K_THREAD_DEFINE(baro_polling, 2048, fake_baro_task, NULL, NULL, NULL,
-		5, 0, 0);
+/* -------- Synthetic baro interface -------- */
+
+/* fake_baro_init - see fake_sensors.h */
+int fake_baro_init(void)
+{
+	LOG_INF("Fake baro ready, sampled at %d Hz", CONFIG_BARO_FREQUENCY);
+	return 0;
+}
+
+/* fake_baro_measure - see fake_sensors.h */
+int fake_baro_measure(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	double altitude, accel_vert;
+
+	profile_sample(flight_time_seconds(), &altitude, &accel_vert);
+
+	struct baro_data msg = {0};
+
+	set_sensor_value_double(&msg.temperature, 20.0);
+	set_sensor_value_double(&msg.pressure,
+			       altitude_to_pressure_kpa(altitude));
+
+	return zbus_chan_pub(&baro_data_chan, &msg, K_NO_WAIT);
+}
 
 /* -------- Shell interface -------- */
 

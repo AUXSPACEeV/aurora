@@ -13,7 +13,7 @@
 		auxspace,mmc = &mmc0;
 		auxspace,pyro = &pyro0;
 		auxspace,ffs = &ffs0;
-		auxspace,buzzer = &buzzer0;
+		// auxspace,buzzer = &buzzer0;
 		auxspace,led = &pwmleds;
 		auxspace,flight-log-disk = &flight_log_disk;
 		auxspace,sm-config = &sm_config_partition;

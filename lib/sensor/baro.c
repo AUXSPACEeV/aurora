@@ -78,35 +78,37 @@ static int fetch_and_send(const struct device *dev)
 
 #if defined(CONFIG_BARO_TRIGGER)
 /**
- * @brief Data-ready trigger callback for the baro.
- *
- * @param dev  Pointer to the baro device.
- * @param trig Pointer to the sensor trigger descriptor.
- */
-static void trigger_handler(const struct device *dev,
-							const struct sensor_trigger *trig)
-{
-	fetch_and_send(dev);
-}
-
-/**
  * @brief Configure the baro to run in data-ready trigger mode.
  *
- * @param dev Pointer to the baro device.
+ * Not every barometer driver offers one.  The BMP581 driver, for instance,
+ * exposes its interrupt only through the asynchronous RTIO streaming API
+ * (CONFIG_BMP581_STREAM) and has no trigger_set at all, so this returns
+ * -ENOTSUP there and the caller is expected to poll instead.
+ *
+ * @param dev     Pointer to the baro device.
+ * @param handler Trigger handler function.
+ *
+ * @retval 0 on success.
+ * @retval -ENOTSUP if the device cannot deliver a data-ready trigger.
  */
-static void run_trigger_mode(const struct device *dev)
+static int run_trigger_mode(const struct device *dev, sensor_trigger_handler_t handler)
 {
-	static struct sensor_trigger trig;
+	static const struct sensor_trigger trig = {
+		.type = SENSOR_TRIG_DATA_READY,
+		.chan = SENSOR_CHAN_ALL,
+	};
+	int ret = sensor_trigger_set(dev, &trig, handler);
 
-	trig.type = SENSOR_TRIG_DATA_READY;
-	trig.chan = SENSOR_CHAN_ALL;
-
-	if (sensor_trigger_set(dev, &trig, trigger_handler) != 0) {
-		LOG_ERR("Could not set sensor type and channel");
-		return;
+	if (ret != 0) {
+		LOG_ERR("%s: could not install the data-ready trigger (%d)",
+			dev->name, ret);
+		return -ENOTSUP;
 	}
+
+	return 0;
 }
-#else
+#endif /* CONFIG_BARO_TRIGGER */
+
 /* baro_measure – see baro.h */
 int baro_measure(const struct device *dev)
 {
@@ -115,10 +117,9 @@ int baro_measure(const struct device *dev)
 
 	return fetch_and_send(dev);
 }
-#endif /* CONFIG_BARO_TRIGGER */
 
 /* baro_init – see baro.h */
-int baro_init(const struct device *dev)
+int baro_init(const struct device *dev, sensor_trigger_handler_t handler)
 {
 	if (dev == NULL) {
 		LOG_ERR("Baro device is NULL");
@@ -130,11 +131,11 @@ int baro_init(const struct device *dev)
 	}
 
 #if defined(CONFIG_BARO_TRIGGER)
-	run_trigger_mode(dev);
 	LOG_DBG("Baro initialized in trigger mode");
-#endif /* CONFIG_BARO_TRIGGER */
-
+	return run_trigger_mode(dev, handler);
+#else
 	return 0;
+#endif /* CONFIG_BARO_TRIGGER */
 }
 
 /*-----------------------------------------------------------
