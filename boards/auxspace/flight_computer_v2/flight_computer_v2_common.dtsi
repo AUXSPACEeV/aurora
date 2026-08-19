@@ -16,7 +16,7 @@
 
 / {
 	model = "Auxspace e.V. Flight Computer V2";
-	compatible = "auxspaceev,sensor-board-v2";
+	compatible = "auxspaceev,flight-computer-v2";
 
 	chosen {
 		zephyr,sram = &sram0;
