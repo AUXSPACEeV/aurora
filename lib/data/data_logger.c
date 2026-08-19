@@ -15,11 +15,16 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <zephyr/fs/fs.h>
+#include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/fs/fs.h>
 
 #include <aurora/lib/data_logger.h>
+
+#if defined(CONFIG_HWINFO)
+#include <zephyr/drivers/hwinfo.h>
+#endif /* CONFIG_HWINFO */
 
 #if defined(CONFIG_AURORA_NOTIFY)
 #include <aurora/lib/notify.h>
@@ -99,6 +104,150 @@ const char *data_logger_type_name(enum aurora_data type)
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Append-mode log sessions                                                  */
+/* -------------------------------------------------------------------------- */
+
+#if defined(CONFIG_HWINFO)
+
+#define DL_SESSION_CONTINUE_CAUSES                                             \
+	((uint32_t)(RESET_WATCHDOG | RESET_CPU_LOCKUP))
+
+#define DL_SESSION_FRESH_CAUSES                                                \
+	((uint32_t)(RESET_POR | RESET_PIN | RESET_BROWNOUT | RESET_DEBUG |     \
+		    RESET_LOW_POWER_WAKE | RESET_SOFTWARE))
+#endif /* CONFIG_HWINFO */
+
+#define DL_SESSION_COOKIE_MAGIC 0x5AF1106Bu
+
+static bool boot_continues_session;
+
+static struct dl_session_cookie {
+	uint32_t magic;
+	uint32_t magic_inv;
+	int32_t  index;
+	char     key[DATA_LOGGER_NAME_MAX];
+} session_cookie __noinit;
+
+static bool session_cookie_valid(const char *filename)
+{
+	return session_cookie.magic == DL_SESSION_COOKIE_MAGIC &&
+	       session_cookie.magic_inv == ~DL_SESSION_COOKIE_MAGIC &&
+	       session_cookie.index >= 0 &&
+	       session_cookie.index <= CONFIG_DATA_LOGGER_MAX_FILES &&
+	       strncmp(session_cookie.key, filename,
+		       sizeof(session_cookie.key)) == 0;
+}
+
+static void session_cookie_set(const char *filename, int index)
+{
+	session_cookie.index = (int32_t)index;
+	strncpy(session_cookie.key, filename, sizeof(session_cookie.key) - 1);
+	session_cookie.key[sizeof(session_cookie.key) - 1] = '\0';
+	session_cookie.magic = DL_SESSION_COOKIE_MAGIC;
+	session_cookie.magic_inv = ~DL_SESSION_COOKIE_MAGIC;
+}
+
+static int dl_session_init(void)
+{
+#if defined(CONFIG_HWINFO)
+	uint32_t cause = 0;
+	int rc = hwinfo_get_reset_cause(&cause);
+
+	boot_continues_session = (rc == 0) && (cause != 0) &&
+				 (cause & DL_SESSION_FRESH_CAUSES) == 0u &&
+				 (cause & DL_SESSION_CONTINUE_CAUSES) != 0u;
+#endif /* CONFIG_HWINFO */
+
+	if (!boot_continues_session) {
+		memset(&session_cookie, 0, sizeof(session_cookie));
+	}
+
+	return 0;
+}
+
+/* Runs before main(), which is where the hwinfo latch gets cleared. */
+SYS_INIT(dl_session_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
+
+/**
+ * @brief Choose the file index this session writes.
+ *
+ * Indices are handed out in ascending order and nothing here deletes files, so
+ * the first index that does not exist is the next free one and the index below
+ * it is what the interrupted run was writing.
+ */
+static int session_index_pick(const char *filename, const char *file_ext)
+{
+	char probe[DATA_LOGGER_PATH_MAX];
+	int first_free = -1;
+	int index;
+
+	for (int i = 0; i <= CONFIG_DATA_LOGGER_MAX_FILES; i++) {
+		struct fs_dirent entry;
+		int n = snprintf(probe, sizeof(probe), "%s/%s_%d.%s",
+				 CONFIG_DATA_LOGGER_BASE_PATH, filename, i,
+				 file_ext);
+
+		if (n < 0 || n >= (int)sizeof(probe)) {
+			return -ENAMETOOLONG;
+		}
+
+		if (fs_stat(probe, &entry) == -ENOENT) {
+			first_free = i;
+			break;
+		}
+	}
+
+	if (first_free < 0) {
+		/* Every slot is taken */
+		index = CONFIG_DATA_LOGGER_MAX_FILES;
+		LOG_WRN("'%s': no free log slot; sharing index %d", filename,
+			index);
+	} else if (boot_continues_session && first_free > 0) {
+		index = first_free - 1;
+		LOG_INF("'%s': reset interrupted a run; appending to index %d",
+			filename, index);
+	} else {
+		index = first_free;
+		LOG_INF("'%s': new log session at index %d", filename, index);
+	}
+
+	return index;
+}
+
+/**
+ * @brief Resolve the file an append-mode logger writes for this session.
+ *
+ * The probe walks the directory once per session rather than once per init:
+ * the result is remembered in the cookie, so the second and later arms cost
+ * nothing.  That matters because the loop is up to MAX_FILES fs_stat() calls
+ * on the card at the exact moment the vehicle is being armed.
+ */
+static int session_path(char *out, size_t out_sz, const char *filename,
+			const char *file_ext)
+{
+	int index;
+	int n;
+
+	if (session_cookie_valid(filename)) {
+		index = (int)session_cookie.index;
+	} else {
+		index = session_index_pick(filename, file_ext);
+		if (index < 0) {
+			return index;
+		}
+		session_cookie_set(filename, index);
+	}
+
+	n = snprintf(out, out_sz, "%s/%s_%d.%s", CONFIG_DATA_LOGGER_BASE_PATH,
+		     filename, index, file_ext);
+	if (n < 0 || n >= (int)out_sz) {
+		return -ENAMETOOLONG;
+	}
+
+	return 0;
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Public API                                                                */
 /* -------------------------------------------------------------------------- */
 
@@ -127,16 +276,15 @@ int data_logger_init(struct data_logger *logger, const char *filename,
 	atomic_set(&logger->state.running, 0);
 
 	if (fmt->append_mode) {
-		/* Stable path, no rotation probe: this formatter continues the
-		 * file it finds.  Skipping the probe also keeps arming cheap --
-		 * the rotation loop below costs up to MAX_FILES fs_stat() calls
-		 * on the card at the exact moment the vehicle is being armed.
+		/* One file per boot session, not per init: this formatter
+		 * continues whatever it opens, so every arm of the same session
+		 * (and the remainder of a flight picked up after a watchdog
+		 * or fatal-error reset ) lands in the same file.
+		 * See session_path().
 		 */
-		rc = snprintf(full_path, sizeof(full_path), "%s/%s_0.%s",
-			      CONFIG_DATA_LOGGER_BASE_PATH, filename,
-			      fmt->file_ext);
-		if (rc < 0 || rc >= (int)sizeof(full_path)) {
-			rc = -ENAMETOOLONG;
+		rc = session_path(full_path, sizeof(full_path), filename,
+				  fmt->file_ext);
+		if (rc != 0) {
 			goto out_err;
 		}
 		goto path_ready;

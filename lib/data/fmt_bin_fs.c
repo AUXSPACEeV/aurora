@@ -68,6 +68,13 @@ struct bin_fs_ctx {
 
 static struct bin_fs_ctx g_ctx;
 
+/* Path of the file this session writes, as resolved by data_logger_init().
+ * The converter has no logger handle to ask, and the file is no longer at a
+ * fixed index (see data_logger_formatter::append_mode), so the writer leaves
+ * it here.  Empty until the first log of this boot has been opened.
+ */
+static char g_active_path[DATA_LOGGER_PATH_MAX];
+
 /* -------------------------------------------------------------------------- */
 /*  Frame handling                                                            */
 /* -------------------------------------------------------------------------- */
@@ -142,9 +149,13 @@ static int bin_commit_frame(struct bin_fs_ctx *ctx)
 /**
  * @brief Pick up where the previous arm cycle left off.
  *
- * Re-arming appends to the existing log rather than starting a new file, so
- * the whole session stays one readable stream.  Two things have to be
- * recovered from what is already on disk:
+ * Everything inside one boot session appends to the same file rather than
+ * starting a new one, so the session stays a single readable stream: a
+ * re-arm, and the remainder of a flight resumed after a watchdog or
+ * fatal-error reset, both land here.  Which file that is comes from
+ * data_logger_init(); an operator-initiated reboot hands over a fresh one and
+ * the probe below simply finds it empty.  Two things have to be recovered
+ * from what is already on disk:
  *
  *  - @c flight_id, so the file keeps a single value throughout.  convert.c
  *    treats a change of flight_id as the end of the log, so minting a fresh
@@ -265,6 +276,9 @@ static int bin_fs_init(struct data_logger *logger, const char *path)
 
 	bin_frame_init(ctx);
 	logger->ctx = ctx;
+
+	strncpy(g_active_path, path, sizeof(g_active_path) - 1);
+	g_active_path[sizeof(g_active_path) - 1] = '\0';
 
 	return 0;
 }
@@ -429,21 +443,28 @@ static size_t g_io_size;
 int bin_io_open(void)
 {
 	struct fs_dirent entry;
+	const char *path;
 	int rc;
 
 	if (g_io_open) {
 		return 0;
 	}
 
-	rc = fs_stat(CONFIG_DATA_LOGGER_BIN_FS_PATH, &entry);
+	/* Whatever the writer actually opened this session.  The Kconfig path
+	 * only covers the case where nothing has been logged since boot --
+	 * converting a log left behind by a previous run.
+	 */
+	path = (g_active_path[0] != '\0') ? g_active_path
+					  : CONFIG_DATA_LOGGER_BIN_FS_PATH;
+
+	rc = fs_stat(path, &entry);
 	if (rc != 0) {
-		LOG_ERR("bin_fs: no flight log at %s (%d)",
-			CONFIG_DATA_LOGGER_BIN_FS_PATH, rc);
+		LOG_ERR("bin_fs: no flight log at %s (%d)", path, rc);
 		return rc;
 	}
 
 	fs_file_t_init(&g_io_file);
-	rc = fs_open(&g_io_file, CONFIG_DATA_LOGGER_BIN_FS_PATH, FS_O_READ);
+	rc = fs_open(&g_io_file, path, FS_O_READ);
 	if (rc != 0) {
 		return rc;
 	}

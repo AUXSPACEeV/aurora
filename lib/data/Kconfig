@@ -68,6 +68,7 @@ config DATA_LOGGER_BIN_BACKEND_DISK
 config DATA_LOGGER_BIN_BACKEND_FS
 	bool "Filesystem file (linear, append)"
 	depends on FILE_SYSTEM
+	select HWINFO
 	help
 	  Live log is an ordinary file on a mounted filesystem, written as
 	  the same sequence of fixed-size frames the other backends use.
@@ -86,9 +87,12 @@ config DATA_LOGGER_BIN_BACKEND_FS
 	  no ring, no writer thread and no raw region to keep in sync with
 	  the partition table.
 
-	  Re-arming appends to the existing file instead of opening a new
-	  one, and a file left ending mid-frame by a reset is truncated back
-	  to the last whole frame on the next open.
+	  One file per boot session: re-arming appends to the file the
+	  session is already writing, and so does a flight resumed after a
+	  watchdog or fatal-error reset, while a power-on, reset pin,
+	  brownout or debugger reset starts the next <name>_N.bin.  A file
+	  left ending mid-frame by a reset is truncated back to the last
+	  whole frame on the next open.
 
 endchoice
 
@@ -97,11 +101,13 @@ config DATA_LOGGER_BIN_FS_PATH
 	depends on DATA_LOGGER_BIN_BACKEND_FS
 	default "/MMC:/DATA/flight_0.bin"
 	help
-	  Absolute path of the binary flight log.  Must match the file
-	  data_logger_init() opens, i.e.
-	  <DATA_LOGGER_BASE_PATH>/<name>_0.<ext> for the logger the
-	  application arms ("flight" on the sensor board).  Used by the
-	  converter to find the log after the writer has closed it.
+	  Fallback path the converter reads when nothing has been logged
+	  since boot, i.e. when converting a log left behind by a previous
+	  run.  Once a flight log has been opened the converter follows
+	  whatever file the writer actually picked for the session, which is
+	  <DATA_LOGGER_BASE_PATH>/<name>_N.<ext> with N chosen per boot (see
+	  DATA_LOGGER_BIN_BACKEND_FS), so this only needs to name the index
+	  worth converting by default.
 
 config DATA_LOGGER_DISK_AUTO_MKFS
 	bool "Auto-format the companion FAT volume on mismatch (DISK backend)"
