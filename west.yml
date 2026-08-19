@@ -12,7 +12,7 @@ manifest:
   projects:
     - name: zephyr
       remote: auxspace-forked
-      revision: 91be4d2f6913586c4df0e117db1b18ee558e9c04
+      revision: 9691e9ae8bf6563269a0ac8b87eada0da9ca2703
       import:
         # By using name-allowlist we can clone only the modules that are
         # strictly needed by the application.
