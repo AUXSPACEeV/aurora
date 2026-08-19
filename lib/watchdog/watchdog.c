@@ -78,7 +78,10 @@ wdt_bite(const struct device *dev, int channel_id)
 #if defined(CONFIG_AURORA_WATCHDOG_BREADCRUMB)
 
 #define WDT_CRUMB_MAGIC   0x57445443u /* "WDTC" */
-#define WDT_CRUMB_VERSION 1u
+/* v2 added nested_bad_ms.  The version and size fields exist so an older
+ * record is rejected rather than misread across a layout change like this.
+ */
+#define WDT_CRUMB_VERSION 2u
 
 /**
  * @brief What the feeder knew just before the board stopped.
@@ -100,6 +103,12 @@ struct aurora_wdt_crumb {
 	uint32_t max_gap_ms;  /**< Worst interval seen this boot.             */
 	int32_t feed_rc;      /**< Return of the last task_wdt_feed().        */
 	uint32_t silent_ms[AURORA_WDT_SRC_COUNT]; /**< Per-source silence.    */
+	/* Uptime at which the nested-interrupt count was first seen corrupt,
+	 * or 0 if it never was.  Carried here rather than left to the log
+	 * because the failure it predicts takes the board down too fast to
+	 * flush a deferred log line, while this record survives the reset.
+	 */
+	uint32_t nested_bad_ms;
 };
 
 /* Deliberately uninitialised: .rtc_noinit is NOLOAD and startup does not
@@ -180,6 +189,23 @@ static void crumb_stamp(int feed_rc)
 	crumb.crc = crumb_crc(&crumb);
 }
 
+/**
+ * @brief Record that the nested-interrupt count was seen corrupt.
+ *
+ * Re-CRCs on the spot rather than leaving it to the next crumb_stamp(): the
+ * fault this marks can take the board down before the next feed, and a record
+ * whose CRC does not cover the mark is thrown away on the next boot.
+ */
+static void crumb_mark_nested_bad(void)
+{
+	if (crumb.nested_bad_ms != 0u) {
+		return;
+	}
+
+	crumb.nested_bad_ms = MAX(k_uptime_get_32(), 1u);
+	crumb.crc = crumb_crc(&crumb);
+}
+
 /* aurora_watchdog_kick - see watchdog.h */
 void aurora_watchdog_kick(enum aurora_wdt_source src)
 {
@@ -234,6 +260,19 @@ void aurora_watchdog_report(void)
 			src_name[i], prev_crumb.silent_ms[i]);
 	}
 
+	/* The one line that turns "the board just stopped" into a named cause.
+	 * Everything else here describes the symptom; this says the kernel's
+	 * nested-interrupt count was already corrupt beforehand, which is what
+	 * makes exception entry stop switching to the ISR stack.
+	 */
+	if (prev_crumb.nested_bad_ms != 0u) {
+		LOG_ERR("breadcrumb: nested-interrupt count was corrupt from "
+			"%u ms into the previous boot -- %u ms before it stopped. "
+			"That is the cause, not the watchdog",
+			prev_crumb.nested_bad_ms,
+			prev_crumb.uptime_ms - prev_crumb.nested_bad_ms);
+	}
+
 	/* The discriminator worth spelling out, because it splits the two
 	 * failure modes that look identical from the reset cause alone.
 	 * Measured against the timeout rather than the feed interval: what
@@ -261,7 +300,39 @@ static inline void crumb_stamp(int feed_rc)
 	ARG_UNUSED(feed_rc);
 }
 
+static inline void crumb_mark_nested_bad(void)
+{
+}
+
 #endif /* CONFIG_AURORA_WATCHDOG_BREADCRUMB */
+
+/**
+ * @brief Name a corrupted nested-interrupt count while the board can still say it.
+ *
+ * This runs in thread context, so @c _current_cpu->nested -- which is all
+ * arch_is_in_isr() reads on Xtensa -- must be zero.  When it is not, the count
+ * has underflowed, and the consequences are silent: k_is_in_isr() lies to every
+ * caller, and exception entry stops switching to the ISR stack because the
+ * "nested != 0" branch keeps it on the interrupted thread's stack.  That ends
+ * as a double fault spinning with PS.INTLEVEL at 15, where no interrupt is
+ * delivered, the stage-0 bite never runs, no coredump is written and only the
+ * stage-1 hardware reset breaks out -- a board that simply stops, with nothing
+ * in the log to say why.
+ */
+static void nested_count_check(void)
+{
+	static bool reported;
+
+	if (!k_is_in_isr() || reported) {
+		return;
+	}
+
+	reported = true;
+	crumb_mark_nested_bad();
+	LOG_ERR("nested-interrupt count underflowed: k_is_in_isr() is true in "
+		"thread context. Exception entry will stop switching to the ISR "
+		"stack; expect a silent double fault and a stage-1 watchdog reset");
+}
 
 static void wdt_feeder(void *p1, void *p2, void *p3)
 {
@@ -270,6 +341,8 @@ static void wdt_feeder(void *p1, void *p2, void *p3)
 	ARG_UNUSED(p3);
 
 	while (true) {
+		nested_count_check();
+
 		/* Unconditional, whatever the breadcrumb says about silent
 		 * sources.  A wedged sensor is a degraded flight to fly
 		 * through, and an I2C wedge survives the warm reset anyway, so

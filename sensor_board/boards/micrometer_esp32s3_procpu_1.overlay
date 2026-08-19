@@ -18,7 +18,7 @@
 
 &lps22hh0 {
 	status = "okay";
-	odr = <LPS22HH_DT_ODR_100HZ>;
+	odr = <LPS22HH_DT_ODR_50HZ>;
 };
 
 &spi2 {
