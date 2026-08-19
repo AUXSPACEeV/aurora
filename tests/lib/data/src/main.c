@@ -16,6 +16,10 @@
  *  3. **data_logger_influx** (CONFIG_DATA_LOGGER_CONVERT_INFLUX) — same as above
  *     for the InfluxDB Line Protocol formatter.
  *
+ *  4. **data_logger_bin_fs** (CONFIG_DATA_LOGGER_BIN_BACKEND_FS) — covers the
+ *     filesystem binary backend's per-boot log sessions: which file a session
+ *     claims and that re-arming appends to it rather than rotating.
+ *
  * Copyright (c) 2026 Auxspace e.V.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -1066,7 +1070,11 @@ ZTEST(data_logger_influx, test_influx_multiple_lines)
 /*  Suite 4: binary → text round-trip via data_logger_convert          */
 /* ================================================================== */
 
-#if defined(CONFIG_DATA_LOGGER_BIN) && defined(CONFIG_DATA_LOGGER_CONVERT_CSV)
+/* CONVERT_CSV only builds the formatter; data_logger_convert() itself comes
+ * with CONVERT, which is off by default for the FS backend.
+ */
+#if defined(CONFIG_DATA_LOGGER_BIN) && defined(CONFIG_DATA_LOGGER_CONVERT) && \
+	defined(CONFIG_DATA_LOGGER_CONVERT_CSV)
 
 #include <zephyr/storage/flash_map.h>
 #include <zephyr/devicetree.h>
@@ -1174,7 +1182,7 @@ ZTEST(data_logger_convert, test_convert_empty_partition)
 	zassert_not_null(strstr(buf, "timestamp_ns"), NULL);
 }
 
-#endif /* CONFIG_DATA_LOGGER_BIN && CONFIG_DATA_LOGGER_CONVERT_CSV */
+#endif /* CONFIG_DATA_LOGGER_BIN && CONFIG_DATA_LOGGER_CONVERT[_CSV] */
 
 /* ================================================================== */
 /*  Suite 5: flash backend on-flash layout & single-instance semantics */
@@ -1361,3 +1369,204 @@ ZTEST(data_logger_flash, test_flash_event_hooks)
 }
 
 #endif /* CONFIG_DATA_LOGGER_BIN && CONFIG_DATA_LOGGER_BIN_BACKEND_FLASH */
+
+/* ================================================================== */
+/*  Suite 6: filesystem backend -- per-boot log sessions              */
+/* ================================================================== */
+
+#if defined(CONFIG_DATA_LOGGER_BIN) && defined(CONFIG_DATA_LOGGER_BIN_BACKEND_FS)
+
+#define BIN_FS_FRAME_BYTES ((size_t)CONFIG_DATA_LOGGER_BIN_FRAME_SIZE)
+
+static struct data_logger fs_logger;
+
+static void fs_clear_series(const char *name)
+{
+	for (int i = 0; i <= 4; i++) {
+		char path[DATA_LOGGER_PATH_MAX];
+
+		(void)snprintk(path, sizeof(path), "%s/%s_%d.bin",
+			       CONFIG_DATA_LOGGER_BASE_PATH, name, i);
+		(void)fs_unlink(path);
+	}
+}
+
+static void fs_before(void *fixture)
+{
+	(void)fixture;
+	memset(&fs_logger, 0, sizeof(fs_logger));
+}
+
+ZTEST_SUITE(data_logger_bin_fs, NULL, NULL, fs_before, NULL, NULL);
+
+static int fs_read_header(const char *path, off_t off,
+			  struct aurora_bin_frame_header *out)
+{
+	struct fs_file_t f;
+	int rc;
+
+	fs_file_t_init(&f);
+
+	rc = fs_open(&f, path, FS_O_READ);
+	if (rc != 0) {
+		return rc;
+	}
+
+	rc = fs_seek(&f, off, FS_SEEK_SET);
+	if (rc == 0) {
+		ssize_t rd = fs_read(&f, out, sizeof(*out));
+
+		rc = (rd == (ssize_t)sizeof(*out)) ? 0 : -EIO;
+	}
+
+	(void)fs_close(&f);
+
+	return rc;
+}
+
+static off_t fs_file_size(const char *path)
+{
+	struct fs_dirent entry;
+	int rc = fs_stat(path, &entry);
+
+	return (rc == 0) ? (off_t)entry.size : (off_t)rc;
+}
+
+static void fs_write_one_frame(struct data_logger *logger)
+{
+	struct datapoint dp = {
+		.timestamp_ns  = 1000ULL,
+		.type          = AURORA_DATA_BARO,
+		.channel_count = 2,
+		.channels = {
+			{.val1 = 23, .val2 = 500000},
+			{.val1 = 101325, .val2 = 0},
+		},
+	};
+
+	zassert_ok(data_logger_start(logger), NULL);
+	zassert_ok(data_logger_write(logger, &dp), NULL);
+	/* close() flushes, which commits the partially-filled frame. */
+	zassert_ok(data_logger_close(logger), NULL);
+}
+
+/**
+ * @brief A session that finds no log of its own starts at index 0.
+ */
+ZTEST(data_logger_bin_fs, test_bin_fs_first_log_is_index_0)
+{
+	char expect[DATA_LOGGER_PATH_MAX];
+
+	fs_clear_series("s6a");
+
+	zassert_ok(data_logger_init(&fs_logger, "s6a",
+				    &data_logger_bin_formatter), NULL);
+
+	(void)snprintk(expect, sizeof(expect), "%s/s6a_0.bin",
+		       CONFIG_DATA_LOGGER_BASE_PATH);
+	zassert_str_equal(fs_logger.path, expect,
+			  "First log of a series must be index 0");
+
+	zassert_ok(data_logger_close(&fs_logger), NULL);
+}
+
+/**
+ * @brief A new session steps past the logs earlier sessions left behind.
+ *
+ * This is the reboot case: the previous run's file must not be reopened and
+ * must not be touched.
+ */
+ZTEST(data_logger_bin_fs, test_bin_fs_new_session_skips_existing)
+{
+	char previous[DATA_LOGGER_PATH_MAX];
+	char expect[DATA_LOGGER_PATH_MAX];
+	off_t previous_size;
+
+	fs_clear_series("s6b");
+
+	/* Stand in for a log left by an earlier session. */
+	(void)snprintk(previous, sizeof(previous), "%s/s6b_0.bin",
+		       CONFIG_DATA_LOGGER_BASE_PATH);
+	zassert_ok(data_logger_init(&fs_logger, "s6b",
+				    &data_logger_bin_formatter), NULL);
+	fs_write_one_frame(&fs_logger);
+	zassert_equal(fs_file_size(previous), (off_t)BIN_FS_FRAME_BYTES, NULL);
+	previous_size = fs_file_size(previous);
+
+	/* A fresh boot clears the cookie; here the same effect comes from the
+	 * probe running against a series whose index 0 is already taken.
+	 */
+	fs_clear_series("s6c");
+	(void)snprintk(expect, sizeof(expect), "%s/s6c_1.bin",
+		       CONFIG_DATA_LOGGER_BASE_PATH);
+	{
+		char occupied[DATA_LOGGER_PATH_MAX];
+		struct fs_file_t f;
+
+		(void)snprintk(occupied, sizeof(occupied), "%s/s6c_0.bin",
+			       CONFIG_DATA_LOGGER_BASE_PATH);
+		fs_file_t_init(&f);
+		zassert_ok(fs_open(&f, occupied, FS_O_CREATE | FS_O_WRITE),
+			   NULL);
+		zassert_ok(fs_close(&f), NULL);
+	}
+
+	memset(&fs_logger, 0, sizeof(fs_logger));
+	zassert_ok(data_logger_init(&fs_logger, "s6c",
+				    &data_logger_bin_formatter), NULL);
+	zassert_str_equal(fs_logger.path, expect,
+			  "A new session must claim the next free index");
+	zassert_ok(data_logger_close(&fs_logger), NULL);
+
+	zassert_equal(fs_file_size(previous), previous_size,
+		      "The earlier session's log must be left untouched");
+}
+
+/**
+ * @brief Re-arming inside one session appends to the same file.
+ *
+ * The second arm must land in the same path, behind the frames the first one
+ * wrote, and must carry the first arm's flight_id with a monotonic seq --
+ * that pair is what makes convert.c read the whole session as one stream
+ * instead of stopping at the seam.
+ */
+ZTEST(data_logger_bin_fs, test_bin_fs_rearm_appends_to_session)
+{
+	struct aurora_bin_frame_header first;
+	struct aurora_bin_frame_header second;
+	char path[DATA_LOGGER_PATH_MAX];
+
+	fs_clear_series("s6d");
+
+	zassert_ok(data_logger_init(&fs_logger, "s6d",
+				    &data_logger_bin_formatter), NULL);
+	strncpy(path, fs_logger.path, sizeof(path) - 1);
+	path[sizeof(path) - 1] = '\0';
+	fs_write_one_frame(&fs_logger);
+
+	zassert_equal(fs_file_size(path), (off_t)BIN_FS_FRAME_BYTES, NULL);
+
+	/* Re-arm. */
+	memset(&fs_logger, 0, sizeof(fs_logger));
+	zassert_ok(data_logger_init(&fs_logger, "s6d",
+				    &data_logger_bin_formatter), NULL);
+	zassert_str_equal(fs_logger.path, path,
+			  "Re-arming must reuse the session's file");
+	fs_write_one_frame(&fs_logger);
+
+	zassert_equal(fs_file_size(path), (off_t)(2 * BIN_FS_FRAME_BYTES),
+		      "The second arm must append a frame, not rewrite one");
+
+	zassert_ok(fs_read_header(path, 0, &first), NULL);
+	zassert_ok(fs_read_header(path, (off_t)BIN_FS_FRAME_BYTES, &second),
+		   NULL);
+
+	zassert_mem_equal(second.magic, AURORA_BIN_FRAME_MAGIC,
+			  sizeof(second.magic), NULL);
+	zassert_equal(second.flight_id, first.flight_id,
+		      "flight_id must survive the seam");
+	zassert_equal(second.seq, first.seq + 1U,
+		      "seq must stay monotonic across the seam");
+}
+
+#endif /* CONFIG_DATA_LOGGER_BIN && CONFIG_DATA_LOGGER_BIN_BACKEND_FS */

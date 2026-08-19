@@ -123,17 +123,7 @@ struct data_logger_formatter {
 	int (*on_event)(struct data_logger *logger, enum data_logger_event ev);
 
 	/**
-	 * @brief Reuse one file across init cycles instead of rotating.
-	 *
-	 * Normally @ref data_logger_init probes for the first free
-	 * @c <base>/<name>_N.<ext> so each session gets its own file.  A
-	 * formatter that sets this gets the stable @c _0 path every time and
-	 * is expected to append to whatever is already there.
-	 *
-	 * Used by the filesystem binary backend so re-arming continues the
-	 * existing flight log: a scrubbed launch followed by a real one
-	 * stays a single readable stream, and the recorder does not have to
-	 * find and create a new file at the moment of arming.
+	 * @brief One file per boot session.
 	 */
 	bool append_mode;
 

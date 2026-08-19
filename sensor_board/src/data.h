@@ -30,7 +30,10 @@ void log_vbat_telemetry(void);
  *
  * Replaying the full lifecycle handler instead is not safe: its LANDED
  * branch schedules a close for a log that was never opened.  This covers
- * only the airborne states, where opening a fresh log is the right answer.
+ * only the airborne states, where re-opening the recorder is the right
+ * answer.  The binary FS backend appends the remainder of the flight to the
+ * file the pre-reset part is already in, so the recovered flight reads back
+ * as one stream with a gap rather than as two files.
  *
  * @param state State the machine resumed in.
  */

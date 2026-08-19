@@ -57,3 +57,14 @@ tests:
       - CONFIG_DATA_LOGGER_BIN=y
       - CONFIG_DATA_LOGGER_BIN_BACKEND_FLASH=y
       - CONFIG_DATA_LOGGER_BASE_PATH="/RAM:/test"
+
+  aurora.lib.data.bin_fs:
+    integration_platforms:
+      - qemu_x86
+    platform_allow:
+      - qemu_x86
+    tags: test_data_logger
+    extra_configs:
+      - CONFIG_DATA_LOGGER_BIN=y
+      - CONFIG_DATA_LOGGER_BIN_BACKEND_FS=y
+      - CONFIG_DATA_LOGGER_BASE_PATH="/RAM:/test"

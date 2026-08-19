@@ -135,9 +135,12 @@ bool log_flight_log_busy(void)
 void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state)
 {
 	/* Flight-time logging lifecycle:
-	 *  - IDLE→ARMED:  open a fresh binary log (cancel any
+	 *  - IDLE→ARMED:  open the binary log (cancel any
 	 *                 still-pending deferred close from a
-	 *                 previous flight first). Calibration itself
+	 *                 previous flight first). The FS backend
+	 *                 keeps one file per boot session, so a
+	 *                 re-arm appends rather than rotating.
+	 *                 Calibration itself
 	 *                 runs continuously while IDLE, potentially
 	 *                 well before this arm edge, so it is
 	 *                 deliberately not captured -- only the
