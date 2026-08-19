@@ -43,7 +43,7 @@ Their public APIs are documented in the API-Reference, including the
 
 Applications use libraries and drivers to function.
 An example is the
-[`sensor_board`](https://github.com/AUXSPACEeV/aurora/tree/main/sensor_board)
+[`flight_computer`](https://github.com/AUXSPACEeV/aurora/tree/main/flight_computer)
 application, that acts as a flight computer using IMU and barometric pressure
 data and deploying a parachute when rocket apogee is detected.
 

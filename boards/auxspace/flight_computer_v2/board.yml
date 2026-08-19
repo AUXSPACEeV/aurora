@@ -1,0 +1,12 @@
+board:
+  name: flight_computer_v2
+  full_name: Flight Computer V2
+  vendor: auxspaceev
+  socs:
+    - name: rp2040
+      variants:
+        - name: w
+    - name: rp2350a
+      variants:
+        - name: w
+          cpucluster: m33

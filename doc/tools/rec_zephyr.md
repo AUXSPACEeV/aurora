@@ -24,7 +24,7 @@ The hardware is identical for receiver and transmitter, since the HC-12
 can do both.
 ````
 
-![hardware_setup](/img/sensor_board_bench.drawio.svg)
+![hardware_setup](/img/flight_computer_bench.drawio.svg)
 
 | Pico pin | HC-12 pin | Notes |
 |---|---|---|
@@ -299,7 +299,7 @@ barometer, no SD card. This is what the `rpi_pico2/rp2350a/m33/w` board
 target plus the `sim` and `nodisk` snippets provide:
 
 ```bash
-west build -p -b rpi_pico2/rp2350a/m33/w -S sim -S nodisk sensor_board
+west build -p -b rpi_pico2/rp2350a/m33/w -S sim -S nodisk flight_computer
 ```
 
 After flashing the resulting `build/zephyr/zephyr.uf2` onto the Pico,

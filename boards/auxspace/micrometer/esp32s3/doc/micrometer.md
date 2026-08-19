@@ -74,10 +74,10 @@ card-detect-pin!
 
 ```bash
 # Revision 1 (default)
-west build -p -b micrometer/esp32s3/procpu --sysbuild sensor_board
+west build -p -b micrometer/esp32s3/procpu --sysbuild flight_computer
 
 # Revision 2
-west build -p -b micrometer@2/esp32s3/procpu --sysbuild sensor_board
+west build -p -b micrometer@2/esp32s3/procpu --sysbuild flight_computer
 ```
 
 ## Flashing
@@ -92,5 +92,5 @@ Instead, flash both images in download mode and then just reset, using
 ```bash
 esptool --chip esp32s3 -p /dev/tty<ESP_DEV> -b 921600 write-flash \
   0x0 build/mcuboot/zephyr/zephyr.bin \
-  0x20000 build/sensor_board/zephyr/zephyr.signed.bin
+  0x20000 build/flight_computer/zephyr/zephyr.signed.bin
 ```

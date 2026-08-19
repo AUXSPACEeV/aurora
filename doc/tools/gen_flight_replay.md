@@ -30,7 +30,7 @@ const struct replay_baro_sample replay_baro[];
 ```
 
 `gen_flight_replay.py` is the small code-generator that produces the C file
-holding these arrays. It is invoked automatically from the sensor_board
+holding these arrays. It is invoked automatically from the flight_computer
 `CMakeLists.txt` whenever the replay backend is enabled — you normally do
 not call it by hand.
 
@@ -100,7 +100,7 @@ The script exits with a non-zero status (and a message on `stderr`) if:
 ## Build integration
 
 You usually do not run `gen_flight_replay.py` directly. The
-sensor_board `CMakeLists.txt` adds a custom command that re-runs it
+flight_computer `CMakeLists.txt` adds a custom command that re-runs it
 whenever the input CSV (or, if present, the sibling `state_audit` file)
 changes:
 
@@ -136,7 +136,7 @@ python3 ./tools/gen_flight_replay.py \
 To then build a `native_sim` image that replays this flight:
 
 ```bash
-west build -p -b native_sim -S sim aurora/sensor_board \
+west build -p -b native_sim -S sim aurora/flight_computer \
     -- -DCONFIG_AURORA_FAKE_SENSORS_REPLAY=y
 ./build/zephyr/zephyr.exe
 # in the Zephyr shell:

@@ -20,12 +20,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - board: sensor_board_v2/rp2040
-            artifact: sensor_board_v2_rp2040
+          - board: flight_computer_v2/rp2040
+            artifact: flight_computer_v2_rp2040
             toolchain: arm-zephyr-eabi
             extra_args: "--sysbuild"
-          - board: sensor_board_v2/rp2350a/hazard3
-            artifact: sensor_board_v2_rp2350a_hazard3
+          - board: flight_computer_v2/rp2350a/hazard3
+            artifact: flight_computer_v2_rp2350a_hazard3
             toolchain: riscv64-zephyr-elf
             extra_args: ""
           - board: micrometer@1/esp32s3/procpu
@@ -68,7 +68,7 @@ jobs:
         working-directory: aurora
         shell: bash
         run: |
-          west build -b ${{ matrix.board }} ${{ matrix.extra_args }} sensor_board
+          west build -b ${{ matrix.board }} ${{ matrix.extra_args }} flight_computer
 
       - name: Collect artifacts
         working-directory: aurora
@@ -80,10 +80,10 @@ jobs:
             for f in build/mcuboot/zephyr/zephyr.{elf,bin,hex}; do
               [ -f "${f}" ] && cp "${f}" "dist/${{ matrix.artifact }}/mcuboot.${f##*.}"
             done
-            for f in build/sensor_board/zephyr/zephyr.signed.{elf,bin}; do
+            for f in build/flight_computer/zephyr/zephyr.signed.{elf,bin}; do
               [ -f "${f}" ] && cp "${f}" "dist/${{ matrix.artifact }}/${{ matrix.artifact }}.signed.${f##*.}"
             done
-            for f in build/sensor_board/zephyr/zephyr.{elf,bin,hex}; do
+            for f in build/flight_computer/zephyr/zephyr.{elf,bin,hex}; do
               [ -f "${f}" ] && cp "${f}" "dist/${{ matrix.artifact }}/${{ matrix.artifact }}.${f##*.}"
             done
           else

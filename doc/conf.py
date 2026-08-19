@@ -415,7 +415,7 @@ _zd.gh_link_get_url = _gh_link_get_url_clean
 # Board status registry: board_id -> (display_name, status_string)
 # Extend this dict when new boards are added or maintenance status changes.
 _AURORA_BOARD_STATUS = {
-    "sensor_board_v2": ("Auxspace Sensor Board V2", "Maintained"),
+    "flight_computer_v2": ("Auxspace Flight Computer V2", "Maintained"),
     "micrometer":      ("µMETER", "Maintained"),
 }
 
@@ -534,7 +534,7 @@ def setup(app):
 # Run CMake-only twister pass for Aurora's boards so that board-supported-hw
 # and board-supported-runners show real data instead of the "not generated" note.
 # The vendor filter must match the 'vendor' field in the per-variant board YAML
-# (e.g. sensor_board_v2_rp2040.yaml), which uses the vendor prefix "auxspaceev".
+# (e.g. flight_computer_v2_rp2040.yaml), which uses the vendor prefix "auxspaceev".
 zephyr_generate_hw_features = True
 zephyr_hw_features_vendor_filter = ["auxspaceev"]
 # The twister pass runs with a minimal env that intentionally strips BOARD_ROOT,

@@ -22,7 +22,7 @@ Hex dump format emitted by subsys/fs/shell.c cmd_read:
   <8 hex digits offset>  <up to 16 "NN " bytes>   <ascii gutter>
   ...
 
-Example use: (after building with `west build -p -b native_sim sensor_board`)
+Example use: (after building with `west build -p -b native_sim flight_computer`)
 python3 ./tools/sim_fetch.py pexpect \
     build/zephyr/zephyr.exe \
     --await-ready "Attitude calibrated" \

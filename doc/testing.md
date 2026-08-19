@@ -13,8 +13,8 @@ west twister -T tests -v --inline-logs
 # Run a single test suite by path
 west twister -T tests/lib/state -v --inline-logs
 
-# Build-verify sensor_board against all supported boards
-west twister -T sensor_board -v --inline-logs --integration
+# Build-verify flight_computer against all supported boards
+west twister -T flight_computer -v --inline-logs --integration
 ```
 
 ## Test Layout
