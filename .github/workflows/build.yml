@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   build:
-    name: Build sensor_board and tests
+    name: Build flight_computer and tests
     strategy:
       fail-fast: false
       # Matrix node is kept for future use
@@ -49,7 +49,7 @@ jobs:
         working-directory: aurora
         shell: bash
         run: |
-          west twister -T sensor_board -v --inline-logs --integration --outdir twister-out-firmware
+          west twister -T flight_computer -v --inline-logs --integration --outdir twister-out-firmware
 
       - name: Twister Tests
         working-directory: aurora

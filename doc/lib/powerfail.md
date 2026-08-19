@@ -56,7 +56,7 @@ battery-sense divider is *not* an alternative, for two reasons:
   capacitance plus a supervisor that fires while the cap still holds charge.
 
 Boards without such a line log the battery voltage as telemetry (see the
-{doc}`sensor board <../applications/sensor_board>` hardware requirements) and
+{doc}`flight computer <../applications/flight_computer>` hardware requirements) and
 leave this subsystem disabled.
 
 ## Usage

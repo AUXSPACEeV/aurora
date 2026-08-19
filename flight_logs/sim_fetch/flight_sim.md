@@ -11,7 +11,7 @@
 
 ```bash
 # Building and running the simulator first:
-west build -p -b native_sim/native sensor_board/ -- \
+west build -p -b native_sim/native flight_computer/ -- \
   -DCONFIG_AURORA_FAKE_SENSORS_REPLAY=y
 
 python3 ./tools/sim_fetch.py pexpect \

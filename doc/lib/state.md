@@ -113,7 +113,7 @@ and the two are independent.
 The thresholds that drive the transitions are per-vehicle data, not a
 firmware constant: a 200 m model and a 1 km vehicle disagree on every
 altitude and timeout in the set. The Kconfig options
-(see {ref}`the sensor_board tables <configuration>`) are the factory
+(see {ref}`the flight_computer tables <configuration>`) are the factory
 defaults; the running values are edited from the shell and persisted, so a
 board flashed with one firmware image can fly either rocket.
 
@@ -215,7 +215,7 @@ pad still disarms.
 ### Attitude calibration comes back too
 
 Calibration only runs while the machine is in `IDLE` (see the
-{doc}`sensor board <../applications/sensor_board>` IMU handling), so a board
+{doc}`flight computer <../applications/flight_computer>` IMU handling), so a board
 that resumes into a flight state can never redo it. Losing it is not
 cosmetic: vertical acceleration would stay pinned at zero, leaving boost and
 apogee detection blind, and orientation would integrate from a zero reference

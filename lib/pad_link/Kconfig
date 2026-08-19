@@ -30,6 +30,6 @@ config AURORA_PAD_LINK_BOARD_ID
 	help
 	  Reported via the read-only board-identifier characteristic
 	  so the central can distinguish hardware revisions
-	  (e.g. sensor_board_v2/rp2040).
+	  (e.g. flight_computer_v2/rp2040).
 
 endif # AURORA_PAD_LINK

@@ -254,7 +254,7 @@ hc12: hc12 {
 Boards that do not mount an HC-12 leave the node disabled (or omit it
 entirely); the `AURORA_TELEMETRY_HC12` symbol is then unselectable
 (`DT_HAS_AUXSPACEEV_HC12_ENABLED` resolves to `n`) and the backend
-is compiled out. The default `sensor_board_v2` DTS ships the node
+is compiled out. The default `flight_computer_v2` DTS ships the node
 `status = "disabled"` so each application opts in explicitly via an
 overlay.
 

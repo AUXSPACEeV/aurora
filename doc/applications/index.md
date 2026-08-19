@@ -5,10 +5,10 @@ model rocketry.
 
 The application code lives in the top-level directories of the
 [`aurora`](https://github.com/AUXSPACEeV/aurora) repository, e.g.
-[`sensor_board`](https://github.com/AUXSPACEeV/aurora/tree/main/sensor_board).
+[`flight_computer`](https://github.com/AUXSPACEeV/aurora/tree/main/flight_computer).
 
 ```{toctree}
 :maxdepth: 2
 
-sensor_board
+flight_computer
 ```

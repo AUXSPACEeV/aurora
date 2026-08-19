@@ -68,8 +68,8 @@ After all fetches the script issues `kernel reboot cold` and closes the child.
 
 ## Example
 
-After building the sensor board for the simulator
-(`west build -p -b native_sim sensor_board`):
+After building the flight computer for the simulator
+(`west build -p -b native_sim flight_computer`):
 
 ```bash
 python3 ./tools/sim_fetch.py pexpect \
