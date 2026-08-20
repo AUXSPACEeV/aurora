@@ -143,13 +143,13 @@ Both a native setup and a Docker-based setup are supported. The Docker path is r
 mkdir zephyr_workspace && cd zephyr_workspace
 git clone -b main https://github.com/AUXSPACEeV/aurora.git aurora
 cd aurora
-./run.sh -b flight_computer_v2/rp2040 shell
+./run.sh -b sensor_board_v2/rp2040 shell
 ```
 
 Once your environment is set up, build the project with `west` from the `aurora/` directory:
 
 ```bash
-west build -b flight_computer_v2/rp2040 flight_computer
+west build -b sensor_board_v2/rp2040 flight_computer
 ```
 
 Run the test suite to verify your changes don't break anything:

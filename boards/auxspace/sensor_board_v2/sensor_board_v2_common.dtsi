@@ -2,12 +2,12 @@
  * Copyright (c) 2025-2026 Auxspace e.V.
  * SPDX-License-Identifier: Apache-2.0
  *
- * Common device tree shared by every Flight Computer V2 variant.
+ * Common device tree shared by every Sensor Board V2 variant.
  *
  * The SoC- and core-specific pieces (flash size and controller, code
  * partition and USB device defaults) live in the per-SoC includes
- * flight_computer_v2_rp2040.dtsi / flight_computer_v2_rp2350a.dtsi, and the
- * optional CYW43 radio in flight_computer_v2_wifi.dtsi.
+ * sensor_board_v2_rp2040.dtsi / sensor_board_v2_rp2350a.dtsi, and the
+ * optional CYW43 radio in sensor_board_v2_wifi.dtsi.
  */
 
 #include <zephyr/dt-bindings/i2c/i2c.h>
@@ -15,8 +15,8 @@
 #include <freq.h>
 
 / {
-	model = "Auxspace e.V. Flight Computer V2";
-	compatible = "auxspaceev,flight-computer-v2";
+	model = "Auxspace e.V. Sensor Board V2";
+	compatible = "auxspaceev,sensor-board-v2";
 
 	chosen {
 		zephyr,sram = &sram0;

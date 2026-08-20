@@ -44,7 +44,7 @@ def parse_key_lines(path: Path) -> dict[str, str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('board', help='Board name (e.g. flight_computer_v2/rp2040)')
+    parser.add_argument('board', help='Board name (e.g. sensor_board_v2/rp2040)')
     parser.add_argument('project', help='Project directory name (e.g. flight_computer)')
     args = parser.parse_args()
 

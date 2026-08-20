@@ -1,9 +1,9 @@
-```{zephyr:board} flight_computer_v2
+```{zephyr:board} sensor_board_v2
 ```
 
 # Overview
 
-The Auxspace e.V. flight_computer_v2 PCB is built around the idea to support
+The Auxspace e.V. sensor_board_v2 PCB is built around the idea to support
 interchangeable hardware in a stackable rocket avionics system.
 This version contains a
 [Raspberry Pi Pico](https://www.raspberrypi.com/products/raspberry-pi-pico/)
@@ -63,7 +63,7 @@ active development.
 
 The `_w` board variants are fitted with the Infineon CYW43439 combo radio (as
 on the Raspberry Pi Pico W / Pico 2 W). It hangs off a PIO-SPI ("gSPI") bus on
-GPIO 23/24/25/29, defined in `flight_computer_v2_wifi.dtsi`.
+GPIO 23/24/25/29, defined in `sensor_board_v2_wifi.dtsi`.
 
 ### Wi-Fi (supported)
 
@@ -125,14 +125,14 @@ SPI-SDHC driver has no way to detect card presence without a card-detect-pin!
 The aurora software for the RP2040 is built with `sysbuild` since it uses the MCUBoot boot loader:
 
 ```bash
-west build -p -b flight_computer_v2/rp2040 --sysbuild flight_computer
+west build -p -b sensor_board_v2/rp2040 --sysbuild sensor_board
 ```
 
 ### RP2350
 The aurora software for the RP2350 is built without `sysbuild` at the moment.
 
 ```bash
-west build -p -b flight_computer_v2/rp2350a/hazard3 flight_computer
+west build -p -b sensor_board_v2/rp2350a/hazard3 sensor_board
 ```
 
 ## Flashing
@@ -149,7 +149,7 @@ plugging the board into the computer. Then the following commands can be used to
 # Flash the bootloader
 picotool load build/mcuboot/zephyr/zephyr.uf2
 # Flash the application
-picotool load build/flight_computer/zephyr/zephyr.signed.bin --offset 0x10010000
+picotool load build/sensor_board/zephyr/zephyr.signed.bin --offset 0x10010000
 # Reboot the board
 picotool reboot
 ```
@@ -162,4 +162,4 @@ instructions on the [picotool](https://github.com/raspberrypi/picotool) reposito
 ## RP2350
 
 Flashing the RP2350 can be done by copying the generated `zephyr.uf2` located in the
-`build/flight_computer/zephyr` directory to the board's USB mass storage device. The board needs to be put into bootloader mode by holding the `BOOTSEL` button while plugging the board into the computer.
+`build/sensor_board/zephyr` directory to the board's USB mass storage device. The board needs to be put into bootloader mode by holding the `BOOTSEL` button while plugging the board into the computer.

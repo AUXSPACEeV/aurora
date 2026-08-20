@@ -3,7 +3,7 @@
  * Copyright (c) 2026 Auxspace e.V.
  * SPDX-License-Identifier: Apache-2.0
  *
- * RP2040-specific device tree for the Flight Computer V2. Boots via MCUboot
+ * RP2040-specific device tree for the Sensor Board V2. Boots via MCUboot
  * out of a 2 MiB external flash (sysbuild partition layout).
  */
 

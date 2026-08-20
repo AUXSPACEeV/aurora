@@ -3,7 +3,7 @@
 #
 # Layer the flight-profile generator and `sim` shell commands
 # on top of any board build, e.g.:
-#   west build -b flight_computer_v2/rp2040 -S sim aurora/flight_computer
+#   west build -b sensor_board_v2/rp2040 -S sim aurora/flight_computer
 #   west build -b native_sim             -S sim aurora/flight_computer
 #
 # Replaces the hardware IMU/baro polling threads with the canned profile;

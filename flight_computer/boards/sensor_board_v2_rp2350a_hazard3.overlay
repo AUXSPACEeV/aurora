@@ -2,7 +2,7 @@
  * Copyright (c) 2026 Auxspace e.V.
  * SPDX-License-Identifier: Apache-2.0
  *
- * RP2350a flight computer overlay.  The flight log lives on a sector
+ * RP2350a sensor board overlay.  The flight log lives on a sector
  * range of the SD card (DATA_LOGGER_BIN_BACKEND_DISK), so internal
  * flash is reserved entirely for code.
  *
@@ -11,7 +11,7 @@
  * first 1 GiB of the card so it does not overlap the raw region.
  */
 
-#include "flight_computer_v2.dtsi"
+#include "sensor_board_v2.dtsi"
 
 &timer0 {
 	status = "okay";

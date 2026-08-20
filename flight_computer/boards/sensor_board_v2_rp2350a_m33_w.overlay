@@ -2,19 +2,18 @@
  * Copyright (c) 2026 Auxspace e.V.
  * SPDX-License-Identifier: Apache-2.0
  *
- * RP2040 flight computer overlay.  The flight log lives on a sector range
- * of the SD card (DATA_LOGGER_BIN_BACKEND_DISK), so internal flash is
- * reserved entirely for code; no flight_log partition is carved out.
+ * RP2350a sensor board overlay.  The flight log lives on a sector
+ * range of the SD card (DATA_LOGGER_BIN_BACKEND_DISK), so internal
+ * flash is reserved entirely for code.
  *
  * The flight-log region starts 1 GiB into the card and reserves
  * 256 MiB.  The FATFS volume mounted at /MMC: must be sized to the
- * first 1 GiB of the card (i.e. created with mkfs limited to that
- * range) so it does not overlap the raw region.
+ * first 1 GiB of the card so it does not overlap the raw region.
  */
 
-#include "flight_computer_v2.dtsi"
+#include "sensor_board_v2.dtsi"
 
-&timer {
+&timer0 {
 	status = "okay";
 };
 

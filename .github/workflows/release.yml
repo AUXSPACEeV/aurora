@@ -20,12 +20,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - board: flight_computer_v2/rp2040
-            artifact: flight_computer_v2_rp2040
+          - board: sensor_board_v2/rp2040
+            artifact: sensor_board_v2_rp2040
             toolchain: arm-zephyr-eabi
             extra_args: "--sysbuild"
-          - board: flight_computer_v2/rp2350a/hazard3
-            artifact: flight_computer_v2_rp2350a_hazard3
+          - board: sensor_board_v2/rp2350a/hazard3
+            artifact: sensor_board_v2_rp2350a_hazard3
             toolchain: riscv64-zephyr-elf
             extra_args: ""
           - board: micrometer@1/esp32s3/procpu

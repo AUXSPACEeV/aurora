@@ -8,6 +8,6 @@
 /dts-v1/;
 
 #include <raspberrypi/rpi_pico/rp2040.dtsi>
-#include "flight_computer_v2_rp2040-pinctrl.dtsi"
-#include "flight_computer_v2_common.dtsi"
-#include "flight_computer_v2_rp2040.dtsi"
+#include "sensor_board_v2_rp2040-pinctrl.dtsi"
+#include "sensor_board_v2_common.dtsi"
+#include "sensor_board_v2_rp2040.dtsi"

@@ -162,8 +162,8 @@ cd aurora
 After installing docker, all requirements are met to run the setup:
 
 ```bash
-# Open a shell in the development container for the flight_computer_v2/rp2040 board
-./run.sh -b flight_computer_v2/rp2040 shell
+# Open a shell in the development container for the sensor_board_v2/rp2040 board
+./run.sh -b sensor_board_v2/rp2040 shell
 ```
 
 **note:** This can take a long time, since the docker container is quite big
@@ -209,8 +209,8 @@ application.
 Start the command from the **\<aurora\>** dir:
 
 ```bash
-# Build the flight_computer project for the flight_computer_v2/rp2040
-west build -b flight_computer_v2/rp2040 flight_computer
+# Build the flight_computer project for the sensor_board_v2/rp2040
+west build -b sensor_board_v2/rp2040 flight_computer
 
 # Another example: build for the custom Auxspace Micrometer PCB:
 west build -b micrometer/esp32s3/procpu --sysbuild flight_computer/
@@ -223,7 +223,7 @@ called `zephyr.uf2` and `zephyr.elf`.
 ## :rocket: Deployment
 
 **note:** This chapter shows how to deploy AURORA onto the
-flight_computer_v2 as an example.
+sensor_board_v2 as an example.
 The board uses a Raspberry Pi Pico Series microcontroller as its main
 logic unit.
 
@@ -231,7 +231,7 @@ logic unit.
 
 Deploy the binary to your board by either using `west flash` or the
 Board manufacturers' manual.
-In case of the flight_computer_v2 that would be
+In case of the sensor_board_v2 that would be
 [Raspberry Pi](https://www.raspberrypi.com/documentation/microcontrollers/pico-series.html).
 
 **note:** flashing from inside the docker container is currently

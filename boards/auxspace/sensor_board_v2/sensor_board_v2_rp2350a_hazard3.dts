@@ -8,7 +8,7 @@
 /dts-v1/;
 
 #include <raspberrypi/rpi_pico/rp2350a.dtsi>
-#include <raspberrypi/rpi_pico/m33.dtsi>
-#include "flight_computer_v2_rp2350a-pinctrl.dtsi"
-#include "flight_computer_v2_common.dtsi"
-#include "flight_computer_v2_rp2350a.dtsi"
+#include <riscv/raspberrypi/hazard3.dtsi>
+#include "sensor_board_v2_rp2350a-pinctrl.dtsi"
+#include "sensor_board_v2_common.dtsi"
+#include "sensor_board_v2_rp2350a.dtsi"

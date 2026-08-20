@@ -11,7 +11,7 @@
  */
 
 / {
-	model = "Auxspace e.V. Flight Computer V2 (WiFi)";
+	model = "Auxspace e.V. Sensor Board V2 (WiFi)";
 };
 
 &pinctrl {

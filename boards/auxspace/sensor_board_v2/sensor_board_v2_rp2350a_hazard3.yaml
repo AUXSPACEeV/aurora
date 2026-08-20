@@ -1,12 +1,11 @@
-identifier: flight_computer_v2/rp2350a/m33/w
-name: Auxspace Flight Computer V2 (RP2350A Cortex-M33) WiFi
+identifier: sensor_board_v2/rp2350a/hazard3
+name: Auxspace Sensor Board V2 (RP2350A Hazard3)
 type: mcu
-arch: arm
+arch: riscv
 flash: 4096
 ram: 520
 toolchain:
   - zephyr
-  - gnuarmemb
 supported:
   - gpio
   - uart
@@ -18,5 +17,4 @@ supported:
   - dma
   - usbd
   - sensors
-  - wifi
 vendor: auxspaceev

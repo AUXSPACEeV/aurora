@@ -3,7 +3,7 @@
  * Copyright (c) 2026 Auxspace e.V.
  * SPDX-License-Identifier: Apache-2.0
  *
- * RP2350A-specific device tree for the Flight Computer V2. The full 4 MiB of
+ * RP2350A-specific device tree for the Sensor Board V2. The full 4 MiB of
  * external flash is reserved for code; the USB device is enabled by the
  * application overlay.
  */

@@ -4,7 +4,7 @@
 # Drop the SD-card / FAT stack for bench tests without media inserted.
 # Telemetry, sensors, state machine and shell all stay live.
 #
-#   west build -b flight_computer_v2/rp2350a/hazard3 -S nodisk aurora/flight_computer
+#   west build -b sensor_board_v2/rp2350a/hazard3 -S nodisk aurora/flight_computer
 
 name: nodisk
 append:

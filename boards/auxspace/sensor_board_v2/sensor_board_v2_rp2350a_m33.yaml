@@ -1,9 +1,9 @@
-identifier: flight_computer_v2/rp2040/w
-name: Auxspace Flight Computer V2 (RP2040) WiFi
+identifier: sensor_board_v2/rp2350a/m33
+name: Auxspace Sensor Board V2 (RP2350A Cortex-M33)
 type: mcu
 arch: arm
-flash: 2048
-ram: 264
+flash: 4096
+ram: 520
 toolchain:
   - zephyr
   - gnuarmemb
@@ -18,5 +18,4 @@ supported:
   - dma
   - usbd
   - sensors
-  - wifi
 vendor: auxspaceev

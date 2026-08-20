@@ -12,7 +12,7 @@ Custom Auxspace PCBs intended for use in flight.
    :maxdepth: 1
    :glob:
 
-   auxspace/flight_computer_v2/doc/flight_computer_v2
+   auxspace/sensor_board_v2/doc/sensor_board_v2
    auxspace/micrometer/esp32s3/doc/micrometer
 
 Bench targets

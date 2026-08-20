@@ -1,0 +1,21 @@
+identifier: sensor_board_v2/rp2040
+name: Auxspace Sensor Board V2 (RP2040)
+type: mcu
+arch: arm
+flash: 2048
+ram: 264
+toolchain:
+  - zephyr
+  - gnuarmemb
+supported:
+  - gpio
+  - uart
+  - i2c
+  - spi
+  - counter
+  - watchdog
+  - pwm
+  - dma
+  - usbd
+  - sensors
+vendor: auxspaceev
