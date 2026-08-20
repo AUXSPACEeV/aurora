@@ -33,7 +33,7 @@ sys.path.insert(0, str(_ZEPHYR_BASE / "scripts" / "dts" / "python-devicetree" / 
 project = 'AURORA'
 copyright = '2025-2026, Auxspace e.V.'
 author = 'Auxspace e.V.'
-release = '1.6.2'  # documentation version, NOT project version!
+release = '1.6.3'  # documentation version, NOT project version!
 
 try:
     git_tag = subprocess.check_output(
@@ -209,7 +209,7 @@ html_theme_options["source_directory"]  = "doc/"
 # sidebar dropdown turns every entry into a link to its GitHub release page
 # ({gh_link_base_url}/releases/tag/<tag>).
 _AURORA_RELEASES = [
-    "v0.5.1",
+    "v0.5.2",
     "v0.4.2",
     "v0.3.2",
 ]
