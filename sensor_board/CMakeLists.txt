@@ -15,13 +15,9 @@ list(APPEND SNIPPET_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
-# For some reason, when using west twister, the app target is not created
-# automatically, so we need to create it manually here.
-# Building locally and without the zephyr github action, naming this
-# "sensor_board" works fine, but as soon as we use west twister inside a
-# github-runner context, the target must be named "app":
-# > Cannot specify sources for target "app" which is not built by this project.
-project(app LANGUAGES C)
+# The "app" library target below is created by find_package(Zephyr) (see
+# zephyr/cmake/modules/kernel.cmake), independently of the project name.
+project(sensor_board LANGUAGES C CXX)
 
 target_sources(app PRIVATE
 	src/main.c
