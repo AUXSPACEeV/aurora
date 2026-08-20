@@ -86,7 +86,7 @@ currently playing melody before issuing the new pattern.
 | State → `REDUNDANT` | Two 2500 Hz beeps of 150 ms, separated by a 100 ms gap | Redundant (backup) parachute deployment event. The double beep distinguishes the fallback path from the nominal `MAIN` event. |
 | State → `LANDED` | "Astronomia" (Coffin Dance) melody, plays until interrupted | Flight complete. Acts as an audible recovery beacon. |
 | Any other state transition | Silent (any ongoing melody is stopped) | In-flight states `BOOST` and `BURNOUT` are silent on the buzzer. |
-| Log conversion started | "Mii Channel" melody, loops until conversion finishes | The post-flight log conversion has the flight recorder (and the SD card). Arming is held off for the whole melody — see [Arming During a Conversion](data.md#arming-during-a-conversion). |
+| Log conversion started | "Mii Channel" melody, loops until conversion finishes | The post-flight log conversion has the flight recorder (and the SD card). Arming is held off for the whole melody — see {ref}`Arming During a Conversion <arming-during-conv>`. |
 | Log conversion complete | Melody stops (or reverts to "Astronomia" if the rocket is still `LANDED`) | Recorder free again; the state machine will arm as soon as the other conditions are met. Raised whether the conversion succeeded or failed. |
 | Error | Three 4000 Hz beeps of 100 ms, separated by 100 ms gaps | Unrecoverable error. Service required. |
 | Powerfail | *(not handled)* | The buzzer backend does not implement `on_powerfail`. |

@@ -215,6 +215,7 @@ data_logger_convert(&data_logger_csv_formatter, "/data/flight.csv");
 The flight-log region is left intact. Conversion must not run
 concurrently with active logging.
 
+(arming-during-conv)=
 #### Arming During a Conversion
 
 On the sensor board the conversion is driven by a dedicated converter

@@ -54,8 +54,8 @@ int aurora_watchdog_setup(void);
 /**
  * @brief Liveness sources recorded in the breadcrumb.
  *
- * Purely observational.  See @ref aurora_watchdog_kick for why these must
- * never gate the feed.
+ * Purely observational.
+ * See @c aurora_watchdog_kick for why these must never gate the feed.
  */
 enum aurora_wdt_source {
 	AURORA_WDT_SRC_IMU = 0, /**< IMU samples arriving at the state machine. */
