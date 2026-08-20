@@ -12,6 +12,13 @@
 		auxspace,rbf = &button1;
 		auxspace,vbat = &vbatt;
 		auxspace,disk-led = &sd_activity_led;
+		auxspace,telemetry-hc12 = &hc12;
+	};
+
+	hc12: hc12 {
+		compatible = "auxspaceev,hc12";
+		uart = <&uart0>;
+		status = "okay";
 	};
 };
 

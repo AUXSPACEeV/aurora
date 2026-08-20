@@ -725,8 +725,10 @@ void state_machine_task(void *, void *, void *)
 			 */
 			WDT_KICK(AURORA_WDT_SRC_STATE);
 
+#if defined(CONFIG_AURORA_TELEMETRY)
 			/* update telemetry data */
 			telemetry_send_sm_update(state, sm_get_type(), &inputs);
+#endif /*.CONFIG_AURORA_TELEMETRY */
 
 			/* update pad link data */
 			update_pad_link_data();
