@@ -704,7 +704,7 @@ void state_machine_task(void *, void *, void *)
 		 */
 		if (baro_ready && imu_ready) {
 			struct sm_inputs inputs = {
-				.armed = 1,
+				.armed = sm_get_armed(),
 				.log_ready = log_flight_log_online(),
 				.log_busy = log_flight_log_busy(),
 				.calibrated = calibrated,
@@ -724,6 +724,9 @@ void state_machine_task(void *, void *, void *)
 			 * waits for a sensor that never comes back.
 			 */
 			WDT_KICK(AURORA_WDT_SRC_STATE);
+
+			/* update telemetry data */
+			telemetry_send_sm_update(state, sm_get_type(), &inputs);
 
 			/* update pad link data */
 			update_pad_link_data();

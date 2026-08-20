@@ -105,7 +105,7 @@ static int hc12_send_sm_update(enum sm_state state, enum sm_type type,
 	struct hc12_sm_update_payload p = {
 		.timestamp_ms = (uint32_t)k_uptime_get(),
 		.state        = (uint8_t)state,
-		.armed        = inputs->armed ? 1 : 0,
+		.armed        = inputs->armed,
 		.sm_type      = (uint8_t)type,
 		.altitude     = inputs->altitude,
 		.acceleration = inputs->acceleration,

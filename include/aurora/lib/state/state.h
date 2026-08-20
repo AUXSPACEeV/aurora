@@ -180,6 +180,16 @@ enum sm_type sm_get_type(void);
 void sm_get_inputs(struct sm_inputs *out);
 
 /**
+ * @brief Get the state machine armed state.
+ *
+ * When an RBF interlock is installed and configured,
+ * return its state.
+ *
+ * @retval 0 if disarmed, 1 if armed.
+ */
+int sm_get_armed();
+
+/**
  * @brief Copy the thresholds that the backend is currently running with.
  *
  * @param out Buffer for the active thresholds.
