@@ -4,7 +4,7 @@ The [Raspberry Pi Pico](https://www.raspberrypi.com/products/raspberry-pi-pico/)
 and [Pico 2](https://www.raspberrypi.com/products/raspberry-pi-pico-2/)
 families are supported as **bench / development targets**, not as
 flight boards. They are intended for testing the AURORA telemetry
-stack and other subsystems without populating a full flight_computer or
+stack and other subsystems without populating a full sensor_board or
 micrometer PCB.
 
 The same HC-12 wiring and the same AURORA Kconfig set work across all
@@ -15,7 +15,7 @@ to validate against.
 
 | Upstream board target | SoC | Core | Notes |
 |---|---|---|---|
-| `rpi_pico/rp2040/w`              | RP2040  | Cortex-M0+ | Same RP2040 silicon as the flight_computer v2 (Pico variant). |
+| `rpi_pico/rp2040/w`              | RP2040  | Cortex-M0+ | Same RP2040 silicon as the sensor_board v2 (Pico variant). |
 | `rpi_pico2/rp2350a/m33/w`        | RP2350A | Cortex-M33 | RP2350A Arm core. |
 | `rpi_pico2/rp2350a/hazard3/w`    | RP2350A | Hazard3 (RISC-V) | Same RP2350A silicon, RISC-V core selected. |
 

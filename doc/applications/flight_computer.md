@@ -307,7 +307,7 @@ starts the playback.
 Since `flight_computer` is an auxspace internal project, only auxspace hardware
 is tested with the application.
 
-- {doc}`Flight Computer v2 <../boards/auxspace/flight_computer_v2/doc/flight_computer_v2>` - RP2040 / RP2350 flight computer
+- {doc}`Sensor Board v2 <../boards/auxspace/sensor_board_v2/doc/sensor_board_v2>` - RP2040 / RP2350 flight computer
 - {doc}`ESP32-S3 Micrometer <../boards/auxspace/micrometer/esp32s3/doc/micrometer>` - ESP32-S3 based board
 
 ### Hardware Requirements

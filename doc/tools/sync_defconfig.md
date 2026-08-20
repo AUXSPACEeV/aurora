@@ -35,7 +35,7 @@ python3 tools/sync_defconfig.py <board> <project>
 
 Arguments:
 
-- `board` — Zephyr board name (e.g. `flight_computer_v2/rp2040`). Slashes are
+- `board` — Zephyr board name (e.g. `sensor_board_v2/rp2040`). Slashes are
   translated to underscores when resolving the `.conf` path.
 - `project` — AURORA project directory (e.g. `flight_computer`).
 
@@ -48,14 +48,14 @@ Expected paths (relative to the `aurora/` root):
 Example:
 
 ```bash
-west build -b flight_computer_v2/rp2040 aurora/flight_computer
-python3 aurora/tools/sync_defconfig.py flight_computer_v2/rp2040 flight_computer
+west build -b sensor_board_v2/rp2040 aurora/flight_computer
+python3 aurora/tools/sync_defconfig.py sensor_board_v2/rp2040 flight_computer
 ```
 
 The script reports a summary on stdout:
 
 ```
-Written aurora/flight_computer/boards/flight_computer_v2_rp2040.conf
+Written aurora/flight_computer/boards/sensor_board_v2_rp2040.conf
   42 kept, 7 added from defconfig, 3 removed (overhead in prj.conf)
 ```
 

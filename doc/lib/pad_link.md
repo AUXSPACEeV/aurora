@@ -59,7 +59,7 @@ Use the pad link when you want any of the following:
 - Sanity-check the last raw IMU and baro readings before flight.
 - Display computed altitude, velocity, and orientation on a phone or
   laptop during setup.
-- Identify which board is on the pad (e.g. `flight_computer_v2/rp2040`
+- Identify which board is on the pad (e.g. `sensor_board_v2/rp2040`
   vs. an ESP32-S3 variant) when you have several flight computers in
   a backpack.
 
@@ -297,7 +297,7 @@ example script mirrors these as `CAP_IMU_TYPE_*` constants.
 
 **Board identifier**: UTF-8 string, length-bounded by
 `CONFIG_AURORA_PAD_LINK_BOARD_ID`. Defaults to the Zephyr board name
-(e.g. `flight_computer_v2_rp2040`). Read once; it doesn't change.
+(e.g. `sensor_board_v2_rp2040`). Read once; it doesn't change.
 
 **SM type**: `uint8_t`. Identifies *which* state machine
 implementation the firmware is running, so the central knows how to
@@ -610,7 +610,7 @@ characteristics that are actually present on the board:
 ```console
 $ pip install bleak
 $ python3 aurora/tools/pad_link_central_example.py
-connected to flight_computer_v2_esp32s3 (sm_type=0)
+connected to sensor_board_v2_esp32s3 (sm_type=0)
 capabilities:
   IMU:        6-DoF (accel + gyro)
   Barometer:  present

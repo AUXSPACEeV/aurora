@@ -1,6 +1,6 @@
 /**
  * @file main.c
- * @brief Flieght computer application entry point.
+ * @brief Flight computer application entry point.
  *
  * Defines three Zephyr threads (IMU, barometer, state machine) that run
  * concurrently to collect sensor data and drive the flight state machine.
@@ -308,7 +308,6 @@ static void handle_imu(int64_t *last_imu_ns, struct attitude *attitude_state, st
 	double orientation[3], double *acceleration, double *accel_vert, bool *imu_ready,
 	bool *calibration_started_notified, bool *calibration_notified)
 {
-	// int64_t now_ns = (k_uptime_ticks() * NSEC_PER_SEC) / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
 	int64_t now_ns = k_ticks_to_ns_floor64(k_uptime_ticks());
 	/* Delta-time since the last sample, clamped to a sane range; 0.0 on the
 	 * first sample or after a discontinuity. Shared by orientation

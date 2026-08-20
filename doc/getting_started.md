@@ -30,10 +30,10 @@ Build the primary `flight_computer` application for one of the supported boards:
 
 ```shell
 # RP2040 (primary target)
-west build -b flight_computer_v2/rp2040 flight_computer
+west build -b sensor_board_v2/rp2040 flight_computer
 
 # RP2350 RISC-V
-west build -b flight_computer_v2/rp2350a/hazard3 flight_computer
+west build -b sensor_board_v2/rp2350a/hazard3 flight_computer
 
 # ESP32-S3 Micrometer board
 west build -b micrometer/esp32s3/procpu --sysbuild flight_computer/
@@ -54,14 +54,14 @@ subdirectories for `MCUBoot` and the application at
 west build -b \<BOARD\> -t menuconfig \<APPLICATION\>
 
 # Using the wrapper
-./run.sh -b flight_computer_v2/rp2040 menuconfig
+./run.sh -b sensor_board_v2/rp2040 menuconfig
 ```
 
 ### Docker Container
 
 ```shell
 # Open a shell inside the dev container
-./run.sh -b flight_computer_v2/rp2040 shell
+./run.sh -b sensor_board_v2/rp2040 shell
 ```
 
 ## Flashing
@@ -89,13 +89,13 @@ Repeat until the flashing command has finished.
 ### OpenOCD (CMSIS-DAP)
 
 ```shell
-# e.g. flight_computer_v2/rp2040
+# e.g. sensor_board_v2/rp2040
 sudo openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg \
   -c "adapter speed 5000" \
   -c "program build/zephyr/zephyr.elf verify reset exit"
 ```
 
-### USB (on flight_computer_v2 via RPi Pico BOOTSEL mode)
+### USB (on sensor_board_v2 via RPi Pico BOOTSEL mode)
 
 Hold BOOTSEL while connecting the board, then copy the UF2 file:
 

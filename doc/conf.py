@@ -534,7 +534,7 @@ def setup(app):
 # Run CMake-only twister pass for Aurora's boards so that board-supported-hw
 # and board-supported-runners show real data instead of the "not generated" note.
 # The vendor filter must match the 'vendor' field in the per-variant board YAML
-# (e.g. flight_computer_v2_rp2040.yaml), which uses the vendor prefix "auxspaceev".
+# (e.g. sensor_board_v2_rp2040.yaml), which uses the vendor prefix "auxspaceev".
 zephyr_generate_hw_features = True
 zephyr_hw_features_vendor_filter = ["auxspaceev"]
 # The twister pass runs with a minimal env that intentionally strips BOARD_ROOT,

@@ -60,7 +60,7 @@ _DEFAULT_RUNNERS = _BOARD_RUNNERS["rp2040"]
 
 def _board_yml_path(docname: str, app) -> str | None:
     """Try to locate the board.yml for the board whose doc page is *docname*."""
-    # docname is e.g. "boards/auxspace/flight_computer_v2/doc/flight_computer_v2"
+    # docname is e.g. "boards/auxspace/sensor_board/doc/sensor_board_v2"
     # Walk up to find a board.yml sibling.
     parts = docname.split("/")
     for i in range(len(parts), 0, -1):
