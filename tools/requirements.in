@@ -2,4 +2,5 @@ bleak>=3.0.2
 matplotlib>=3.11.1
 numpy>=2.5.1
 pexpect>=4.9.0
+pillow>=12.3.0
 pip-tools>=7.6.0
