@@ -15,6 +15,8 @@ Pip requirements are installed via `pip install -r tools/requirements.txt`
 ```{toctree}
 :maxdepth: 1
 
+binlog
+flight_log_gui
 gen_flight_replay
 pad_link_central_example
 plot_flight_data
@@ -29,6 +31,8 @@ sync_defconfig
 
 | Script | Purpose |
 |---|---|
+| [`binlog.py`](binlog.md) | Decode the data logger's binary flight logs on the host — no on-target CSV/Influx conversion pass needed. |
+| [`flight_log_gui.py`](flight_log_gui.md) | Desktop viewer for recorded flights — open a `.bin` or a whole `DATA` directory and browse the graphs. |
 | [`gen_flight_replay.py`](gen_flight_replay.md) | Convert a recorded `flights.csv` into a generated C source file consumed by the replay sample source in `lib/sensor`. |
 | [`pad_link_central_example.py`](pad_link_central_example.md) | Reference BLE central for the pad-link library — scans, connects, and prints SM state and computed kinematics from a rocket. |
 | [`plot_flight_data.py`](plot_flight_data.md) | Plot recorded or simulated flight data — standalone CLI for telemetry logs, importable plotting module for `sim_flight_kalman`. |

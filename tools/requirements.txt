@@ -35,7 +35,9 @@ packaging==26.1
 pexpect==4.9.0
     # via -r tools/requirements.in
 pillow==12.3.0
-    # via matplotlib
+    # via
+    #   -r tools/requirements.in
+    #   matplotlib
 pip-tools==7.6.0
     # via -r tools/requirements.in
 ptyprocess==0.7.0

@@ -22,6 +22,12 @@ covers two use cases:
   calls `plot_flight(...)` to render the seven-panel plot of its
   simulated output.
 
+Panels are created only for the streams a log actually contains, so
+the plot covers whatever the recording holds: barometer, Kalman
+altitude and velocity, state-machine acceleration inputs, body
+acceleration, rotation rate, magnetometer, orientation, battery
+voltage, and the replayed apogee votes.
+
 The tool does not run the Kalman filter or attitude tracker itself.
 What it does carry, on top of pure plotting, is the log-loading and
 replay glue needed to turn raw telemetry into the curves that the plot
@@ -102,9 +108,20 @@ The most useful entry points are:
 - `plot_flight(...)` — seven-panel plot used by
   [`sim_flight_kalman.py`](sim_flight_kalman.md).
 - `plot_raw_flight(...)` — multi-panel raw-telemetry plot used by the
-  CLI above.
+  CLI above. Pass `out_path=None` to build the figure without writing
+  it (this is how [`flight_log_gui.py`](flight_log_gui.md) embeds it in
+  a Tk canvas), and `panels=[...]` to draw a subset.
+- `available_panels(sliced)` — the panel keys a sliced flight has data
+  for, in stack order; `PANEL_LABELS` maps each to a readable name.
 
 ## Requirements
 
 - Python 3.10+
 - `numpy`, `matplotlib`
+
+## See also
+
+- [`flight_log_gui.py`](flight_log_gui.md) — the same panels in a
+  desktop window, driven from binary flight logs.
+- [`binlog.py`](binlog.md) — decode a `.bin` into the `streams` dict
+  these helpers expect.

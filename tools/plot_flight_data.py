@@ -80,10 +80,12 @@ FILTER_APOGEE_ACCEL_BAND = 20.0
 FIELD_SPECS = {
     "accel":         ("x", "y", "z"),
     "gyro":          ("x", "y", "z"),
+    "mag":           ("x", "y", "z"),
     "baro":          ("pres", "temp"),
     "sm_kinematics": ("accel", "accel_vert"),
     "sm_pose":       ("velocity", "altitude"),
     "orientation":   ("yaw", "pitch", "roll"),
+    "vbat":          ("voltage",),
 }
 
 
@@ -325,8 +327,9 @@ def compute_log_votes(sliced):
     running peak, |accel_vert| < FILTER_APOGEE_ACCEL_BAND.  Returns
     ``(None, None)`` if either stream is empty.
     """
-    t_kin, kin = sliced["sm_kinematics"]
-    t_pose, pose = sliced["sm_pose"]
+    empty = (np.empty(0, dtype=np.int64), np.empty((0, 2)))
+    t_kin, kin = sliced.get("sm_kinematics", empty)
+    t_pose, pose = sliced.get("sm_pose", empty)
     if t_kin.size == 0 or t_pose.size == 0:
         return None, None
     altitude = np.interp(t_kin, t_pose, pose[:, 1])
@@ -349,8 +352,9 @@ def compute_log_gated(sliced, r_meas, warmup=FILTER_NIS_WARMUP):
     residual against the logged Kalman altitude exceeds the firmware gate
     threshold.
     """
-    t_baro, baro = sliced["baro"]
-    t_pose, pose = sliced["sm_pose"]
+    empty = (np.empty(0, dtype=np.int64), np.empty((0, 2)))
+    t_baro, baro = sliced.get("baro", empty)
+    t_pose, pose = sliced.get("sm_pose", empty)
     if t_baro.size == 0 or t_pose.size == 0:
         return None, None, None
     p_pa = baro[:, 0] * 1000.0
@@ -696,8 +700,63 @@ def plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
     return fig
 
 
-def plot_raw_flight(sliced, transitions, theme_name, out_path, title=None,
-                    r_meas=6.0, disable_votes=False):
+#: Panel key -> human-readable label, in the order panels are stacked.
+#: Consumed by :func:`available_panels` and by the GUI's panel picker.
+PANEL_LABELS = {
+    "baro":         "Barometer (pressure / temperature)",
+    "sm_pose":      "Altitude (Kalman)",
+    "velocity":     "Velocity (Kalman)",
+    "sm_accel":     "Acceleration (state-machine inputs)",
+    "body_accel":   "Body acceleration (IMU)",
+    "body_gyro":    "Body rotation rate (IMU)",
+    "mag":          "Magnetometer (IMU)",
+    "orientation":  "Orientation (yaw / pitch / roll)",
+    "vbat":         "Battery voltage",
+    "apogee_votes": "Apogee detection votes",
+}
+
+
+def _has(sliced, name):
+    """True when ``sliced`` carries at least one sample of stream ``name``."""
+    entry = sliced.get(name)
+    return entry is not None and entry[0].size > 0
+
+
+def available_panels(sliced, disable_votes=False):
+    """List the panel keys that ``sliced`` has data for, in stack order.
+
+    Panels are created only for stream types with at least one sample in
+    the window, so the same call decides both what
+    :func:`plot_raw_flight` draws by default and what a caller may pick
+    from via its ``panels`` argument.
+    """
+    panels = []
+    if _has(sliced, "baro"):
+        panels.append("baro")
+    if _has(sliced, "sm_pose"):
+        panels.append("sm_pose")
+        panels.append("velocity")
+    if _has(sliced, "sm_kinematics"):
+        panels.append("sm_accel")
+    if _has(sliced, "accel"):
+        panels.append("body_accel")
+    if _has(sliced, "gyro"):
+        panels.append("body_gyro")
+    if _has(sliced, "mag"):
+        panels.append("mag")
+    if _has(sliced, "orientation"):
+        panels.append("orientation")
+    if _has(sliced, "vbat"):
+        panels.append("vbat")
+    if not disable_votes and _has(sliced, "sm_kinematics") \
+            and _has(sliced, "sm_pose"):
+        panels.append("apogee_votes")
+    return panels
+
+
+def plot_raw_flight(sliced, transitions, theme_name, out_path=None,
+                    title=None, r_meas=6.0, disable_votes=False,
+                    panels=None):
     """Plot every raw stream found in ``sliced`` against time, with state
     transitions drawn as labelled vertical lines on every panel.
 
@@ -708,28 +767,23 @@ def plot_raw_flight(sliced, transitions, theme_name, out_path, title=None,
     ``r_meas`` is the assumed measurement variance used to approximate the
     NIS gate from the logged baro and Kalman-altitude streams; it should
     match ``CONFIG_FILTER_R_MILLISCALE / 1000`` for the flight build.
+
+    ``out_path`` may be ``None`` to build the figure without writing it
+    to disk — that is how the GUI embeds it in a Tk canvas. ``panels``
+    restricts the plot to a subset of :func:`available_panels`, keeping
+    the stack order regardless of the order given.
     """
     c = apply_theme(theme_name)
 
     t_gated, gated_mask, baro_alt = compute_log_gated(sliced, r_meas=r_meas)
     t_votes, votes = compute_log_votes(sliced)
 
-    panels = []
-    if sliced["baro"][0].size:
-        panels.append("baro")
-    if sliced["sm_pose"][0].size:
-        panels.append("sm_pose")
-        panels.append("velocity")
-    if sliced["sm_kinematics"][0].size:
-        panels.append("sm_accel")
-    if sliced["accel"][0].size:
-        panels.append("body_accel")
-    if sliced["gyro"][0].size:
-        panels.append("body_gyro")
-    if sliced["orientation"][0].size:
-        panels.append("orientation")
-    if votes is not None and not disable_votes:
-        panels.append("apogee_votes")
+    usable = available_panels(sliced, disable_votes=disable_votes)
+    if panels is None:
+        panels = usable
+    else:
+        wanted = set(panels)
+        panels = [p for p in usable if p in wanted]
 
     if not panels:
         raise SystemExit("error: no telemetry samples in flight window")
@@ -829,6 +883,17 @@ def plot_raw_flight(sliced, transitions, theme_name, out_path, title=None,
             ax.axhline(0, color=c["zero_line"], linewidth=0.5)
             ax.set_ylabel("ω (rad/s)")
             ax.legend(loc="upper right", ncol=3)
+        elif panel == "mag":
+            t_s, vals = sliced["mag"]
+            ax.plot(t_s, vals[:, 0], color=c["g_x"], linewidth=0.8,
+                    label="B[x]")
+            ax.plot(t_s, vals[:, 1], color=c["g_y"], linewidth=0.8,
+                    label="B[y]")
+            ax.plot(t_s, vals[:, 2], color=c["g_z"], linewidth=0.8,
+                    label="B[z]")
+            ax.axhline(0, color=c["zero_line"], linewidth=0.5)
+            ax.set_ylabel("B (gauss)")
+            ax.legend(loc="upper right", ncol=3)
         elif panel == "orientation":
             t_s, vals = sliced["orientation"]
             ax.plot(t_s, vals[:, 0], color=c["g_x"], linewidth=1.0,
@@ -840,6 +905,12 @@ def plot_raw_flight(sliced, transitions, theme_name, out_path, title=None,
             ax.axhline(0, color=c["zero_line"], linewidth=0.5)
             ax.set_ylabel("Orientation (deg)")
             ax.legend(loc="upper right", ncol=3)
+        elif panel == "vbat":
+            t_s, vals = sliced["vbat"]
+            ax.plot(t_s, vals[:, 0], color=c["filtered"], linewidth=1.5,
+                    marker=".", markersize=3, label="vbat")
+            ax.set_ylabel("Battery (V)")
+            ax.legend(loc="upper right")
         elif panel == "apogee_votes":
             vote_labels = [
                 "velocity ≤ 0",
@@ -866,9 +937,10 @@ def plot_raw_flight(sliced, transitions, theme_name, out_path, title=None,
 
     axes[-1].set_xlabel("Time (s)")
 
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=150)
-    print(f"[{theme_name}] Plot saved to {out_path}")
+    fig.tight_layout()
+    if out_path is not None:
+        fig.savefig(out_path, dpi=150)
+        print(f"[{theme_name}] Plot saved to {out_path}")
     return fig
 
 
