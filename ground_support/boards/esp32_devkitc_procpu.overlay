@@ -1,0 +1,243 @@
+/*
+ * Copyright (c) 2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Ground Support bench overlay for the ESP32-DevKitC (ESP32-WROOM-32).
+ *
+ * The ESP32 routes peripherals through the GPIO matrix, so these pins are a
+ * free choice - confirm every one of them against the actual wiring and edit
+ * the GPIO numbers below if they differ.
+ *
+ * Bus map:
+ *   I2C0  (SDA GPIO21 / SCL GPIO22)  - DPS310 barometer
+ *   SPI2  (SCLK GPIO14/ MOSI GPIO13 / MISO GPIO35) - BNO08x 9-DoF IMU
+ *                                      (CS GPIO15, INT GPIO34, RESET GPIO16,
+ *                                      PS0/WAKE GPIO17; PS1 strapped high)
+ *   UART1 (TX  GPIO4  / RX  GPIO5 )  - u-blox NEO-6M GNSS (NMEA @ 9600)
+ *   UART2 (TX  GPIO25 / RX  GPIO26)  - HC-12 433 MHz link (SET on GPIO27)
+ *   SPI3  (SCLK GPIO18/ MOSI GPIO23) - ST7789V display (CS GPIO19, DC GPIO32,
+ *                                      RESET GPIO33), MIPI-DBI 4-wire
+ *   Console/shell stay on UART0 (GPIO1/GPIO3) via the on-board USB-UART bridge,
+ *   which is why GNSS and HC-12 move to UART1/UART2 (the Pico build had GNSS on
+ *   UART0/HC-12 on UART1, but UART0 is the console here).
+ *
+ * IMU: BNO08x (BNO080/085/086) on SPI2, driven by the out-of-tree
+ * `ceva,bno08x` driver (aurora/drivers/sensor/ceva/bno08x). The part runs
+ * CEVA SH-2 fusion firmware over SHTP; the driver exposes accel/gyro/magn on
+ * the standard sensor API. SPI (not I2C) because the driver is SPI-only and
+ * SPI is the reliable BNO08x host interface. PS1 is strapped high on the
+ * board for a static SPI-mode select (output-capable GPIOs are scarce on this
+ * board, so PS1 does not get its own GPIO); PS0 stays a GPIO because it
+ * doubles as the H_WAKE line. INT is on input-only GPIO34 (needs the module's
+ * external pull-up on nINT). Note GPIO16/17 are only usable because this file
+ * un-reserves them above (WROOM-32, no PSRAM).
+ */
+
+#include <zephyr/dt-bindings/pinctrl/esp32-pinctrl.h>
+#include <zephyr/dt-bindings/display/panel.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+#include <zephyr/dt-bindings/i2c/i2c.h>
+
+/*
+ * This DevKitC carries an ESP32-WROOM-32 (no PSRAM), so GPIO16 and GPIO17 are
+ * ordinary GPIOs. The upstream esp32_devkitc board target, however, includes
+ * esp32_wrover_e_n4r8.dtsi, whose gpio-reserved-ranges mark <16 2> (GPIO16/17)
+ * as flash&psram. On a WROOM part that reservation is wrong: it clears bits
+ * 16/17 from gpio0's port_pin_mask, so gpio_pin_configure() on either pin trips
+ * the "Unsupported pin" assert -> kernel panic at init. Re-state the reserved
+ * ranges without <16 2> so the HC-12 SET line (GPIO16) and the BNO08x PS0/H_WAKE
+ * line (GPIO17) are usable. Keep the SPI-flash pins (6-11) and the not-bonded
+ * pins (20, 24, 28-31) reserved. (Do NOT do this on a WROVER: 16/17 are PSRAM.)
+ */
+&gpio0 {
+	gpio-reserved-ranges = <6 6>, <20 1>, <24 1>, <28 4>;
+};
+
+/ {
+	chosen {
+		auxspace,imu = &bno08x_0;
+		auxspace,baro = &dps310_0;
+		auxspace,telemetry-hc12 = &hc12;
+		zephyr,display = &st7789v_0;
+	};
+
+	aliases {
+		gnss = &gnss;
+	};
+
+	hc12: hc12 {
+		compatible = "auxspaceev,hc12";
+		uart = <&uart2>;
+		set-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
+
+	/* MIPI-DBI Mode-C shim over SPI3. */
+	mipi_dbi_display: mipi-dbi-display {
+		compatible = "zephyr,mipi-dbi-spi";
+		spi-dev = <&spi3>;
+		/* GPIO32/33 are on the gpio1 controller (indices 0/1); &gpio0 would
+		 * write the wrong register. DC=GPIO32, RESET=GPIO33.
+		 */
+		dc-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio1 1 GPIO_ACTIVE_LOW>;
+		write-only;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		/* 240x240 IPS panel parameters (generic ST7789V module). */
+		st7789v_0: st7789v@0 {
+			compatible = "sitronix,st7789v";
+			reg = <0>;
+			mipi-max-frequency = <20000000>;
+			mipi-mode = "MIPI_DBI_MODE_SPI_4WIRE";
+			width = <240>;
+			height = <240>;
+			x-offset = <0>;
+			y-offset = <0>;
+			vcom = <0x19>;
+			gctrl = <0x35>;
+			vrhs = <0x12>;
+			vdvs = <0x20>;
+			mdac = <0x00>;
+			gamma = <0x01>;
+			pixel-format = <PANEL_PIXEL_FORMAT_RGB_565>;
+			lcm = <0x2c>;
+			porch-param = [0c 0c 00 33 33];
+			cmd2en-param = [5a 69 02 01];
+			pwctrl1-param = [a4 a1];
+			pvgam-param = [d0 04 0d 11 13 2b 3f 54 4c 18 0d 0b 1f 23];
+			nvgam-param = [d0 04 0c 11 13 2c 3f 44 51 2f 1f 1f 20 23];
+			ram-param = [00 f0];
+			rgb-param = [cd 08 14];
+		};
+	};
+};
+
+&pinctrl {
+	/* GNSS on UART1. */
+	uart1_gnss: uart1_gnss {
+		group1 {
+			pinmux = <UART1_TX_GPIO4>;
+		};
+		group2 {
+			pinmux = <UART1_RX_GPIO5>;
+			bias-pull-up;
+		};
+	};
+
+	/* HC-12 on UART2. */
+	uart2_hc12: uart2_hc12 {
+		group1 {
+			pinmux = <UART2_TX_GPIO25>;
+		};
+		group2 {
+			pinmux = <UART2_RX_GPIO26>;
+			bias-pull-up;
+		};
+	};
+
+	/* Baro on I2C0. */
+	i2c0_ground: i2c0_ground {
+		group1 {
+			pinmux = <I2C0_SDA_GPIO21>, <I2C0_SCL_GPIO22>;
+			bias-pull-up;
+			drive-open-drain;
+			output-high;
+		};
+	};
+
+	/* BNO08x IMU on SPI2 (HSPI): SCLK + MOSI + MISO. CS is a GPIO (below).
+	 * MISO is on GPIO35 (input-only) via the GPIO matrix: NOT GPIO12, which
+	 * is the MTDI flash-voltage strapping pin - a device driving it high at
+	 * boot forces 1.8V flash and bricks the boot. GPIO35 has no internal
+	 * pull, which is fine (MISO is driven by the BNO08x while CS is asserted).
+	 */
+	spi2_bno08x: spi2_bno08x {
+		group1 {
+			pinmux = <SPIM2_SCLK_GPIO14>, <SPIM2_MOSI_GPIO13>;
+		};
+		group2 {
+			pinmux = <SPIM2_MISO_GPIO35>;
+		};
+	};
+
+	/* Display is write-only: SCLK + MOSI only, CS is a GPIO (see below). */
+	spi3_display: spi3_display {
+		group1 {
+			pinmux = <SPIM3_SCLK_GPIO18>, <SPIM3_MOSI_GPIO23>;
+		};
+	};
+};
+
+/* --- I2C0: barometer ------------------------------------------------- */
+&i2c0 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	sda-gpios = <&gpio0 21 GPIO_OPEN_DRAIN>;
+	scl-gpios = <&gpio0 22 GPIO_OPEN_DRAIN>;
+	pinctrl-0 = <&i2c0_ground>;
+	pinctrl-names = "default";
+
+	dps310_0: dps310@77 {
+		compatible = "infineon,dps310";
+		reg = <0x77>;
+		status = "okay";
+	};
+};
+
+/* --- SPI2 (HSPI): BNO08x 9-DoF IMU ----------------------------------- */
+&spi2 {
+	status = "okay";
+	pinctrl-0 = <&spi2_bno08x>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpio0 15 GPIO_ACTIVE_LOW>;
+
+	bno08x_0: bno08x@0 {
+		compatible = "ceva,bno08x";
+		reg = <0>;
+		/* BNO08x SPI max is 3 MHz (mode 3, set by the driver). */
+		spi-max-frequency = <3000000>;
+		/* INT = GPIO34. Pins 32-39 live on the gpio1 controller (gpio0 is
+		 * pins 0-31), so GPIO34 is gpio1 index 2. Using &gpio0 34 trips the
+		 * "Unsupported pin" assert -> kernel panic at init.
+		 */
+		int-gpios = <&gpio1 2 GPIO_ACTIVE_LOW>;    /* H_INTN = GPIO34 (input-only) */
+		reset-gpios = <&gpio0 16 GPIO_ACTIVE_LOW>; /* nRESET */
+		ps0-gpios = <&gpio0 17 GPIO_ACTIVE_HIGH>;  /* PS0 / H_WAKE */
+		/* PS1 strapped high in hardware for a static SPI-mode select, so
+		 * no ps1-gpios here (the binding makes it optional).
+		 */
+		report-interval-us = <10000>;
+		status = "okay";
+	};
+};
+
+/* --- UART1: u-blox NEO-6M GNSS (NMEA) ------------------------------- */
+&uart1 {
+	status = "okay";
+	current-speed = <9600>;
+	pinctrl-0 = <&uart1_gnss>;
+	pinctrl-names = "default";
+
+	gnss: gnss-nmea-generic {
+		compatible = "gnss-nmea-generic";
+		status = "okay";
+	};
+};
+
+/* --- UART2: HC-12 telemetry link ------------------------------------ */
+&uart2 {
+	status = "okay";
+	current-speed = <9600>;
+	pinctrl-0 = <&uart2_hc12>;
+	pinctrl-names = "default";
+};
+
+/* --- SPI3: ST7789V display (MIPI-DBI, GPIO chip-select) -------------- */
+&spi3 {
+	status = "okay";
+	pinctrl-0 = <&spi3_display>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpio0 19 GPIO_ACTIVE_LOW>;
+};

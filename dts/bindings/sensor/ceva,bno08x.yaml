@@ -1,0 +1,52 @@
+# Copyright (c) 2024 Sensorimotor Learning Lab (SML-Posey), MIT-licensed.
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: MIT
+#
+# Vendored from SML-Posey/posey-firmware and adapted for AURORA:
+#   - ps1-gpios is now optional (PS1 may be strapped high in hardware for a
+#     static SPI-mode select when a spare MCU GPIO is not available), and
+#   - report-interval-us configures the accel/gyro/mag report rate.
+
+description: |
+  CEVA BNO08x (BNO080 / BNO085 / BNO086) 9-DoF sensor hub, SPI interface.
+
+  The BNO08x runs CEVA's SH-2 fusion firmware and speaks the SHTP protocol.
+  In SPI mode the protocol-select straps must be PS1=1, PS0=1; PS0 doubles as
+  the host wake (H_WAKE) line. The driver drives PS0 (and PS1 when wired) and
+  toggles the interrupt (H_INTN) and reset lines.
+
+compatible: "ceva,bno08x"
+
+include: ["spi-device.yaml", "sensor-device.yaml"]
+
+properties:
+  int-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      Connection for the active-LOW host interrupt (H_INTN / nINT).
+  reset-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      Connection for the active-LOW hardware reset (nRESET).
+  ps0-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      Connection for protocol-select pin 0 (PS0). In SPI mode PS0 also serves
+      as the host wake (H_WAKE) line, so it must be an MCU GPIO.
+  ps1-gpios:
+    type: phandle-array
+    required: false
+    description: |
+      Connection for protocol-select pin 1 (PS1). Optional: omit this when PS1
+      is strapped high in hardware for a static SPI-mode select. When present,
+      the driver drives it high at init.
+  report-interval-us:
+    type: int
+    default: 10000
+    description: |
+      Interval, in microseconds, between input reports requested from the hub
+      for the accelerometer, calibrated gyroscope and calibrated magnetic
+      field. Default 10000 (100 Hz); set at or above the consumer's poll rate.

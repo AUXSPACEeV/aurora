@@ -1,0 +1,32 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+#
+# This file is provided so that the application can be compiled using Twister,
+# the Zephyr testing tool. In this file, multiple combinations can be specified,
+# so that you can easily test all of them locally or in CI.
+sample:
+  description: Ground Support Application
+  name: Ground Support
+common:
+  build_only: true
+tests:
+  app.default:
+    platform_allow:
+      - rpi_pico2/rp2350a/m33
+    integration_platforms:
+      - rpi_pico2/rp2350a/m33
+  app.debug:
+    extra_overlay_confs:
+      - debug.conf
+    platform_allow:
+      - rpi_pico2/rp2350a/m33
+    integration_platforms:
+      - rpi_pico2/rp2350a/m33
+  app.debug.sysbuild:
+    sysbuild: true
+    extra_overlay_confs:
+      - debug.conf
+    platform_allow:
+      - rpi_pico2/rp2350a/m33
+    integration_platforms:
+      - rpi_pico2/rp2350a/m33

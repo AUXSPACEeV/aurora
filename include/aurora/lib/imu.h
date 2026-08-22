@@ -36,6 +36,9 @@ struct imu_data
 {
 	struct sensor_value accel[IMU_NUM_AXES]; /**< Latest accelerometer readings (x, y, z). */
 	struct sensor_value gyro[IMU_NUM_AXES];  /**< Latest gyroscope readings (x, y, z). */
+#if defined(CONFIG_IMU_MAGNETOMETER)
+	struct sensor_value magn[IMU_NUM_AXES];  /**< Latest magnetometer readings (x, y, z), Gauss. */
+#endif /* CONFIG_IMU_MAGNETOMETER */
 };
 
 /**
@@ -129,6 +132,35 @@ int imu_sensor_value_to_orientation(const struct imu_data *data,
 				    double dt_s,
 				    const double gyro_bias[IMU_NUM_AXES],
 				    double *orientation);
+
+#if defined(CONFIG_IMU_MAGNETOMETER)
+/**
+ * @brief Compute a tilt-compensated magnetic heading from a 9-DoF sample.
+ *
+ * Uses the accelerometer to recover the unit's tilt and de-rotates the
+ * magnetometer into the horizontal plane, so the heading stays valid when
+ * the unit is not held level.  The body frame is remapped with the same
+ * @c CONFIG_IMU_UP_AXIS_* convention as @ref imu_sensor_value_to_orientation:
+ * the configured up-axis becomes world Z and the two remaining axes are the
+ * local forward (X) and lateral (Y).  The heading returned is that of the
+ * forward axis.
+ *
+ * Output is the magnetic heading in degrees, 0 = magnetic north, increasing
+ * clockwise (0..360).  Magnetic declination is @b not applied — add the local
+ * declination at the call site for true north.  The result is only as good as
+ * the magnetometer calibration: hard/soft-iron offsets must be removed
+ * upstream, and the sign/zero reference may need a per-unit offset depending
+ * on how the sensor is mounted.
+ *
+ * @param data        Pointer to the IMU sample (accelerometer + magnetometer).
+ * @param heading_out Output: magnetic heading of the forward axis in degrees,
+ *                    normalized to [0, 360).  Must be a valid pointer.
+ *
+ * @retval 0 on success.
+ * @retval -EINVAL if @p data or @p heading_out is NULL.
+ */
+int imu_sensor_value_to_heading(const struct imu_data *data, double *heading_out);
+#endif /* CONFIG_IMU_MAGNETOMETER */
 
 /** @} */
 

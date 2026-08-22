@@ -294,6 +294,11 @@ static int imu_acquire(const struct device *dev)
 	if (ret == 0) {
 		ret = sensor_channel_get(dev, SENSOR_CHAN_GYRO_XYZ, sample.gyro);
 	}
+#if defined(CONFIG_IMU_MAGNETOMETER)
+	if (ret == 0) {
+		ret = sensor_channel_get(dev, SENSOR_CHAN_MAGN_XYZ, sample.magn);
+	}
+#endif /* CONFIG_IMU_MAGNETOMETER */
 	k_sched_unlock();
 
 	if (ret != 0) {
@@ -394,6 +399,57 @@ int imu_sensor_value_to_orientation(const struct imu_data *data,
 
 	return 0;
 }
+
+#if defined(CONFIG_IMU_MAGNETOMETER)
+/* imu_sensor_value_to_heading - see imu.h */
+int imu_sensor_value_to_heading(const struct imu_data *data, double *heading_out)
+{
+	if (data == NULL || heading_out == NULL)
+		return -EINVAL;
+
+	const int idx = CONFIG_IMU_UP_AXIS_INDEX;
+	const int sign = CONFIG_IMU_UP_AXIS_SIGN;
+
+	/* Same body-axis remap as imu_sensor_value_to_orientation(): the
+	 * configured up-axis becomes world Z, the two remaining axes are the
+	 * local forward (X) and lateral (Y).  Applied to both accel and magn
+	 * so the tilt recovered from gravity lines up with the field vector.
+	 */
+	const int x_idx = (idx + 1) % 3;
+	const int y_idx = (idx + 2) % 3;
+
+	const double ax = out_ev(&data->accel[x_idx]);
+	const double ay = out_ev(&data->accel[y_idx]);
+	const double az = (double)sign * out_ev(&data->accel[idx]);
+
+	const double mx = out_ev(&data->magn[x_idx]);
+	const double my = out_ev(&data->magn[y_idx]);
+	const double mz = (double)sign * out_ev(&data->magn[idx]);
+
+	/* Tilt from gravity: roll about forward X, pitch about lateral Y. */
+	const double roll = atan2(ay, az);
+	const double pitch = atan2(-ax, sqrt(ay * ay + az * az));
+
+	const double sr = sin(roll), cr = cos(roll);
+	const double sp = sin(pitch), cp = cos(pitch);
+
+	/* De-rotate the measured field into the horizontal plane. */
+	const double xh = mx * cp + mz * sp;
+	const double yh = mx * sr * sp + my * cr - mz * sr * cp;
+
+	/* atan2(-yh, xh): 0 when the forward axis points at the field
+	 * (magnetic north), increasing clockwise as the unit yaws right.
+	 */
+	double heading = atan2(-yh, xh) * (180.0 / M_PI);
+
+	if (heading < 0.0) {
+		heading += 360.0;
+	}
+
+	*heading_out = heading;
+	return 0;
+}
+#endif /* CONFIG_IMU_MAGNETOMETER */
 
 #if defined(CONFIG_DATA_LOGGER_BIN)
 void log_imu_data(const struct imu_data *imu)
