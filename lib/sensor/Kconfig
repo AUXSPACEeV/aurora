@@ -188,4 +188,34 @@ config BARO_FREQUENCY
 	default 100
 	range 1 1000
 
+config BARO_REF_TRACK_TAU_MS
+	int "Ground reference tracking time constant (ms)"
+	depends on BARO
+	default 1000
+	range 100 60000
+	help
+	  Time constant of the low-pass filter that keeps the barometric
+	  ground reference on ambient while the vehicle is on the pad, so
+	  that reported altitude reads ~0 m there however far the sensor has
+	  drifted since power-on. The reference freezes at liftoff, so from
+	  then on altitude is height above the pad.
+
+	  The value sets how much pad drift survives into the altitude the
+	  ARMED->BOOST gate sees: a pad drifting at rate v biases reported
+	  altitude by about v * tau. That cuts both ways against
+	  BOOST_ALTITUDE. Too large and a sensor still settling after
+	  power-on reads above the threshold on the pad, so a knock can
+	  complete the boost gate on its own; too large in the other
+	  direction and a drifting sensor sits far enough below zero that a
+	  real liftoff never reaches the threshold at all.
+
+	  The default was picked against a recorded flight whose barometer
+	  drifted ~1 m/s on the pad and ~4 m/s during the first seconds after
+	  boot: it holds pad altitude inside +-1.5 m in the steady state and
+	  keeps the boot transient under a 5 m BOOST_ALTITUDE. Raising it
+	  towards a minute reproduces the original bug. Lowering it costs a
+	  slice of the climb between ignition and detection, which is small
+	  because the filter carries altitude on inertial velocity between
+	  barometer updates.
+
 endmenu

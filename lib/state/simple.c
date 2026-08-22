@@ -458,6 +458,32 @@ bool sm_inflight(void)
 	return false;
 }
 
+/* sm_on_pad - see state.h */
+bool sm_on_pad(void)
+{
+	switch (sm_get_state()) {
+	case SM_IDLE:
+	case SM_ARMED:
+		return true;
+
+	case SM_BOOST:
+	case SM_BURNOUT:
+	case SM_APOGEE:
+	case SM_MAIN:
+	case SM_REDUNDANT:
+	case SM_LANDED:
+	case SM_ERROR:
+		/* Airborne, or past the flight: LANDED is not the pad the
+		 * flight started from, and SM_ERROR can be entered mid-flight
+		 * by the apogee/redundant timeouts, so neither may re-zero a
+		 * pad-referenced quantity.
+		 */
+		return false;
+	}
+
+	return false;
+}
+
 /* sm_state_str – see simple.h */
 const char *sm_state_str(enum sm_state state)
 {

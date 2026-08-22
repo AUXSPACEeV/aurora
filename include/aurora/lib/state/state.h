@@ -156,6 +156,27 @@ enum sm_state sm_get_state(void);
 bool sm_inflight(void);
 
 /**
+ * @brief Return whether the vehicle is still sitting on the pad.
+ *
+ * True in the pre-liftoff states only (IDLE and, where the backend has
+ * one, ARMED).  Everything from liftoff onward reports false, and so do
+ * the terminal states: after touchdown the flight is over, and
+ * @c SM_ERROR may have been entered mid-flight, so neither may be
+ * treated as "on the pad".
+ *
+ * Note this is deliberately *not* the complement of @ref sm_inflight():
+ * the landed and error states report false to both.
+ *
+ * Consumers use it to decide whether a pad-referenced quantity may still
+ * be re-zeroed -- the barometric ground reference does exactly that, and
+ * must stay frozen from liftoff onward so that altitude keeps meaning
+ * height above the pad.
+ *
+ * @return True while the vehicle is on the pad, false otherwise.
+ */
+bool sm_on_pad(void);
+
+/**
  * @brief Identify which state machine implementation is active.
  *
  * External consumers use it to pick the right @c sm_state enum mapping.

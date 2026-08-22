@@ -561,7 +561,10 @@ def plot_flight(t, noisy_press, baro_alt, filtered_alt, filtered_vel,
                          label=f"NIS-gated ({len(idx)})", zorder=5)
     mark_computed_apogee(ax_press)
     mark_apogee(ax_press)
-    ax_press.set_ylabel("Pressure (hPa)")
+    # Inverted below so the trace reads like the altitude panel: up =
+    # climbing.  Labelled as such, or a rising pressure looks like a
+    # descent.
+    ax_press.set_ylabel("Pressure (hPa)\n(inverted: up = climb)")
     if title is not None:
         ax_press.set_title(title, color=c["brand"], fontweight="bold")
     ax_press.legend(loc="upper right")
@@ -818,7 +821,10 @@ def plot_raw_flight(sliced, transitions, theme_name, out_path=None,
                            color=c["apogee"], marker="x", s=28,
                            linewidths=1.2, zorder=5,
                            label=f"NIS-gated (~{len(idx)})")
-            ax.set_ylabel("Pressure (hPa)")
+            # Inverted so the pressure trace reads like the altitude
+            # panel below it: up = climbing.  Say so on the axis, or a
+            # rising pressure looks like a descent.
+            ax.set_ylabel("Pressure (hPa)\n(inverted: up = climb)")
             ax.invert_yaxis()
             ax2 = ax.twinx()
             ax2.plot(t_s, vals[:, 1], color=c["velocity"], linewidth=0.8,

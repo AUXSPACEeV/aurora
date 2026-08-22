@@ -28,6 +28,10 @@
 #include <aurora/lib/sim.h>
 #endif /* CONFIG_AURORA_FAKE_SENSORS */
 
+#if defined(CONFIG_AURORA_STATE_MACHINE)
+#include <aurora/lib/state/state.h>
+#endif /* CONFIG_AURORA_STATE_MACHINE */
+
 #if defined(CONFIG_AURORA_FAKE_SENSORS_REPLAY)
 #include "replay.h"
 #endif /* CONFIG_AURORA_FAKE_SENSORS_REPLAY */
@@ -280,8 +284,36 @@ int baro_measure(const struct device *dev, struct baro_data *out)
 /** R·L / (g·M) exponent for the hypsometric formula. */
 #define ISA_RL_OVER_GM 0.190263
 
-/** Ground-level reference pressure in kPa (0 = not set). */
+/*
+ * Ground-level reference pressure in kPa (0 = not set), and the uptime of
+ * the sample that last moved it.
+ *
+ * The reference is what makes the altitude handed to the state machine mean
+ * "height above the pad".  It cannot be a single latched sample: a barometer
+ * reads several kPa off while its die is still settling after power-on, and
+ * ambient keeps moving with the weather afterwards, so a reference frozen at
+ * boot is worth hundreds of metres of bias by the time the vehicle actually
+ * launches.  With the ARMED->BOOST gate requiring altitude >= T_H, that bias
+ * silently makes liftoff undetectable.
+ *
+ * So while the vehicle is on the pad the reference is low-pass tracked onto
+ * the current pressure: the reported altitude sits at ~0 m no matter how far
+ * the sensor or the weather has drifted since boot.  The moment the vehicle
+ * leaves the pad the reference freezes, and from then on altitude is height
+ * above the pad as it was at liftoff.
+ *
+ * The time constant is what separates the two: drift is slow (a barometer
+ * warming up moves ~1 m/s of apparent altitude at worst) while a boost climbs
+ * an order of magnitude faster, so a tracker of a few seconds absorbs the
+ * former while barely touching the latter.  Winding it up towards a minute
+ * puts the lag on a drifting pad past T_H and breaks detection again -- see
+ * BARO_REF_TRACK_TAU_MS.
+ */
 static double ref_pressure_kpa;
+static int64_t ref_last_ms;
+
+/** Low-pass time constant for on-pad reference tracking (ms). */
+#define BARO_REF_TAU_MS ((double)CONFIG_BARO_REF_TRACK_TAU_MS)
 
 static double baro_pressure_to_altitude(double press_kpa)
 {
@@ -293,21 +325,77 @@ static double baro_pressure_to_altitude(double press_kpa)
 	       (1.0 - pow(press_kpa / ref_pressure_kpa, ISA_RL_OVER_GM));
 }
 
+/**
+ * @brief May the ground reference still be re-zeroed onto ambient?
+ *
+ * Only while the vehicle is on the pad.  Without a state machine in the
+ * build there is no flight to freeze for, so tracking always runs.
+ */
+static bool baro_ref_may_track(void)
+{
+#if defined(CONFIG_AURORA_STATE_MACHINE)
+	return sm_on_pad();
+#else
+	return true;
+#endif /* CONFIG_AURORA_STATE_MACHINE */
+}
+
+/**
+ * @brief Feed one pad sample into the ground reference.
+ *
+ * Seeds the reference on the first sample ever, then eases it towards
+ * @p press_kpa with a first-order low pass for as long as the vehicle is on
+ * the pad.  Off the pad the reference is left exactly where liftoff found it.
+ *
+ * The decay is computed from the real elapsed time rather than a fixed
+ * per-sample factor, so the time constant means the same thing whatever
+ * BARO_FREQUENCY is set to and a stalled sensor cannot quietly speed it up.
+ */
+static void baro_track_reference(double press_kpa)
+{
+	int64_t now_ms = k_uptime_get();
+
+	if (ref_pressure_kpa <= 0.0) {
+		ref_pressure_kpa = press_kpa;
+		ref_last_ms = now_ms;
+		LOG_INF("Seeded ref pressure at %f kPa", press_kpa);
+		return;
+	}
+
+	int64_t dt_ms = now_ms - ref_last_ms;
+
+	/* Always advance the clock, so the first sample back on the pad after
+	 * a disarm is not handed the whole flight as its dt and snapped onto
+	 * ambient in one step.
+	 */
+	ref_last_ms = now_ms;
+
+	if (!baro_ref_may_track() || dt_ms <= 0) {
+		return;
+	}
+
+	/* Clamped so a long gap between samples (a sensor that dropped out, a
+	 * disarm after a flight) converges promptly rather than jumping.
+	 */
+	if ((double)dt_ms > BARO_REF_TAU_MS) {
+		dt_ms = (int64_t)BARO_REF_TAU_MS;
+	}
+
+	double alpha = 1.0 - exp(-(double)dt_ms / BARO_REF_TAU_MS);
+
+	ref_pressure_kpa += alpha * (press_kpa - ref_pressure_kpa);
+}
+
 /* baro_set_reference – see baro.h */
 int baro_set_reference(double ref_kpa)
 {
-	static bool ref_set = false;
-
 	if (ref_kpa <= 0.0)
 		return -EINVAL;
 
-	if (!ref_set)
-	{
-		ref_pressure_kpa = ref_kpa;
-		ref_set = true;
-	}
+	ref_pressure_kpa = ref_kpa;
+	ref_last_ms = k_uptime_get();
+	LOG_INF("Set ref pressure to %f kpa", ref_kpa);
 
-	/* Success even if reference is already set */
 	return 0;
 }
 
@@ -319,15 +407,13 @@ int baro_sensor_value_to_altitude(const struct sensor_value *press, double *alti
 
 	double press_kpa = (double)press->val1 + (double)press->val2 / 1e6;
 
-	if (!isfinite(press_kpa)) {
+	if (!isfinite(press_kpa) || press_kpa <= 0.0) {
 		LOG_WRN_RATELIMIT("implausible pressure %.3f kPa; sample dropped",
 				  press_kpa);
 		return -EDOM;
 	}
 
-	if (baro_set_reference(press_kpa) != 0) {
-		return -EINVAL;
-	}
+	baro_track_reference(press_kpa);
 
 	double altitude = baro_pressure_to_altitude(press_kpa);
 
