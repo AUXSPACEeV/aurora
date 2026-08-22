@@ -182,8 +182,11 @@ void sm_get_inputs(struct sm_inputs *out);
 /**
  * @brief Get the state machine armed state.
  *
- * When an RBF interlock is installed and configured,
- * return its state.
+ * With the RBF arm source (CONFIG_AURORA_STATE_MACHINE_RBF) this returns the
+ * mechanical interlock's debounced state.  With tilt arming
+ * (CONFIG_AURORA_STATE_MACHINE_ARM_TILT) there is no input-level interlock, so
+ * it always reports armed and the orientation gate in the backend is the real
+ * arm/disarm control.
  *
  * @retval 0 if disarmed, 1 if armed.
  */

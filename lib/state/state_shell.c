@@ -120,11 +120,11 @@ static int cmd_status(const struct shell *sh, size_t argc, char **argv)
 	shell_print(sh, "  log_ready:   %s", in.log_ready ? "yes" : "NO");
 	shell_print(sh, "  log_busy:    %s", in.log_busy ? "YES (converting)" : "no");
 	shell_print(sh, "  calibrated:  %s", in.calibrated ? "yes" : "NO");
-#if defined(CONFIG_SIMPLE_STATE)
+#if defined(CONFIG_SIMPLE_STATE) && defined(CONFIG_AURORA_STATE_MACHINE_ARM_TILT)
 	shell_print(sh, "  elevation:   %.1f deg (arm >= %d, disarm < %d)",
 		    sm_orientation_elevation_deg(in.orientation),
 		    th.T_OA, th.T_OI);
-#endif /* CONFIG_SIMPLE_STATE */
+#endif /* CONFIG_SIMPLE_STATE && CONFIG_AURORA_STATE_MACHINE_ARM_TILT */
 	shell_print(sh, "  orientation: %.1f %.1f %.1f deg",
 		    in.orientation[0], in.orientation[1], in.orientation[2]);
 
