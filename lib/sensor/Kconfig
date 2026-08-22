@@ -72,6 +72,19 @@ config IMU_TRIGGER
 		This option enables functionality for the IMU
 		to run triggers in an interrupt context.
 
+config IMU_MAGNETOMETER
+	bool "IMU magnetometer (9-DoF)"
+	depends on IMU
+	default y if MPU9250_MAGN_EN
+	help
+	  Read the magnetometer channel (SENSOR_CHAN_MAGN_XYZ) alongside the
+	  accelerometer and gyroscope, and enable imu_sensor_value_to_heading()
+	  for a tilt-compensated magnetic heading. Enable for 9-DoF parts (e.g.
+	  the MPU-9250 with its AK8963, or the BNO08x); leave off for 6-DoF
+	  parts (LSM6DSO). It adds one channel read per sample and grows the
+	  imu_data zbus payload by three sensor_values, so it is opt-in rather
+	  than always on.
+
 # Only show frequency options when IMU is enabled
 config IMU_FREQUENCY
 	int "IMU update frequency (Hz)"
@@ -168,7 +181,7 @@ menu "Barometric Pressure Sensor (BARO)"
 config BARO
 	bool "Support for Baro"
 	depends on AURORA_SENSORS
-	default y if MS5607 || LPS22HH || BMP581
+	default y if MS5607 || LPS22HH || BMP581 || DPS310
 	help
 		This option enables functionality for barometric pressure
 		sensors.

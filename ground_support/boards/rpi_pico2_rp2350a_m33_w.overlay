@@ -1,0 +1,185 @@
+/*
+ * Copyright (c) 2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Ground Support bench overlay for the Raspberry Pi Pico 2 W (RP2350A).
+ *
+ * Bus map (matches the hardware brief, with one correction):
+ *   I2C0  (SDA GP4 / SCL GP5)  - MPU-9250 9-DoF IMU + DPS310 barometer
+ *   UART0 (TX  GP0 / RX  GP1)  - u-blox NEO-6M GNSS (NMEA @ 9600)
+ *   UART1 (TX  GP20/ RX  GP21) - HC-12 433 MHz link (SET on GP3, active-low)
+ *   SPI0  (SCK GP18/ MOSI GP19)- ST7789V display, MIPI-DBI 4-wire
+ *   Console/shell live on USB CDC.
+ *
+ * NOTE on the display: the brief lists the ST7789V on "I2C1", but the
+ * ST7789V controller has no I2C interface - it is an SPI (MIPI-DBI Mode C)
+ * part, so it is wired on SPI0 here. The SPI/DC/RESET/CS pins below and the
+ * GNSS UART pins are sensible Pico defaults; confirm them against the actual
+ * wiring and adjust the pinmux / gpio numbers if they differ.
+ *
+ * NOTE on the IMU: the target 9-DoF part is a BNO08x, which has no in-tree
+ * Zephyr driver yet. The MPU-9250 (accel+gyro+AK8963 magnetometer) is an
+ * in-tree single-chip 9-DoF stand-in that exercises the same sensor-API path
+ * (SENSOR_CHAN_ACCEL/GYRO/MAGN_XYZ). Swap this node for the BNO08x node once
+ * its driver is available; nothing above the sensor API changes.
+ */
+
+#include <zephyr/dt-bindings/pinctrl/rpi-pico-rp2350a-pinctrl.h>
+#include <zephyr/dt-bindings/display/panel.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+#include <zephyr/dt-bindings/i2c/i2c.h>
+
+/ {
+	chosen {
+		zephyr,console = &cdc_acm_uart;
+		zephyr,shell-uart = &cdc_acm_uart;
+		auxspace,telemetry-hc12 = &hc12;
+		auxspace,imu = &mpu9250_0;
+		auxspace,baro = &dps310_0;
+		zephyr,display = &st7789v_0;
+	};
+
+	aliases {
+		gnss = &gnss;
+	};
+
+	hc12: hc12 {
+		compatible = "auxspaceev,hc12";
+		uart = <&uart1>;
+		set-gpios = <&gpio0 3 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
+
+	/*
+	 * MIPI-DBI Mode-C shim over SPI0. dc-gpios / reset-gpios are the
+	 * display's command/data and reset lines; adjust to match wiring.
+	 */
+	mipi_dbi_display: mipi-dbi-display {
+		compatible = "zephyr,mipi-dbi-spi";
+		spi-dev = <&spi0>;
+		dc-gpios = <&gpio0 8 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio0 9 GPIO_ACTIVE_LOW>;
+		write-only;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		/* 240x240 IPS panel parameters (generic ST7789V module). */
+		st7789v_0: st7789v@0 {
+			compatible = "sitronix,st7789v";
+			reg = <0>;
+			mipi-max-frequency = <20000000>;
+			mipi-mode = "MIPI_DBI_MODE_SPI_4WIRE";
+			width = <240>;
+			height = <240>;
+			x-offset = <0>;
+			y-offset = <0>;
+			vcom = <0x19>;
+			gctrl = <0x35>;
+			vrhs = <0x12>;
+			vdvs = <0x20>;
+			mdac = <0x00>;
+			gamma = <0x01>;
+			pixel-format = <PANEL_PIXEL_FORMAT_RGB_565>;
+			lcm = <0x2c>;
+			porch-param = [0c 0c 00 33 33];
+			cmd2en-param = [5a 69 02 01];
+			pwctrl1-param = [a4 a1];
+			pvgam-param = [d0 04 0d 11 13 2b 3f 54 4c 18 0d 0b 1f 23];
+			nvgam-param = [d0 04 0c 11 13 2c 3f 44 51 2f 1f 1f 20 23];
+			ram-param = [00 f0];
+			rgb-param = [cd 08 14];
+		};
+	};
+};
+
+&pinctrl {
+	/* HC-12 on UART1 (TX GP20, RX GP21). RP2350's UART1 uses the primary
+	 * UART function only on GP{4,8,20,24}/{5,9,21,25}; the GPx alt-function
+	 * UART pins are not usable (the _UART_ALT pinmux macro is undefined in
+	 * this Zephyr). GP20/21 avoid the I2C0 (GP4/5) and display (GP8/9) pins.
+	 */
+	uart1_default: uart1_default {
+		group1 {
+			pinmux = <UART1_TX_P20>;
+		};
+		group2 {
+			pinmux = <UART1_RX_P21>;
+			input-enable;
+		};
+	};
+
+	/* Display is write-only: SCK + MOSI only, CS is a GPIO (see below). */
+	spi0_display: spi0_display {
+		group1 {
+			pinmux = <SPI0_SCK_P18>, <SPI0_TX_P19>;
+		};
+	};
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+/* --- I2C0: IMU + barometer ------------------------------------------- */
+&i2c0 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_FAST>;
+	pinctrl-0 = <&i2c0_default>;
+	pinctrl-names = "default";
+
+	mpu9250_0: mpu9250@68 {
+		compatible = "invensense,mpu9250";
+		reg = <0x68>;
+		status = "okay";
+		/* Polled (no irq-gpios): the imu lib falls back to polling when
+		 * no data-ready trigger is available. Wire INT and enable
+		 * CONFIG_MPU9250_TRIGGER to move to interrupt-driven reads.
+		 */
+		gyro-sr-div = <0>;
+		gyro-dlpf = <41>;
+		gyro-fs = <1000>;
+		accel-fs = <16>;
+		accel-dlpf = "44.8";
+	};
+
+	dps310_0: dps310@77 {
+		compatible = "infineon,dps310";
+		reg = <0x77>;
+		status = "okay";
+	};
+};
+
+/* --- UART0: u-blox NEO-6M GNSS (NMEA) -------------------------------- */
+&uart0 {
+	status = "okay";
+	current-speed = <9600>;
+	pinctrl-0 = <&uart0_default>;
+	pinctrl-names = "default";
+
+	gnss: gnss-nmea-generic {
+		compatible = "gnss-nmea-generic";
+		status = "okay";
+	};
+};
+
+/* --- UART1: HC-12 telemetry link ------------------------------------ */
+&uart1 {
+	status = "okay";
+	current-speed = <9600>;
+	pinctrl-0 = <&uart1_default>;
+	pinctrl-names = "default";
+};
+
+/* --- SPI0: ST7789V display (MIPI-DBI, GPIO chip-select) -------------- */
+&spi0 {
+	status = "okay";
+	pinctrl-0 = <&spi0_display>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+};
+
+zephyr_udc0: &usbd {
+	cdc_acm_uart: cdc_acm_uart {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};

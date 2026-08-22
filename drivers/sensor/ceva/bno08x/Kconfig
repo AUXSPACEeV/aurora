@@ -1,0 +1,16 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: MIT
+
+config CEVA_BNO08X
+	bool "CEVA BNO08x (BNO080/085/086) 9-DoF IMU"
+	default y
+	depends on DT_HAS_CEVA_BNO08X_ENABLED
+	depends on SENSOR
+	depends on SPI
+	help
+	  Enable the CEVA BNO08x sensor-hub driver (BNO080/085/086) over SPI.
+	  The device runs CEVA's SH-2 fusion firmware and communicates with the
+	  SHTP protocol; this driver vendors CEVA's sh2 library and exposes the
+	  accelerometer, calibrated gyroscope and calibrated magnetic-field
+	  reports through the standard Zephyr sensor API
+	  (SENSOR_CHAN_ACCEL_XYZ / GYRO_XYZ / MAGN_XYZ).

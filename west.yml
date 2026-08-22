@@ -26,3 +26,4 @@ manifest:
           - mcuboot    # required as bootloader for ESP32
           - mbedtls       # required by BT host crypto (pad_link / BLE)
           - tf-psa-crypto # PSA crypto provider used by mbedtls
+          - lvgl          # required for the Ground Support ST7789 display UI
