@@ -27,16 +27,34 @@ config SIMPLE_STATE
 
 endchoice
 
+choice AURORA_STATE_MACHINE_ARM_SOURCE
+	prompt "Arming source"
+	default AURORA_STATE_MACHINE_ARM_TILT
+	help
+	  How the vehicle is armed on the pad before flight.  Exactly one
+	  scheme is active; the state machine never requires both at once.
+
+config AURORA_STATE_MACHINE_ARM_TILT
+	bool "Tilt / orientation"
+	help
+	  Arm by raising the rocket past ARM_ANGLE elevation and disarm by
+	  laying it back below DISARM_ANGLE.  This is the original arming
+	  scheme and needs no extra hardware: sm_inputs.armed is always taken
+	  as armed and the orientation gate is the actual safety interlock.
+
 config AURORA_STATE_MACHINE_RBF
-	bool "Remove-before-flight arm input"
+	bool "Remove-before-flight input"
 	depends on GPIO
 	help
 	  Take the arm signal from the mechanical safety interlock -
 	  streamer, key or shorting plug - on the GPIO selected by the
-	  auxspace,rbf dt chosen node, instead of from the application.
+	  auxspace,rbf dt chosen node, instead of from orientation.
 	  The line is asserted while the interlock is installed (safe); the
-	  vehicle counts as armed once it is pulled.  When enabled, the pin
-	  overrides sm_inputs.armed on every update.
+	  vehicle counts as armed once it is pulled.  The pin overrides
+	  sm_inputs.armed on every update and the orientation gate (ARM_ANGLE
+	  / DISARM_ANGLE) is not applied in this mode.
+
+endchoice
 
 config AURORA_STATE_MACHINE_RBF_DEBOUNCE_MS
 	int "RBF input debounce window (ms)"
@@ -161,6 +179,7 @@ config ARM_ANGLE
 	help
 		Angle threshold in degrees for arming the system.
 		0 degrees is horizontal, 90 degrees is vertical.
+		Only used with AURORA_STATE_MACHINE_ARM_TILT.
 
 config DISARM_ANGLE
 	int "Angle threshold for disarming"
@@ -168,6 +187,7 @@ config DISARM_ANGLE
 	help
 		Angle threshold in degrees for disarming the system.
 		0 degrees is horizontal, 90 degrees is vertical.
+		Only used with AURORA_STATE_MACHINE_ARM_TILT.
 
 config DISARM_ANGLE_SAMPLES
 	int "Number of disarm angle samples"
@@ -176,6 +196,7 @@ config DISARM_ANGLE_SAMPLES
 	help
 		Number of consecutive samples with angle < DISARM_ANGLE to
 		disarm.
+		Only used with AURORA_STATE_MACHINE_ARM_TILT.
 
 config BOOST_TIMER_MS
 	int "Boost timer duration"

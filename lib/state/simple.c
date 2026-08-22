@@ -123,6 +123,25 @@ static inline bool arm_to_boost_conditions_met(const struct sm_inputs *in)
 		in->altitude >= th.T_H);
 }
 
+/*
+ * Orientation arm gate.  Only part of the arm/disarm decision when the
+ * vehicle is armed by tilt: with an RBF interlock the pin is the sole arm
+ * authority (see sm_get_armed()), so the elevation is ignored and the gate
+ * always passes.
+ */
+#if defined(CONFIG_AURORA_STATE_MACHINE_ARM_TILT)
+static inline bool arm_elevation_reached(const struct sm_inputs *in)
+{
+	return sm_orientation_elevation_deg(in->orientation) >= th.T_OA;
+}
+#else
+static inline bool arm_elevation_reached(const struct sm_inputs *in)
+{
+	ARG_UNUSED(in);
+	return true;
+}
+#endif /* CONFIG_AURORA_STATE_MACHINE_ARM_TILT */
+
 /*-----------------------------------------------------------
  * Initialization / Deinitialization (see state_internal.h)
  *----------------------------------------------------------*/
@@ -160,7 +179,9 @@ void sm_backend_deinit(void)
 /* sm_backend_step – see state_internal.h */
 void sm_backend_step(const struct sm_inputs *in, double previous_altitude)
 {
-	static int n_oi;
+#if defined(CONFIG_AURORA_STATE_MACHINE_ARM_TILT)
+	static int n_oi; /**< Consecutive below-T_OI samples, for tilt disarm. */
+#endif /* CONFIG_AURORA_STATE_MACHINE_ARM_TILT */
 	static bool log_busy_announced;
 
 	if (!in->log_busy) {
@@ -180,8 +201,10 @@ void sm_backend_step(const struct sm_inputs *in, double previous_altitude)
 	* IDLE -> ARMED
 	*----------------------------------------------------------*/
 	case SM_IDLE:
+#if defined(CONFIG_AURORA_STATE_MACHINE_ARM_TILT)
 		n_oi = 0;
-		if (in->armed && sm_orientation_elevation_deg(in->orientation) >= th.T_OA) {
+#endif /* CONFIG_AURORA_STATE_MACHINE_ARM_TILT */
+		if (in->armed && arm_elevation_reached(in)) {
 			if (in->log_busy) {
 				if (!log_busy_announced) {
 					sm_event("arm deferred: flight log busy");
@@ -230,6 +253,11 @@ void sm_backend_step(const struct sm_inputs *in, double previous_altitude)
 			break;
 		}
 
+#if defined(CONFIG_AURORA_STATE_MACHINE_ARM_TILT)
+		/* Tilt arming: laying the rocket back down disarms it.  With an
+		 * RBF interlock the pin is the only disarm authority (handled by
+		 * the !in->armed check above), so orientation is not consulted.
+		 */
 		if (sm_orientation_elevation_deg(in->orientation) < th.T_OI) {
 			if (++n_oi < th.N_OI)
 				break;
@@ -242,6 +270,7 @@ void sm_backend_step(const struct sm_inputs *in, double previous_altitude)
 			break;
 		}
 		n_oi = 0;
+#endif /* CONFIG_AURORA_STATE_MACHINE_ARM_TILT */
 
 		/* Timer is running_timers running. Check conditions */
 		if (running_timers[TIMER_DT_AB] == 1) {
@@ -255,7 +284,9 @@ void sm_backend_step(const struct sm_inputs *in, double previous_altitude)
 
 			/* At this point, conditions are met. Is the timer done as well? */
 			if (TIMER_EXPIRED(&dt_ab)) {
+#if defined(CONFIG_AURORA_STATE_MACHINE_ARM_TILT)
 				n_oi = 0;
+#endif /* CONFIG_AURORA_STATE_MACHINE_ARM_TILT */
 				sm_event("orientation, altitude and timing threshold reached");
 				/* Congrats! BOOST detected! */
 				sm_transition(SM_BOOST);
