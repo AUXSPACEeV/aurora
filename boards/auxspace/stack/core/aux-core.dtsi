@@ -1,0 +1,205 @@
+/*
+ * Copyright (c) 2025-2026 Auxspace e.V.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * AUX-Stack-Core hardware:
+ *   - Native SDHC SD card (espressif,esp32-sdhc slot, 4-bit) instead of the
+ *     rev.1 SPI-attached card.
+ *   - Updated barometer to the Bosch BMP581.
+ *   - Separate Remove Before Flight Pin.
+ *   - Extra Status LEDs
+ *   - USB-C
+ */
+
+#include <zephyr/dt-bindings/adc/adc.h>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <zephyr/dt-bindings/input/esp32-touch-sensor-input.h>
+#include <zephyr/dt-bindings/pwm/pwm.h>
+#include <zephyr/dt-bindings/sensor/lsm6dso.h>
+
+/ {
+
+	model = "Auxspace e.V. ESP32S3-AUX-Stack-Core";
+	compatible = "espressif,esp32s3";
+
+	aliases {
+		i2c-0 = &i2c0;
+		i2c-1 = &i2c1;
+		watchdog0 = &wdt0;
+		uart-0 = &uart0;
+		sw0 = &button0;
+	};
+
+	chosen {
+		zephyr,sram = &sram1;
+		zephyr,console = &usb_serial;
+		zephyr,shell-uart = &usb_serial;
+		zephyr,flash = &flash0;
+		zephyr,code-partition = &slot0_partition;
+		zephyr,bt-hci = &esp32_bt_hci;
+	};
+
+	buttons: buttons {
+	compatible = "gpio-keys";
+
+		button0: button_0 {
+			gpios = <&gpio0 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "BOOT Button";
+			zephyr,code = <INPUT_KEY_0>;
+		};
+	};
+
+	buzzer0: buzzer_0 {
+		compatible = "auxspaceev,pwm-buzzer";
+		pwms = <&ledc0 0 PWM_MSEC(200) PWM_POLARITY_NORMAL>;
+		status = "disabled";
+	};
+
+	pwmleds: pwmleds {
+		compatible = "pwm-leds";
+		status = "disabled";
+
+		red_pwm_led: led_pwm_0 {
+			pwms = <&ledc0 1 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
+			label = "RED Notifier LED";
+		};
+	};
+
+	status_leds: status-leds {
+		compatible = "gpio-leds";
+
+		sd_activity_led: led_sd {
+			gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
+			label = "SD Activity LED";
+		};
+	};
+
+};
+
+&pinctrl {
+	sdmmc_default: sdmmc_default {
+		group1 {
+			pinmux = <SDHC0_CLKOUT_GPIO6>,
+				 <SDHC0_CMD_GPIO5>,
+				 <SDHC0_DATA0_GPIO7>,
+				 <SDHC0_DATA1_GPIO41>,
+				 <SDHC0_DATA2_GPIO42>,
+				 <SDHC0_DATA3_GPIO4>;
+			bias-pull-up;
+		};
+	};
+
+	twai_default: twai_default {
+		group1 {
+			pinmux = <TWAI_RX_GPIO18>,
+				 <TWAI_TX_GPIO8>;
+		};
+	};
+};
+
+&uart0 {
+	current-speed = <115200>;
+	pinctrl-0 = <&uart0_default>;
+	pinctrl-names = "default";
+};
+
+&touch {
+	debounce-interval-ms = <30>;
+	href-microvolt = <2700000>;
+	lref-microvolt = <500000>;
+	href-atten-microvolt = <1000000>;
+	filter-mode = <ESP32_TOUCH_FILTER_MODE_IIR_16>;
+	filter-debounce-cnt = <1>;
+	filter-noise-thr = <ESP32_TOUCH_FILTER_NOISE_THR_4_8TH>;
+	filter-jitter-step = <4>;
+	filter-smooth-level = <ESP32_TOUCH_FILTER_SMOOTH_MODE_IIR_2>;
+};
+
+&i2c0 {
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&i2c0_default>;
+	pinctrl-names = "default";
+
+	lsm6dso320: lsm6dso32@6b {
+		compatible = "st,lsm6dso32";
+		reg = <0x6b>;
+		irq-gpios = <&gpio0 9 GPIO_ACTIVE_HIGH>;
+		int-pin = <1>;
+		status = "disabled";
+	};
+
+	bmp581_0: bmp581@47 {
+		compatible = "bosch,bmp581";
+		reg = <0x47>;
+		/* BMP581 INT is open-drain, active low. */
+		int-gpios = <&gpio0 10 GPIO_ACTIVE_LOW>;
+		status = "disabled";
+	};
+};
+
+&i2c1 {
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	pinctrl-0 = <&i2c1_default>;
+	pinctrl-names = "default";
+};
+
+&i2s0 {
+	pinctrl-0 = <&i2s0_default>;
+	pinctrl-names = "default";
+};
+
+&i2s1 {
+	pinctrl-0 = <&i2s1_default>;
+	pinctrl-names = "default";
+};
+
+&twai {
+	pinctrl-0 = <&twai_default>;
+	pinctrl-names = "default";
+};
+
+&ledc0 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+	pinctrl-0 = <&ledc0_default>;
+	pinctrl-names = "default";
+
+	channel0@0 {
+		reg = <0x0>;
+		timer = <0>;
+	};
+
+	channel1@1 {
+		reg = <0x1>;
+		timer = <1>;
+	};
+};
+
+&wifi {
+	status = "okay";
+};
+
+&wdt0 {
+	status = "okay";
+};
+
+
+&sdhc0 {
+	bus-width = <4>;
+	pinctrl-0 = <&sdmmc_default>;
+	pinctrl-names = "default";
+	max-bus-freq = <40000000>;
+	status = "disabled";
+
+	mmc0: mmc_0 {
+		compatible = "zephyr,sdmmc-disk";
+		disk-name = "MMC";
+		status = "disabled";
+	};
+};
+
+&usb_serial {
+	status = "okay";
+};
