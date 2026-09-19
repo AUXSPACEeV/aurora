@@ -70,7 +70,7 @@
 		compatible = "gpio-leds";
 
 		sd_activity_led: led_sd {
-			gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
+			gpios = <&gpio0 3 GPIO_ACTIVE_HIGH>;
 			label = "SD Activity LED";
 		};
 	};
@@ -81,11 +81,11 @@
 	sdmmc_default: sdmmc_default {
 		group1 {
 			pinmux = <SDHC0_CLKOUT_GPIO6>,
-				 <SDHC0_CMD_GPIO5>,
-				 <SDHC0_DATA0_GPIO7>,
-				 <SDHC0_DATA1_GPIO41>,
+				 <SDHC0_CMD_GPIO39>,
+				 <SDHC0_DATA0_GPIO5>,
+				 <SDHC0_DATA1_GPIO4>,
 				 <SDHC0_DATA2_GPIO42>,
-				 <SDHC0_DATA3_GPIO4>;
+				 <SDHC0_DATA3_GPIO41>;
 			bias-pull-up;
 		};
 	};
@@ -129,11 +129,9 @@
 		status = "disabled";
 	};
 
-	bmp581_0: bmp581@47 {
-		compatible = "bosch,bmp581";
-		reg = <0x47>;
-		/* BMP581 INT is open-drain, active low. */
-		int-gpios = <&gpio0 10 GPIO_ACTIVE_LOW>;
+	dps310_0: dps310@76 {
+		compatible = "infinion,dps310";
+		reg = <0x76>;
 		status = "disabled";
 	};
 };
