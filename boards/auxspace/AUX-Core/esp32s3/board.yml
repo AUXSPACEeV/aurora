@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Copyright (c) 2026 Auxspace e.V.
+
 board:
   name: core65
   full_name: AUX-Core 65
