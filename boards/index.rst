@@ -14,6 +14,7 @@ Custom Auxspace PCBs intended for use in flight.
 
    auxspace/sensor_board_v2/doc/sensor_board_v2
    auxspace/micrometer/esp32s3/doc/micrometer
+   auxspace/AUX-Core/esp32s3/doc/core65
 
 Bench targets
 =============
@@ -26,3 +27,15 @@ individual AURORA subsystems. Not intended for flight.
    :glob:
 
    bench/rpi_pico
+
+Shields
+=======
+
+Add-on boards ("shields") for the AUX-Stack, attached to a flight board via
+an AUX-Stack data connector.
+
+.. toctree::
+   :maxdepth: 1
+   :glob:
+
+   shields/AUX-Pwr/doc/pwr65
