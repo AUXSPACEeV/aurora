@@ -53,6 +53,22 @@ BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_pyro), okay),
 	     "the 'auxspace,pyro' chosen node must have status \"okay\"");
 #endif /* CONFIG_PYRO */
 
+#if defined (CONFIG_HACCEL)
+#if !DT_HAS_CHOSEN(auxspace_haccel)
+#error "CONFIG_HACCEL requires DT chosen 'auxspace,haccel' to point at a haccel device node."
+#endif
+BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_haccel), okay),
+	     "the 'auxspace,haccel' chosen node must have status \"okay\"");
+#endif /* CONFIG_HACCEL */
+
+#if defined(CONFIG_MAG)
+#if !DT_HAS_CHOSEN(auxspace_mag)
+#error "CONFIG_MAG requires DT chosen 'auxspace,mag' to point at a mag device node."
+#endif
+BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_mag), okay),
+	     "the 'auxspace,mag' chosen node must have status \"okay\"");
+#endif /* CONFIG_MAG */
+
 #if defined(CONFIG_DATA_LOGGER_BIN)
 #include <aurora/lib/data_logger.h>
 #endif /* CONFIG_DATA_LOGGER_BIN */

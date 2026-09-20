@@ -168,7 +168,7 @@ menu "Barometric Pressure Sensor (BARO)"
 config BARO
 	bool "Support for Baro"
 	depends on AURORA_SENSORS
-	default y if MS5607 || LPS22HH || BMP581
+	default y if MS5607 || LPS22HH || BMP581 || DPS310
 	help
 		This option enables functionality for barometric pressure
 		sensors.
@@ -217,5 +217,26 @@ config BARO_REF_TRACK_TAU_MS
 	  slice of the climb between ignition and detection, which is small
 	  because the filter carries altitude on inertial velocity between
 	  barometer updates.
+
+endmenu
+
+menu "High Acceleration Sensor (HACCEL)"
+
+config HACCEL
+	bool "Support for High Acceleration Sensor"
+	depends on AURORA_SENSORS
+	default y if ADXL367
+	help
+		This option enables functionality for high acceleration sensors. TODO
+endmenu
+
+menu "Magnetometer (MAG)"
+
+config MAG
+	bool "Support for Magnetometer"
+	depends on AURORA_SENSORS
+	default y if MLX90394
+	help
+		This option enables functionality for magnetometers. TODO
 
 endmenu

@@ -17,10 +17,12 @@
 #include <zephyr/dt-bindings/input/esp32-touch-sensor-input.h>
 #include <zephyr/dt-bindings/pwm/pwm.h>
 #include <zephyr/dt-bindings/sensor/lsm6dso.h>
+#include <zephyr/dt-bindings/sensor/adxl367.h>
+#include <auxspace/dt-bindings/gpio/auxspaceev-aux-stack-data-connector.h>
 
 / {
 
-	model = "Auxspace e.V. ESP32S3-AUX-Stack-Core";
+	model = "Auxspace e.V. AUX-Core-65-01";
 	compatible = "espressif,esp32s3";
 
 	aliases {
@@ -75,6 +77,53 @@
 		};
 	};
 
+	top_data_connector: connector_0 {
+		compatible = "auxspaceev,aux-stack-data-connector";
+		#gpio-cells = <2>;
+		gpio-map-mask = <0xffffffff 0xffffffc0>;
+		gpio-map-pass-thru = <0 0x3f>;
+		gpio-map = <AUX_DATA_ARM 0 &gpio0 15 0>,
+			   <AUX_DATA_LIFTOFF 0 &gpio0 23 0>,
+			   <AUX_DATA_PWRFLT 0 &gpio1 6 0>;
+
+		can-bus = <&twai>;
+		i2c-bus = <&i2c1>;
+		uart-bus = <&uart1>;
+	};
+
+	bottom_data_connector: connector_1 {
+		compatible = "auxspaceev,aux-stack-data-connector";
+		#gpio-cells = <2>;
+		gpio-map-mask = <0xffffffff 0xffffffc0>;
+		gpio-map-pass-thru = <0 0x3f>;
+		gpio-map = <AUX_DATA_ARM 0 &gpio0 15 0>,
+			   <AUX_DATA_LIFTOFF 0 &gpio0 23 0>,
+			   <AUX_DATA_PWRFLT 0 &gpio1 6 0>;
+
+		can-bus = <&twai>;
+		i2c-bus = <&i2c1>;
+		uart-bus = <&uart2>;
+	};
+
+	status_signals: status-signals {
+		compatible = "gpio-leds";
+
+		arm_status: arm0 {
+			gpios = <&top_data_connector AUX_DATA_ARM GPIO_ACTIVE_HIGH>;
+			label = "ARM Status";
+		};
+
+		liftoff_status: liftoff0 {
+			gpios = <&top_data_connector AUX_DATA_LIFTOFF GPIO_ACTIVE_HIGH>;
+			label = "LIFTOFF Status";
+		};
+
+		pwrflt_status: pwrflt0 {
+			gpios = <&top_data_connector AUX_DATA_PWRFLT GPIO_ACTIVE_HIGH>;
+			label = "PWRFLT Status";
+		};
+	};
+
 };
 
 &pinctrl {
@@ -104,6 +153,18 @@
 	pinctrl-names = "default";
 };
 
+aux_data_uart_top: &uart1 {
+	current-speed = <115200>;
+	pinctrl-0 = <&uart1_default>;
+	pinctrl-names = "default";
+};
+
+aux_data_uart_bottom: &uart2 {
+	current-speed = <115200>;
+	pinctrl-0 = <&uart2_default>;
+	pinctrl-names = "default";
+};
+
 &touch {
 	debounce-interval-ms = <30>;
 	href-microvolt = <2700000>;
@@ -130,13 +191,31 @@
 	};
 
 	dps310_0: dps310@76 {
-		compatible = "infinion,dps310";
+		compatible = "infineon,dps310";
+		// TODO: Check for Interrupt support
 		reg = <0x76>;
 		status = "disabled";
 	};
+
+	adxl367_0: adxl367@1d{
+		compatible = "adi,adxl367";
+		reg = <0x1d>;
+		int1-gpios = <&gpio1 13 GPIO_ACTIVE_HIGH>;
+		status = "disabled";
+	};
+
+	// TODO: Check if this supports the MLX90395
+	mlx90394_0: mlx90394@0c {
+		compatible = "melexis,mlx90394";
+		// TODO: Check for Interrupt support
+		reg = <0x0c>;
+		status = "disabled";
+	};
+
+
 };
 
-&i2c1 {
+aux_data_i2c: &i2c1 {
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 	pinctrl-0 = <&i2c1_default>;
 	pinctrl-names = "default";
@@ -152,7 +231,7 @@
 	pinctrl-names = "default";
 };
 
-&twai {
+aux_data_can: &twai {
 	pinctrl-0 = <&twai_default>;
 	pinctrl-names = "default";
 };

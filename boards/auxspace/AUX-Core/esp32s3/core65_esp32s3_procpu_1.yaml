@@ -1,0 +1,25 @@
+identifier: aux-core-65@1/esp32s3/procpu
+name: ESP32-S3 AUX-Core 65 (v1)
+type: mcu
+arch: xtensa
+toolchain:
+  - zephyr
+supported:
+  - gpio
+  - uart
+  - i2c
+  - i2s
+  - spi
+  - can
+  - counter
+  - watchdog
+  - entropy
+  - pwm
+  - dma
+  - input
+  - crypto
+  - retained_mem
+  - sensors
+  - sdhc
+  - disk
+vendor: auxspaceev

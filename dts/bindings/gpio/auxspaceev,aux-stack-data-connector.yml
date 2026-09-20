@@ -1,0 +1,36 @@
+# Copyright (c) 2026 Auxspace e.V.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# This binding is the description of the AUX-stack data connector
+# used in the AUX-Stack. It is deliberately generic: it only describes the
+# connector's GPIO fan-out (the "information" signals ARM/LIFTOFF/PWRFLT/BAT_ON)
+# plus optional phandles to whichever real bus peripherals a given brain board
+# wires to the connector's CAN/I2C/UART pins.
+
+
+title: AUX-Stack data connector
+
+description: >
+  GPIO abstraction for the stack-wide "information" signals carried on the
+  AUX data connector, plus phandles to the CAN/I2C/UART busses also carried
+  on it. Shields plug into this connector for I2C/UART; CAN is a peer bus
+  between brain boards and does not go through the shield mechanism.
+
+compatible: "auxspaceev,aux-stack-data-connector"
+
+include: [gpio-nexus.yaml]
+
+properties:
+  can-bus:
+    type: phandle
+    description: CAN/TWAI controller wired to this connector's CAN_H/CAN_L pins.
+
+  i2c-bus:
+    type: phandle
+    description: I2C controller wired to this connector's SDA/SCL pins.
+
+  uart-bus:
+    type: phandle
+    description: UART controller wired to this connector's TXD/RXD pins.
+
