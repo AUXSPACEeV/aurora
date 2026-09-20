@@ -1,0 +1,11 @@
+board:
+  name: core65
+  full_name: AUX-Core 65
+  vendor: auxspaceev
+  revision:
+    format: number
+    default: "1"
+    revisions:
+    - name: "1"
+  socs:
+  - name: esp32s3

@@ -1,0 +1,164 @@
+/*
+ * Copyright (c) 2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <zephyr/dt-bindings/sensor/lps22hh.h>
+#include <zephyr/dt-bindings/sensor/lsm6dso.h>
+
+/ {
+	chosen {
+		/* Auxspace specific */
+		auxspace,imu = &lsm6dso320;
+		auxspace,mmc = &mmc0;
+		auxspace,ffs = &ffs0;
+		auxspace,buzzer = &buzzer0;
+		auxspace,led = &pwmleds;
+		auxspace,flight-log-disk = &flight_log_disk;
+		auxspace,sm-config = &sm_config_partition;
+		auxspace,baro = &dps310_0;
+		auxspace,mag = &mlx90394_0;
+		auxspace,haccel = &adxl367_0;
+		auxspace,disk-led = &sd_activity_led;
+		/* no dedicated RBF connector.
+		 * The BOOT button stands in for the plug (shorted = safe).
+		 */
+		auxspace,rbf = &button0;
+	};
+
+	fstab {
+		compatible = "zephyr,fstab";
+
+		ffs0: ffs_0 {
+			compatible = "zephyr,fstab,fatfs";
+			automount;
+			disk-access;
+			mount-point = "/MMC:";
+		};
+	};
+
+	flight_log_disk: flight-log-disk {
+		compatible = "auxspaceev,flight-log-disk";
+		disk-name = "MMC";
+		offset-bytes = <0x2 0x00000000>;	/* 8 GiB */
+		size-bytes   = <0x1 0xF0000000>;	/* 7 GiB and 512 MiB */
+	};
+};
+
+/* The 4M layout inherited from partitions_0x0_amp_4M.dtsi leaves no gap, so
+ * the flight-threshold page comes out of the tail of the unused storage
+ * partition: 192K => 188K.
+ */
+&storage_partition {
+	reg = <0x3b0000 DT_SIZE_K(188)>;
+};
+
+&flash0 {
+	partitions {
+		/* One erase page (4K); the state machine erases and rewrites
+		 * the whole thing on every save.
+		 */
+		sm_config_partition: partition@3df000 {
+			compatible = "zephyr,mapped-partition";
+			label = "sm-config";
+			reg = <0x3df000 DT_SIZE_K(4)>;
+		};
+	};
+};
+
+&adc1 {
+	status = "okay";
+};
+
+&buzzer0 {
+	status = "okay";
+};
+
+&esp32_bt_hci {
+	status = "okay";
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+&gpio1 {
+	status = "okay";
+};
+
+&i2c0 {
+	status = "okay";
+};
+
+&lsm6dso320 {
+	status = "okay";
+	accel-range = <LSM6DSO_DT_FS_16G>;
+	accel-odr = <LSM6DSO_DT_ODR_104Hz>;
+	gyro-range = <LSM6DSO_DT_FS_1000DPS>;
+	gyro-odr = <LSM6DSO_DT_ODR_104Hz>;
+};
+
+&mmc0 {
+	status = "okay";
+};
+
+&pwmleds {
+	status = "okay";
+};
+
+
+&timer0 {
+	status = "okay";
+};
+
+&timer1 {
+	status = "okay";
+};
+
+&timer2 {
+	status = "okay";
+};
+
+&timer3 {
+	status = "okay";
+};
+
+&twai {
+	status = "okay";
+};
+
+&trng0 {
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&usb_serial {
+	status = "okay";
+};
+
+&wdt0 {
+	status = "okay";
+};
+
+&dps310_0 {
+	status = "okay";
+};
+
+&sdhc {
+	status = "okay";
+};
+
+&sdhc0 {
+	status = "okay";
+};
+
+&mlx90394_0 {
+	status = "okay";
+};
+
+&adxl367_0 {
+	status = "okay";
+};
