@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2026 Auxspace e.V.
 
-identifier: aux-core-65@1/esp32s3/procpu
+identifier: core65@1/esp32s3/procpu
 name: ESP32-S3 AUX-Core 65 (v1)
 type: mcu
 arch: xtensa
