@@ -162,3 +162,12 @@
 &adxl367_0 {
 	status = "okay";
 };
+
+
+&ina219_0 {
+	status = "okay";
+};
+
+&tca9534_0 {
+	status = "okay";
+};

@@ -1,0 +1,29 @@
+/*
+ * Copyright (c) 2026 Auxspace e.V.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * AUX-Pwr-65 shield describes the power management board of the AUX-Stack
+ */
+
+&aux_data_i2c {
+	status = "okay";
+
+	tca9534_0: tca9534@20 {
+		compatible = "ti,tca9534";
+		reg = <0x20>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		ngpios = <8>;
+		status = "disabled";
+	};
+
+	ina219_0: ina219@81 {
+		compatible = "ti,ina219";
+		reg = <0x81>;
+		lsb-microamp = <100>;
+		shunt-milliohm = <150>;
+		status = "disabled";
+	};
+
+};
