@@ -1,0 +1,9 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+config AURORA_CAN_LOCAL
+	bool "Enable local CAN loopback"
+	depends on CAN
+	help
+	  Enabels the local CAN loopback for testing purposes
+

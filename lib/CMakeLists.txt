@@ -30,3 +30,6 @@ add_subdirectory_ifdef(CONFIG_AURORA_WATCHDOG watchdog)
 
 # pad link (BLE status server on launchrail)
 add_subdirectory_ifdef(CONFIG_AURORA_PAD_LINK pad_link)
+
+# can
+add_subdirectory_ifdef(CONFIG_CAN communication)

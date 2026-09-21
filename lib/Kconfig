@@ -43,4 +43,8 @@ menu "Watchdog"
 rsource "watchdog/Kconfig"
 endmenu
 
+menu "Communication"
+rsource "communication/Kconfig"
+endmenu
+
 endmenu
