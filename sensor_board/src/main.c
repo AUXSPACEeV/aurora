@@ -32,6 +32,10 @@
 #include <aurora/lib/baro.h>
 #endif /* CONFIG_BARO */
 
+#if defined(CONFIG_CAN)
+#include <aurora/lib/can.h>
+#endif
+
 #if defined(CONFIG_AURORA_FAKE_SENSORS)
 #include <aurora/lib/sim.h>
 #endif /* CONFIG_AURORA_FAKE_SENSORS */
@@ -582,6 +586,11 @@ void state_machine_task(void *, void *, void *)
 
 	sm_init(&state_cfg, &sm_error_handler);
 
+#if defined(CONFIG_CAN)
+	init_can();
+	register_can_receiver();
+#endif
+
 #if defined(CONFIG_IMU) && defined(CONFIG_AURORA_STATE_MACHINE_RETAIN)
 	if (sm_retain_recovered()) {
 		/* Hand back the calibration from before the reset */
@@ -651,6 +660,9 @@ void state_machine_task(void *, void *, void *)
 				if (imu_poll(IMU_DEV, &imu_msg) == 0) {
 					WDT_KICK(AURORA_WDT_SRC_IMU);
 					handle_imu(&imu_msg);
+#if defined(CONFIG_CAN)
+					can_send_imu_msg(&imu_msg);
+#endif
 					log_imu_data(&imu_msg);
 				}
 
@@ -675,7 +687,9 @@ void state_machine_task(void *, void *, void *)
 				if (baro_measure(BARO_DEV, &baro_msg) == 0) {
 					WDT_KICK(AURORA_WDT_SRC_BARO);
 					log_baro_data(&baro_msg);
-
+#if defined(CONFIG_CAN)
+					can_send_baro_msg(&baro_msg);
+#endif
 					if (baro_sensor_value_to_altitude(
 						    &baro_msg.pressure, &altitude) == 0) {
 						baro_ready = true;
