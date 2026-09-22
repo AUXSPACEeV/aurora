@@ -8,8 +8,6 @@
 #include <aurora/lib/imu.h>
 #include <zephyr/logging/log.h>
 
-// TODO: compile guards?
-
 #define CAN_BARO_CHANNEL 0x200
 #define CAN_IMU_GYRO_CHANNEL 0x201
 #define CAN_IMU_ACCEL_CHANNEL 0x202
@@ -38,12 +36,12 @@ static inline void press_to_sensor_value(uint32_t raw_press_pa,
   val->val2 = (raw_press_pa % 1000) * 10000;
 }
 
-// TODO: remove magic number?
-static inline void imu_data_to_sensor_value(struct can_payload_imu *data,
-                                            struct sensor_value val[3]) {
+static inline void
+imu_data_to_sensor_value(struct can_payload_imu *data,
+                         struct sensor_value val[IMU_NUM_AXES]) {
   const uint16_t raw_coords[3] = {data->x, data->y, data->z};
 
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < IMU_NUM_AXES; i++) {
     int sign = (data->negative_bits & masks[i]) ? -1 : 1;
 
     val[i].val1 = (int32_t)(raw_coords[i] / 100) * sign;
@@ -60,19 +58,18 @@ static inline int extract_first_two_numbers(int32_t val) {
   return r;
 }
 
-// TODO: remove magic number?
-static inline void check_for_negative_values(struct sensor_value values[3],
-                                             int8_t *out) {
-  for (int i = 0; i < 3; i++) {
+static inline void
+check_for_negative_values(struct sensor_value values[IMU_NUM_AXES],
+                          int8_t *out) {
+  for (int i = 0; i < IMU_NUM_AXES; i++) {
     if (values[i].val1 < 0 || values[i].val2 < 0) {
       *out = (*out) | masks[i];
     }
   }
 }
 
-static inline double out_ev(const struct sensor_value *val)
-{
-	return (val->val1 + (double)val->val2 / 1000000);
+static inline double out_ev(const struct sensor_value *val) {
+  return (val->val1 + (double)val->val2 / 1000000);
 }
 
 static void tx_irq_callback(const struct device *dev, int error, void *arg) {
@@ -92,7 +89,7 @@ int init_can() {
     return -ENODEV;
   }
 
-#if defined (CONFIG_AURORA_CAN_LOCAL)
+#if defined(CONFIG_AURORA_CAN_LOCAL)
   // for local testing with one board
   int r = can_set_mode(can_dev, CAN_MODE_LOOPBACK);
   if (r != 0) {
@@ -160,13 +157,14 @@ int can_send_imu_msg(struct imu_data *imu) {
   int8_t negative_bits_gyo = 0;
   check_for_negative_values(imu->gyro, &negative_bits_gyo);
 
-  struct can_payload_imu acc = {.x = (int16_t)(abs(imu->accel[0].val1 * 100) +
-                                               extract_first_two_numbers(imu->accel[0].val2)),
-                                .y = (int16_t)(abs(imu->accel[1].val1 * 100) +
-                                               extract_first_two_numbers(imu->accel[0].val2)),
-                                .z = (int16_t)(abs(imu->accel[2].val1 * 100) +
-                                               extract_first_two_numbers(imu->accel[0].val2)),
-                                .negative_bits = negative_bits_acc};
+  struct can_payload_imu acc = {
+      .x = (int16_t)(abs(imu->accel[0].val1 * 100) +
+                     extract_first_two_numbers(imu->accel[0].val2)),
+      .y = (int16_t)(abs(imu->accel[1].val1 * 100) +
+                     extract_first_two_numbers(imu->accel[0].val2)),
+      .z = (int16_t)(abs(imu->accel[2].val1 * 100) +
+                     extract_first_two_numbers(imu->accel[0].val2)),
+      .negative_bits = negative_bits_acc};
 
   struct can_payload_imu gyo = {
       .x = (int16_t)(abs(imu->gyro[0].val1 * 100) +
@@ -194,6 +192,14 @@ int can_send_imu_msg(struct imu_data *imu) {
   return r;
 }
 
+/**
+ * @brief Handles receving data. Currently just transforms the data back to
+ * sensors values and logs them.
+ *
+ * @param dev
+ * @param frame
+ * @param user_data
+ */
 static void can_rx_callback(const struct device *dev, struct can_frame *frame,
                             void *user_data) {
   LOG_INF("RX ID: 0x%03x, DLC: %d", frame->id, frame->dlc);
