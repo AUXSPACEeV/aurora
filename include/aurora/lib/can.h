@@ -6,6 +6,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/printk.h>
+#include <aurora/lib/state/state.h>
 
 /**
  * @brief Data structure for sending baro data.
@@ -73,7 +74,7 @@ int can_send_voltage();
  *
  * @retval see can_send
  */
-int can_send_state();
+int can_send_state(enum sm_state state);
 
 /**
  * @brief Sends any data over the CAN bus.

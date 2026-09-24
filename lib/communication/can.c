@@ -6,12 +6,14 @@
 #include <aurora/lib/baro.h>
 #include <aurora/lib/can.h>
 #include <aurora/lib/imu.h>
+#include <aurora/lib/state/state.h>
 #include <zephyr/logging/log.h>
 
 #define CAN_BARO_CHANNEL 0x200
 #define CAN_IMU_GYRO_CHANNEL 0x201
 #define CAN_IMU_ACCEL_CHANNEL 0x202
 #define CAN_VOLTAGE_CHANNEL 0x203
+#define CAN_STATE_CHANNEL 0x204
 
 #define BIT_MASK_FIRST 0b00000100
 #define BIT_MASK_SECOND 0b00000010
@@ -240,6 +242,12 @@ static void can_rx_callback(const struct device *dev, struct can_frame *frame,
             v2.gyro[2].val2);
 
     break;
+
+    case CAN_STATE_CHANNEL:
+	enum sm_state state = frame->data[0];
+
+	LOG_INF("STATE: %d", state);
+    break;
   case CAN_VOLTAGE_CHANNEL:
     // TODO
 
@@ -251,7 +259,7 @@ static void can_rx_callback(const struct device *dev, struct can_frame *frame,
 int register_can_receiver() {
   const struct can_filter filter = {
       .id = 0x200,
-      .mask = 0x7fc, // Listening on 0x200 - 0x203
+      .mask = 0x7f8, // Listening on 0x200 - 0x207
       .flags = 0,
   };
 
@@ -267,7 +275,14 @@ int can_send_voltage() {
   // TODO
   return 0;
 }
-int can_send_state() {
-  // TODO
-  return 0;
+int can_send_state(enum sm_state state) {
+  uint8_t s = (uint8_t)state;
+
+  int r = can_send_msg(CAN_STATE_CHANNEL, (const uint8_t *)&s, sizeof(s));
+
+  if (r < 0) {
+    LOG_WRN("ERROR SENDING %d", r);
+  }
+
+  return r;
 }
