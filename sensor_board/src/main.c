@@ -730,6 +730,9 @@ void state_machine_task(void *, void *, void *)
 
 			sm_update(&inputs);
 			state = sm_get_state();
+#if defined(CONFIG_CAN)
+			can_send_state(state);
+#endif
 
 			/* Deliberately here and not at the top of the loop:
 			 * reaching this point means both sensors delivered and
