@@ -1,0 +1,12 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+config MLX90395
+	bool "MLX90395 3-axis magnetometer"
+	default y
+	depends on DT_HAS_MELEXIS_MLX90395_ENABLED
+	select I2C
+	select CRC
+	help
+	  Enable driver for the Melexis MLX90395 3-axis magnetometer, in
+	  both its 50 mT and 120 mT variants.

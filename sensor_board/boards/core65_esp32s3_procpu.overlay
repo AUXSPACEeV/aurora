@@ -17,7 +17,7 @@
 		auxspace,flight-log-disk = &flight_log_disk;
 		auxspace,sm-config = &sm_config_partition;
 		auxspace,baro = &dps310_0;
-		auxspace,mag = &mlx90394_0;
+		auxspace,mag = &mlx90395_0;
 		auxspace,haccel = &adxl375_0;
 		auxspace,disk-led = &sd_activity_led;
 		/* no dedicated RBF connector.
@@ -155,7 +155,7 @@
 	status = "okay";
 };
 
-&mlx90394_0 {
+&mlx90395_0 {
 	status = "okay";
 };
 

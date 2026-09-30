@@ -203,9 +203,8 @@ aux_data_uart_bottom: &uart2 {
 		status = "disabled";
 	};
 
-	// TODO: Check if this supports the MLX90395
-	mlx90394_0: mlx90394@0c {
-		compatible = "melexis,mlx90394";
+	mlx90395_0: mlx90395@c {
+		compatible = "melexis,mlx90395";
 		// TODO: Check for Interrupt support
 		reg = <0x0c>;
 		status = "disabled";
