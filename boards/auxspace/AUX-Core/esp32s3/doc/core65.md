@@ -33,7 +33,7 @@ it would need to run on this board (see the
   pending bring-up:
   - ST LSM6DSO32 6-DoF IMU
   - Infineon DPS310 barometer
-  - Analog Devices ADXL367 accelerometer
+  - Analog Devices ADXL375 high-g accelerometer
   - Melexis MLX90395 magnetometer
 - Native (4-bit) SDHC µSD-card slot
 - CAN/TWAI controller, shared between both AUX-Stack data connectors
