@@ -21,6 +21,7 @@
 LOG_MODULE_REGISTER(ADXL375, CONFIG_SENSOR_LOG_LEVEL);
 
 #define ADXL375_REG_DEVID       0x00
+#define ADXL375_REG_OFSX        0x1E
 #define ADXL375_REG_BW_RATE     0x2C
 #define ADXL375_REG_POWER_CTL   0x2D
 #define ADXL375_REG_DATA_FORMAT 0x31
@@ -162,6 +163,7 @@ static DEVICE_API(sensor, adxl375_api) = {
 static int adxl375_init(const struct device *dev)
 {
 	const struct adxl375_config *cfg = dev->config;
+	const uint8_t no_offset[3] = {0};
 	uint8_t id;
 	int ret;
 
@@ -182,6 +184,15 @@ static int adxl375_init(const struct device *dev)
 
 	/* Configure in standby, then start measuring */
 	ret = i2c_reg_write_byte_dt(&cfg->i2c, ADXL375_REG_POWER_CTL, 0);
+	if (ret < 0) {
+		return ret;
+	}
+
+	/*
+	 * There is no soft reset and the offset registers only clear on power
+	 * loss, so a stale offset would survive an MCU reset.
+	 */
+	ret = i2c_burst_write_dt(&cfg->i2c, ADXL375_REG_OFSX, no_offset, sizeof(no_offset));
 	if (ret < 0) {
 		return ret;
 	}
