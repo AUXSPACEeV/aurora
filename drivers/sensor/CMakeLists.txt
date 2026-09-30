@@ -1,7 +1,4 @@
 # Copyright (c) 2026 Auxspace e.V.
 # SPDX-License-Identifier: Apache-2.0
 
-menu "Drivers"
-rsource "pyro/Kconfig"
-rsource "sensor/Kconfig"
-endmenu
+add_subdirectory_ifdef(CONFIG_ADXL375 adxl375)

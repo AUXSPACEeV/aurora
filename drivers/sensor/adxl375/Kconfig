@@ -1,0 +1,11 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+config ADXL375
+	bool "ADXL375 high-g accelerometer"
+	default y
+	depends on DT_HAS_ADI_ADXL375_ENABLED
+	select I2C
+	help
+	  Enable driver for the Analog Devices ADXL375 3-axis +-200 g
+	  accelerometer.
