@@ -225,7 +225,7 @@ menu "High Acceleration Sensor (HACCEL)"
 config HACCEL
 	bool "Support for High Acceleration Sensor"
 	depends on AURORA_SENSORS
-	default y if ADXL367
+	default y if ADXL375
 	help
 		This option enables functionality for high acceleration sensors. TODO
 endmenu

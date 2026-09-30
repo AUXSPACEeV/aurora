@@ -1,0 +1,30 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Analog Devices ADXL375 3-axis +-200 g accelerometer on I2C.
+
+  Register compatible with the ADXL345, but with a fixed +-200 g range
+  at 49 mg/LSB.
+
+compatible: "adi,adxl375"
+
+include: [sensor-device.yaml, i2c-device.yaml]
+
+properties:
+  odr:
+    type: int
+    default: 100
+    description: |
+      Output data rate in Hz. The default is the power-on reset value.
+      The datasheet recommends a 400 kHz bus for 800 Hz and SPI for
+      1600 Hz and above when every sample is read.
+    enum: [25, 50, 100, 200, 400, 800, 1600, 3200]
+
+  int1-gpios:
+    type: phandle-array
+    description: INT1 pin. Not used by the driver yet.
+
+  int2-gpios:
+    type: phandle-array
+    description: INT2 pin. Not used by the driver yet.

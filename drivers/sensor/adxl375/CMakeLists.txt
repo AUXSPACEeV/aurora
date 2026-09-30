@@ -1,7 +1,5 @@
 # Copyright (c) 2026 Auxspace e.V.
 # SPDX-License-Identifier: Apache-2.0
 
-menu "Drivers"
-rsource "pyro/Kconfig"
-rsource "sensor/Kconfig"
-endmenu
+zephyr_library()
+zephyr_library_sources(adxl375.c)
