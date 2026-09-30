@@ -18,7 +18,7 @@
 		auxspace,sm-config = &sm_config_partition;
 		auxspace,baro = &dps310_0;
 		auxspace,mag = &mlx90394_0;
-		auxspace,haccel = &adxl367_0;
+		auxspace,haccel = &adxl375_0;
 		auxspace,disk-led = &sd_activity_led;
 		/* no dedicated RBF connector.
 		 * The BOOT button stands in for the plug (shorted = safe).
@@ -159,15 +159,6 @@
 	status = "okay";
 };
 
-&adxl367_0 {
-	status = "okay";
-};
-
-
-&ina219_0 {
-	status = "okay";
-};
-
-&tca9534_0 {
+&adxl375_0 {
 	status = "okay";
 };

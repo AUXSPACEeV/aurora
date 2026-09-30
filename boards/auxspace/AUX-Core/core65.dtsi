@@ -17,7 +17,7 @@
 #include <zephyr/dt-bindings/input/esp32-touch-sensor-input.h>
 #include <zephyr/dt-bindings/pwm/pwm.h>
 #include <zephyr/dt-bindings/sensor/lsm6dso.h>
-#include <zephyr/dt-bindings/sensor/adxl367.h>
+#include <zephyr/dt-bindings/sensor/adxl372.h>
 #include <auxspace/dt-bindings/gpio/auxspaceev-aux-stack-data-connector.h>
 
 / {
@@ -197,8 +197,8 @@ aux_data_uart_bottom: &uart2 {
 		status = "disabled";
 	};
 
-	adxl367_0: adxl367@1d{
-		compatible = "adi,adxl367";
+	adxl375_0: adxl375@1d{
+		compatible = "adi,adxl372";
 		reg = <0x1d>;
 		int1-gpios = <&gpio1 13 GPIO_ACTIVE_HIGH>;
 		status = "disabled";
