@@ -82,7 +82,7 @@
 		gpio-map-mask = <0xffffffff 0xffffffc0>;
 		gpio-map-pass-thru = <0 0x3f>;
 		gpio-map = <AUX_DATA_ARM 0 &gpio0 15 0>,
-			   <AUX_DATA_LIFTOFF 0 &gpio0 23 0>,
+			   <AUX_DATA_LIFTOFF 0 &gpio0 21 0>,
 			   <AUX_DATA_PWRFLT 0 &gpio1 6 0>;
 
 		can-bus = <&twai>;
@@ -96,7 +96,7 @@
 		gpio-map-mask = <0xffffffff 0xffffffc0>;
 		gpio-map-pass-thru = <0 0x3f>;
 		gpio-map = <AUX_DATA_ARM 0 &gpio0 15 0>,
-			   <AUX_DATA_LIFTOFF 0 &gpio0 23 0>,
+			   <AUX_DATA_LIFTOFF 0 &gpio0 21 0>,
 			   <AUX_DATA_PWRFLT 0 &gpio1 6 0>;
 
 		can-bus = <&twai>;
