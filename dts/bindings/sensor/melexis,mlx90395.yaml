@@ -1,0 +1,50 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Melexis MLX90395 3-axis magnetometer on I2C.
+
+  Not compatible with the MLX90394: the MLX90395 is driven by commands
+  written to address 0x80 and has no identification register. Both the
+  medium-field (50 mT) and high-field (120 mT) variants are supported; the
+  driver tells them apart by their factory gain setting.
+
+  Each fetch runs one single measurement of X, Y, Z and temperature. With
+  OSR the oversampling and DF the digital filter, one conversion takes
+  about 165 + 163 + 3 * (67 + 32 * 2^OSR * (2 + 2^DF)) + 11 us, i.e.
+  0.8 ms with the defaults and 100 ms with both at maximum.
+
+compatible: "melexis,mlx90395"
+
+include: [sensor-device.yaml, i2c-device.yaml]
+
+properties:
+  resolution:
+    type: int
+    default: 1
+    enum: [0, 1, 2, 3]
+    description: |
+      Which 16 bits of the 19-bit ADC value are output for X, Y and Z.
+      Each step up doubles the field per LSB. The default is the factory
+      setting, which gives 2.5 uT/LSB on the 50 mT variant and 7.14 uT/LSB
+      on the 120 mT variant.
+
+  oversampling:
+    type: int
+    default: 0
+    enum: [0, 1, 2, 3]
+    description: |
+      ADC oversampling ratio of the magnetic measurement, as 2^n. The
+      default is the factory setting.
+
+  digital-filter:
+    type: int
+    default: 0
+    enum: [0, 1, 2, 3, 4, 5, 6, 7]
+    description: |
+      Averaging filter of the magnetic measurement, over 2^n ADC
+      conversions. The default is the factory setting.
+
+  int-gpios:
+    type: phandle-array
+    description: INT/TRG pin. Not used by the driver yet.

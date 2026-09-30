@@ -235,7 +235,7 @@ menu "Magnetometer (MAG)"
 config MAG
 	bool "Support for Magnetometer"
 	depends on AURORA_SENSORS
-	default y if MLX90394
+	default y if MLX90394 || MLX90395
 	help
 		This option enables functionality for magnetometers. TODO
 
