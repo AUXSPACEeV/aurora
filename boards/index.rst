@@ -14,6 +14,7 @@ Custom Auxspace PCBs intended for use in flight.
    auxspace/sensor_board_v2/doc/sensor_board_v2
    auxspace/micrometer/esp32s3/doc/micrometer
    auxspace/AUX-Core/esp32s3/doc/core65
+   auxspace/AUX-Tel/stm32wl/doc/tel65
 
 Bench targets and shields
 =========================
