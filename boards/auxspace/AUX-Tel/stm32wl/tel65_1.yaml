@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Copyright (c) 2026 Auxspace e.V.
+
+identifier: tel65@1
+name: AUX-Tel 65 (v1)
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+ram: 64
+flash: 256
+supported:
+  - gpio
+  - uart
+  - spi
+  - can
+  - lora
+  - counter
+  - watchdog
+  - entropy
+  - crypto
+vendor: auxspaceev
