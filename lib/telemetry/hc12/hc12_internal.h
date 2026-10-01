@@ -1,6 +1,11 @@
 /*
  * Copyright (c) 2026 Auxspace e.V.
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * HC-12 specifics. The wire format lives in
+ * <aurora/lib/telemetry/wire.h> and the transport in
+ * <aurora/lib/telemetry/uart_link.h>; nothing in either is about this
+ * module.
  */
 
 #ifndef AURORA_LIB_TELEMETRY_HC12_INTERNAL_H_
@@ -21,58 +26,12 @@
 /* Time the HC-12 needs to enter / leave AT mode after a SET edge. */
 #define HC12_SET_SETTLE_MS 80
 
-/* Wire frame packet types. */
-#define HC12_TYPE_SM_UPDATE 0x01
-
-/** @brief HC-12 SM_UPDATE wire payload (little-endian, packed, 64 B).
- *
- * @c sm_type identifies the @c state enum mapping in use (see
- * @ref sm_get_type) so the receiver can decode @c state without
- * prior agreement with the firmware. The trailing @c reserved byte
- * keeps the 64-byte frame size unchanged from earlier revisions.
- */
-struct __packed hc12_sm_update_payload {
-	uint32_t timestamp_ms;
-	uint8_t  state;
-	uint8_t  armed;
-	uint8_t  sm_type;
-	uint8_t  reserved;
-	double   altitude;
-	double   acceleration;
-	double   accel_vert;
-	double   velocity;
-	double   orientation[3];
-};
-
-/**
- * @brief Build a complete HC-12 wire frame in @p buf.
- *
- * Layout (all multi-byte fields little-endian):
- *   buf[0]    magic0   = 0xA5
- *   buf[1]    magic1   = 0x5A
- *   buf[2]    type
- *   buf[3]    payload_len
- *   buf[4..]  payload  (payload_len bytes)
- *   buf[..]   CRC-16/CCITT (init 0xFFFF) over buf[2 .. 4+payload_len-1]
- *
- * @param buf          Output buffer.
- * @param buf_sz       Size of @p buf in bytes.
- * @param type         Packet type byte.
- * @param payload      Payload bytes.
- * @param payload_len  Length of @p payload (must fit in @p buf with the
- *                     6 bytes of header + CRC).
- *
- * @return Total frame length written, or 0 if @p buf is too small.
- */
-size_t hc12_frame_finalise(uint8_t *buf, size_t buf_sz, uint8_t type,
-			   const void *payload, uint8_t payload_len);
-
 /** @brief UART device the backend talks to. Resolved from the binding. */
 extern const struct device *const hc12_uart_dev;
 
-/** @brief Serialises every byte sent on hc12_uart_dev. Held by the TX
- *  worker per frame and by the AT helper for the duration of one
- *  command exchange.
+/** @brief Serialises every byte sent on hc12_uart_dev. Held by the
+ *  uart-link transmit worker per frame and by the AT helper for the
+ *  duration of one command exchange.
  */
 extern struct k_mutex hc12_uart_lock;
 

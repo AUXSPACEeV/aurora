@@ -1,17 +1,18 @@
 /**
  * @file main.c
- * @brief Unit tests for the telemetry dispatcher and HC-12 backend.
+ * @brief Unit tests for the telemetry dispatcher and its UART backends.
  *
  * Three suites:
- *   - format:    locks the HC-12 wire frame byte-for-byte.
- *   - rate:      exercises the per-backend rate limiter.
+ *   - format:    locks the telemetry wire frame byte-for-byte.
+ *   - rate:      exercises the uart-link rate limiter (through the
+ *                HC-12 backend, which is one instance of it).
  *   - dispatch:  verifies fan-out to multiple registered backends and
  *                the dispatcher's error aggregation.
  *
- * UART traffic from the HC-12 worker thread is dumped into qemu's
- * uart0 (which also carries ztest output). Tests never read what
- * leaves the wire. They verify counters and frame bytes built by
- * the helper directly.
+ * UART traffic from the worker thread is dumped into an emulated UART
+ * rather than qemu's uart0, which carries ztest output. Tests never
+ * read what leaves the wire. They verify counters and frame bytes
+ * built by the shared helper directly.
  *
  * Copyright (c) 2025-2026 Auxspace e.V.
  *
@@ -26,8 +27,7 @@
 #include <zephyr/ztest.h>
 
 #include <aurora/lib/telemetry.h>
-
-#include "hc12_internal.h"
+#include <aurora/lib/telemetry/wire.h>
 
 /* ==========================================================
  *                     STUB BACKENDS
@@ -109,9 +109,9 @@ static inline void clear_rate_window(void)
  * to any of them in production must fail this suite.
  */
 
-ZTEST(telemetry_hc12_format, test_sm_update_frame_bytes)
+ZTEST(telemetry_wire_format, test_sm_update_frame_bytes)
 {
-	struct hc12_sm_update_payload p = {
+	struct telemetry_wire_sm_update p = {
 		.timestamp_ms = 0xDEADBEEF,
 		.state        = 3,
 		.armed        = 1,
@@ -124,8 +124,8 @@ ZTEST(telemetry_hc12_format, test_sm_update_frame_bytes)
 	};
 
 	uint8_t buf[128] = { 0 };
-	size_t  n = hc12_frame_finalise(buf, sizeof(buf), 0x01, &p,
-					(uint8_t)sizeof(p));
+	size_t  n = telemetry_wire_finalise(buf, sizeof(buf), 0x01, &p,
+					    (uint8_t)sizeof(p));
 
 	/* Total = 2 magic + 1 type + 1 len + 64 payload + 2 CRC = 70.
 	 * Payload = u32 + u8 + u8 + i16 + 4*f64 + 3*f64 = 64 bytes
@@ -156,23 +156,143 @@ ZTEST(telemetry_hc12_format, test_sm_update_frame_bytes)
 		      actual_crc, expected_crc);
 }
 
-ZTEST(telemetry_hc12_format, test_buffer_too_small)
+ZTEST(telemetry_wire_format, test_buffer_too_small)
 {
-	struct hc12_sm_update_payload p = { 0 };
+	struct telemetry_wire_sm_update p = { 0 };
 	uint8_t small[10];
 
-	zassert_equal(hc12_frame_finalise(small, sizeof(small), 0x01, &p,
-					  (uint8_t)sizeof(p)),
+	zassert_equal(telemetry_wire_finalise(small, sizeof(small), 0x01, &p,
+					      (uint8_t)sizeof(p)),
 		      0, "should reject undersized buffer");
 }
 
-ZTEST_SUITE(telemetry_hc12_format, NULL, NULL, NULL, NULL, NULL);
+/* A zero-length payload is a valid frame: header plus CRC only. The
+ * AUX-Tel relay forwards types it does not know, so an empty payload
+ * has to survive the round trip.
+ */
+ZTEST(telemetry_wire_format, test_empty_payload_frame)
+{
+	uint8_t buf[16] = { 0 };
+	size_t n = telemetry_wire_finalise(buf, sizeof(buf), 0x42, NULL, 0);
+
+	zassert_equal(n, 6, "empty frame should be 6 bytes, got %zu", n);
+	zassert_equal(buf[3], 0, "payload length byte");
+
+	uint16_t expected = crc16_ccitt(0xFFFF, &buf[2], 2);
+
+	zassert_equal(sys_get_le16(&buf[4]), expected, "CRC over type+len");
+}
+
+/* The relay reconstructs the CRC from the frame it received, so the
+ * helper's span must match what a receiver computes by hand.
+ */
+ZTEST(telemetry_wire_format, test_crc_helper_matches_manual_span)
+{
+	struct telemetry_wire_sm_update p = { .timestamp_ms = 1, .state = 2 };
+	uint8_t buf[128] = { 0 };
+	size_t n = telemetry_wire_finalise(buf, sizeof(buf), 0x01, &p,
+					   (uint8_t)sizeof(p));
+
+	zassert_equal(n, 70, "frame length");
+	zassert_equal(telemetry_wire_crc(buf, (uint8_t)sizeof(p)),
+		      crc16_ccitt(0xFFFF, &buf[2], sizeof(p) + 2),
+		      "helper span differs from the manual span");
+}
+
+/* telemetry_wire_validate() is the gate every frame arriving off the air
+ * passes through, and it runs on a buffer straight out of a radio - so
+ * the cases that matter are the malformed ones. A corrupt length byte in
+ * particular must be caught before the CRC helper is allowed to read a
+ * span derived from it.
+ */
+ZTEST(telemetry_wire_format, test_validate_accepts_a_built_frame)
+{
+	struct telemetry_wire_sm_update payload = {
+		.timestamp_ms = 0x11223344,
+		.state = 3,
+		.armed = 1,
+		.altitude = 1234.5,
+	};
+	uint8_t buf[128] = { 0 };
+	size_t n = telemetry_wire_finalise(buf, sizeof(buf), 0x01, &payload,
+					   (uint8_t)sizeof(payload));
+
+	zassert_equal(n, 70, "frame length");
+	zassert_true(telemetry_wire_validate(buf, n),
+		     "a frame from telemetry_wire_finalise() must validate");
+}
+
+ZTEST(telemetry_wire_format, test_validate_accepts_empty_payload)
+{
+	uint8_t buf[16] = { 0 };
+	size_t n = telemetry_wire_finalise(buf, sizeof(buf), 0x7F, NULL, 0);
+
+	zassert_equal(n, AURORA_TELEMETRY_WIRE_OVERHEAD, "frame length");
+	zassert_true(telemetry_wire_validate(buf, n), "empty payload frame");
+}
+
+ZTEST(telemetry_wire_format, test_validate_rejects_bad_magic)
+{
+	uint8_t buf[32] = { 0 };
+	size_t n = telemetry_wire_finalise(buf, sizeof(buf), 0x01, "abcd", 4);
+
+	buf[0] ^= 0xFF;
+	zassert_false(telemetry_wire_validate(buf, n), "corrupt magic0");
+
+	buf[0] ^= 0xFF;
+	buf[1] ^= 0xFF;
+	zassert_false(telemetry_wire_validate(buf, n), "corrupt magic1");
+}
+
+ZTEST(telemetry_wire_format, test_validate_rejects_length_disagreement)
+{
+	uint8_t buf[32] = { 0 };
+	size_t n = telemetry_wire_finalise(buf, sizeof(buf), 0x01, "abcd", 4);
+
+	/* The frame is intact, but the transport claims a different size:
+	 * a truncated or padded packet.
+	 */
+	zassert_false(telemetry_wire_validate(buf, n - 1), "short packet");
+	zassert_false(telemetry_wire_validate(buf, n + 1), "long packet");
+
+	/* And the mirror image: the right byte count, but a len byte that
+	 * disagrees with it. Left unchecked this is an out-of-bounds read.
+	 */
+	buf[3] = 200;
+	zassert_false(telemetry_wire_validate(buf, n), "corrupt len byte");
+}
+
+ZTEST(telemetry_wire_format, test_validate_rejects_runts)
+{
+	uint8_t buf[AURORA_TELEMETRY_WIRE_OVERHEAD] = {
+		AURORA_TELEMETRY_WIRE_MAGIC0, AURORA_TELEMETRY_WIRE_MAGIC1,
+	};
+
+	for (size_t len = 0; len < AURORA_TELEMETRY_WIRE_OVERHEAD; len++) {
+		zassert_false(telemetry_wire_validate(buf, len),
+			      "accepted a %zu byte packet", len);
+	}
+
+	zassert_false(telemetry_wire_validate(NULL, 70), "NULL frame");
+}
+
+ZTEST(telemetry_wire_format, test_validate_rejects_payload_corruption)
+{
+	uint8_t buf[32] = { 0 };
+	size_t n = telemetry_wire_finalise(buf, sizeof(buf), 0x01, "abcd", 4);
+
+	buf[AURORA_TELEMETRY_WIRE_HDR_LEN] ^= 0x01;
+	zassert_false(telemetry_wire_validate(buf, n), "flipped payload bit");
+}
+
+ZTEST_SUITE(telemetry_wire_format, NULL, NULL, NULL, NULL, NULL);
 
 /* ==========================================================
  *                     RATE LIMITER SUITE
  * ==========================================================
- * Exercises the per-backend rate limiter inside hc12_send_sm_update.
- * Compiled with CONFIG_AURORA_TELEMETRY_HC12_MIN_INTERVAL_MS=50.
+ * Exercises the uart-link rate limiter. The HC-12 backend is one
+ * instance of that engine, and is the one wired up here; compiled with
+ * CONFIG_AURORA_TELEMETRY_HC12_MIN_INTERVAL_MS=50.
  *
  * The dispatcher returns the first non-zero result from any backend.
  * Stubs A and B are silenced (rc=0) so the only path that can return

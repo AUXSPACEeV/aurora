@@ -37,6 +37,21 @@
 		};
 	};
 
+	/*
+	 * Telemetry out to AUX-Tel over the top stack connector's UART.
+	 * AUX-Tel's abby relay reads frames off whichever connector it is
+	 * mated to and puts them on the air, so from here the peer is just
+	 * a UART that speaks the telemetry wire format - no provisioning
+	 * pin, no command set.
+	 *
+	 * Use aux_data_uart_bottom instead if AUX-Tel is stacked below.
+	 */
+	telemetry_link: telemetry-uart-link {
+		compatible = "auxspaceev,telemetry-uart-link";
+		uart = <&aux_data_uart_top>;
+		status = "okay";
+	};
+
 	flight_log_disk: flight-log-disk {
 		compatible = "auxspaceev,flight-log-disk";
 		disk-name = "MMC";
@@ -120,6 +135,10 @@
 };
 
 &timer3 {
+	status = "okay";
+};
+
+&aux_data_uart_top {
 	status = "okay";
 };
 
