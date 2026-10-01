@@ -15,9 +15,8 @@ More about the SoC itself can be found in the zephyr docs of the
 
 ```{warning}
 AUX-Core is still under active hardware bring-up. Most of its sensor
-footprints are wired in devicetree but left `status = "disabled"` pending
-validation, and no AURORA application currently declares the chosen nodes
-it would need to run on this board (see the
+footprints are wired in devicetree but no AURORA application currently
+declares the chosen nodes it would need to run on this board (see the
 {doc}`sensor_board hardware requirements </applications/sensor_board>`).
 ```
 
@@ -83,8 +82,6 @@ does not go through the shield mechanism.
 ## Building
 
 AUX-Core is built with `sysbuild` since it uses the MCUBoot boot loader.
-Since no AURORA application is wired up for this board yet, use a plain
-Zephyr sample to validate the board itself:
 
 ```bash
 west build -p -b core65/esp32s3/procpu --sysbuild sensor_board
@@ -92,15 +89,19 @@ west build -p -b core65/esp32s3/procpu --sysbuild sensor_board
 
 ## Flashing
 
-`west flash` does not work here, since the ESP32-S3 requires download mode
-to be set when booting and `west flash` chain-loads both images one after
-another.
+The simplest way to flash is connecting the board via USB
+and running:
 
-Instead, put the board into download mode and flash both images with
-`esptool`, then reset:
+```bash
+west flash
+```
+
+Otherwise, put the board into download mode and flash both images
+with `esptool`, then reset.
+e.g. for the sensor_board application:
 
 ```bash
 esptool --chip esp32s3 -p /dev/tty<ESP_DEV> -b 921600 write-flash \
   0x0 build/mcuboot/zephyr/zephyr.bin \
-  0x20000 build/hello_world/zephyr/zephyr.signed.bin
+  0x20000 build/sensor_board/zephyr/zephyr.signed.bin
 ```

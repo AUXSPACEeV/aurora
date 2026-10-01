@@ -3,16 +3,14 @@
 ## Overview
 
 The Auxspace e.V. AUX-Pwr 65 PCB is the power management board of the
-**AUX-Stack**, a modular avionics stack made up of interconnected PCBs. It
-has no MCU of its own: it plugs onto a "brain board" (e.g.
+**AUX-Stack**, a modular avionics stack made up of interconnected PCBs.
+It has no MCU of its own: it plugs onto a "brain board" (e.g.
 {doc}`AUX-Core </boards/auxspace/AUX-Core/esp32s3/doc/core65>`) via an
-AUX-Stack data connector and is driven entirely over I2C, as a Zephyr
+AUX-Stack data connector and is driven over I2C, as a Zephyr
 [shield](https://docs.zephyrproject.org/latest/hardware/porting/shields.html).
 
 ```{warning}
-AUX-Pwr is still under active hardware bring-up. Both of its devicetree
-nodes are `status = "disabled"` by default until the corresponding
-drivers/wiring have been validated.
+AUX-Pwr is still under active hardware bring-up.
 ```
 
 ## Hardware
@@ -40,7 +38,3 @@ is layered on top of a brain board build with `--shield pwr65`, e.g. for the `co
 ```bash
 west build -p -b core65/esp32s3/procpu --shield pwr65 --sysbuild sensor_board
 ```
-
-The shield only adds the two devicetree nodes above; enable the ones you
-need for your application (e.g. via a board/application overlay) since both
-default to `status = "disabled"`.
