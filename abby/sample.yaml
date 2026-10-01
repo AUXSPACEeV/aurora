@@ -1,0 +1,43 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Lets Twister build the application in CI. abby has no automated runtime
+# test: proving a role end to end needs real hardware on the other side of
+# it, so these are build checks and the parser is exercised by hand (see
+# the application doc). Both roles are built, because they share headers
+# and a break in one is easy to miss from the other.
+sample:
+  description: AUX-Tel telemetry bridge between the stack UART and LoRa
+  name: abby
+common:
+  build_only: true
+  platform_allow:
+    - tel65@1
+  integration_platforms:
+    - tel65@1
+tests:
+  app.default: {}
+  app.debug:
+    extra_overlay_confs:
+      - debug.conf
+  app.no_shell:
+    extra_configs:
+      - CONFIG_SHELL=n
+      - CONFIG_ABBY_SHELL=n
+  app.duty_cycle_off:
+    extra_configs:
+      - CONFIG_ABBY_DUTY_CYCLE_ENFORCE=n
+      - CONFIG_ABBY_LORA_SF=12
+  app.receive:
+    extra_overlay_confs:
+      - receive.conf
+  app.receive_debug:
+    extra_overlay_confs:
+      - receive.conf
+      - debug.conf
+  app.receive_no_shell:
+    extra_overlay_confs:
+      - receive.conf
+    extra_configs:
+      - CONFIG_SHELL=n
+      - CONFIG_ABBY_SHELL=n

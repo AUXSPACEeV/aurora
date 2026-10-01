@@ -1,0 +1,192 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Application Kconfig entry point for abby, the AUX-Tel telemetry relay.
+
+menu "Zephyr"
+
+source "Kconfig.zephyr"
+
+endmenu
+
+module = ABBY
+module-str = ABBY
+source "subsys/logging/Kconfig.template.log_config"
+
+menu "abby - AUX-Tel telemetry relay"
+
+choice ABBY_ROLE
+	prompt "Role"
+	default ABBY_ROLE_RELAY
+	help
+	  Which end of the LoRa link this firmware is. The two roles are
+	  mirror images and share the radio settings below, which is the
+	  point: a LoRa link only decodes when both ends agree on frequency,
+	  spreading factor and bandwidth, so building both ends from one
+	  application keeps them in step instead of leaving it to two
+	  separate sets of constants.
+
+config ABBY_ROLE_RELAY
+	bool "Relay (vehicle): stack UART in, LoRa out"
+	help
+	  The flight role. Telemetry frames arrive from a brain board over
+	  the AUX-Stack data connector and every frame that passes its CRC
+	  is relayed verbatim over LoRa.
+
+config ABBY_ROLE_RECEIVE
+	bool "Receive (ground): LoRa in, stack UART out"
+	help
+	  The ground role. Frames arrive over LoRa and every one that
+	  validates is written verbatim to the AUX-Stack data connector's
+	  UART, so whatever is attached there - a brain board, or a
+	  USB-serial adapter - sees exactly the byte stream a directly wired
+	  relay would have produced.
+
+endchoice
+
+menu "LoRa downlink"
+
+config ABBY_LORA_FREQ_HZ
+	int "Carrier frequency (Hz)"
+	default 868100000
+	help
+	  Must sit in the module's band (Daphnis-I: 863..870 MHz) and on a
+	  channel your regulator permits. The Daphnis-I user manual's
+	  channel assignment table lists the EN 300 220 limits per channel,
+	  including which ones allow more than a 1 % duty cycle - worth
+	  consulting before raising ABBY_DUTY_CYCLE_PERMILLE.
+
+config ABBY_LORA_SF
+	int "Spreading factor"
+	range 5 12
+	default 7
+	help
+	  Higher spreads reach further and cost airtime roughly doubling per
+	  step, which the duty-cycle budget then charges for. SF7 keeps a
+	  70-byte frame near 130 ms; SF12 pushes the same frame past three
+	  seconds.
+
+config ABBY_LORA_BW_KHZ
+	int "Signal bandwidth (kHz)"
+	default 125
+	help
+	  Values map onto enum lora_signal_bandwidth: 7, 10, 15, 20, 31, 41,
+	  62, 125, 200, 250, 400, 500, 800 or 1000.
+
+config ABBY_LORA_CODING_RATE
+	int "Coding rate denominator offset (1 = 4/5 ... 4 = 4/8)"
+	range 1 4
+	default 1
+	help
+	  Values map onto enum lora_coding_rate: 1 is CR_4_5, 4 is CR_4_8.
+
+config ABBY_LORA_PREAMBLE_LEN
+	int "Preamble length in symbols"
+	default 8
+
+config ABBY_LORA_TX_POWER_DBM
+	int "Transmit power (dBm)"
+	default 14
+	help
+	  The Daphnis-I front end is the STM32WL's low-power PA and is
+	  specified to +14 dBm, so values above that buy nothing.
+
+config ABBY_LORA_PUBLIC_NETWORK
+	bool "Use the public-network sync word"
+	help
+	  Leave this off for a point-to-point link. The public sync word is
+	  for LoRaWAN-style traffic.
+
+config ABBY_DUTY_CYCLE_ENFORCE
+	bool "Enforce a transmit duty-cycle budget"
+	depends on ABBY_ROLE_RELAY
+	default y
+	help
+	  Spaces transmissions so that time on air stays within
+	  ABBY_DUTY_CYCLE_PERMILLE, using the radio driver's own airtime
+	  calculation so the budget tracks the configured spreading factor,
+	  bandwidth and frame length automatically. Turning this off will
+	  transmit as fast as frames arrive, which is almost certainly
+	  outside what your ISM band allows - bench use only.
+
+config ABBY_DUTY_CYCLE_PERMILLE
+	int "Transmit duty-cycle budget (per mille)"
+	depends on ABBY_ROLE_RELAY
+	range 1 1000
+	default 10
+	help
+	  10 per mille is the 1 % limit that applies to most EU868 channels.
+	  Note what this costs: a 70-byte frame at SF7/BW125 is ~130 ms on
+	  air, so 1 % allows one frame roughly every 13 seconds. Raise the
+	  rate by shrinking the frame or lowering the spreading factor
+	  rather than by relaxing this.
+
+config ABBY_DOWNLINK_STACK_SIZE
+	int "Radio thread stack size (bytes)"
+	default 2048
+	help
+	  Stack for the thread that owns the radio: the transmit worker in
+	  the relay role, the receive worker in the receive role.
+
+config ABBY_DOWNLINK_THREAD_PRIORITY
+	int "Radio thread priority"
+	default 10
+	help
+	  In the relay role this thread blocks for the whole airtime of a
+	  packet, so keep it below the link receiver.
+
+endmenu # LoRa downlink
+
+menu "Stack link"
+
+config ABBY_LINK_RX_RING_SIZE
+	int "Receive ring buffer size (bytes)"
+	depends on ABBY_ROLE_RELAY
+	default 512
+	help
+	  Buffers bytes between the UART interrupt and the frame parser. It
+	  needs to cover a few frames' worth of burst; overruns are counted
+	  and reported by "abby status".
+
+config ABBY_LINK_STACK_SIZE
+	int "Link parser thread stack size (bytes)"
+	depends on ABBY_ROLE_RELAY
+	default 1024
+
+config ABBY_LINK_THREAD_PRIORITY
+	int "Link parser thread priority"
+	depends on ABBY_ROLE_RELAY
+	default 7
+	help
+	  Above the radio thread, so parsing keeps up with the UART while a
+	  transmission is in flight.
+
+endmenu # Stack link
+
+config ABBY_LED_PULSE_MS
+	int "Status LED pulse length (ms)"
+	default 50
+
+config ABBY_HEARTBEAT_SEC
+	int "Heartbeat interval (s)"
+	default 30
+	range 1 3600
+
+config ABBY_HEARTBEAT_LOG
+	bool "Log counters on each heartbeat"
+	default y
+	help
+	  Prints the link and downlink counters periodically. Harmless in
+	  flight - it goes to the console UART on the debug header - and the
+	  cheapest way to see on a bench that frames are moving.
+
+config ABBY_SHELL
+	bool "abby shell commands"
+	depends on SHELL
+	default y if SHELL
+	help
+	  Registers the "abby" command tree: status, and test to push a
+	  synthetic frame into whichever output the role uses, so each path
+	  can be proven before the other end of it exists.
+
+endmenu

@@ -10,5 +10,6 @@ The application code lives in the top-level directories of the
 ```{toctree}
 :maxdepth: 2
 
+abby
 sensor_board
 ```

@@ -1,0 +1,40 @@
+# Telemetry link over a plain UART
+#
+# For a peer that already speaks the telemetry wire frame
+# (<aurora/lib/telemetry/wire.h>) and needs no provisioning: an AUX-Tel
+# relay on the stack data connector, or a laptop on a USB-serial
+# adapter. A node that needs a SET pin and an AT command set wants
+# auxspaceev,hc12 instead.
+#
+# Example - a brain board feeding the stack connector's UART:
+#
+#   / {
+#       telemetry_link: telemetry-uart-link {
+#           compatible = "auxspaceev,telemetry-uart-link";
+#           uart = <&aux_data_uart_top>;
+#           status = "okay";
+#       };
+#   };
+#
+#   &aux_data_uart_top {
+#       current-speed = <115200>;
+#       status = "okay";
+#   };
+#
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+description: Telemetry link over a plain UART
+
+compatible: "auxspaceev,telemetry-uart-link"
+
+include: base.yaml
+
+properties:
+  uart:
+    type: phandle
+    required: true
+    description: |
+      UART peripheral the frames are written to. Its `current-speed`
+      must match whatever the far end listens at; nothing in this
+      backend reconfigures the line.

@@ -22,4 +22,24 @@
 		uart = <&test_uart>;
 		status = "okay";
 	};
+
+	/* A second emulated UART carries the plain uart-link backend, so a
+	 * run exercises both instances of the uart-link engine at once and
+	 * the dispatcher really does fan out to two independent transports
+	 * - which is what a brain board with a local radio and an AUX-Tel
+	 * relay above it looks like.
+	 */
+	link_uart: link-uart {
+		compatible = "zephyr,uart-emul";
+		status = "okay";
+		current-speed = <115200>;
+		tx-fifo-size = <128>;
+		rx-fifo-size = <128>;
+	};
+
+	telemetry_link: telemetry-uart-link {
+		compatible = "auxspaceev,telemetry-uart-link";
+		uart = <&link_uart>;
+		status = "okay";
+	};
 };
