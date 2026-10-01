@@ -1,0 +1,19 @@
+/*
+ * Copyright (c) 2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	chosen {
+		/*
+		 * Which AUX-Stack data connector carries the telemetry link.
+		 * abby reads the UART out of this node's uart-bus phandle, so
+		 * it never names a board-specific peripheral and works on any
+		 * board exposing an auxspaceev,aux-stack-data-connector.
+		 *
+		 * On AUX-Tel both connectors are bridged to the same LPUART1,
+		 * so either label resolves to the same UART.
+		 */
+		auxspace,stack-connector = &top_data_connector;
+	};
+};

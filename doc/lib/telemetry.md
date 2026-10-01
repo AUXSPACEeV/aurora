@@ -6,9 +6,19 @@ small dispatcher: every backend that registers a
 message. Backends own their own framing, transport, worker threads, and
 any backend-specific rate limiting.
 
-Today only the HC-12 433 MHz UART-RF bridge backend ships in-tree, but
-the API is transport-agnostic: a LoRaWAN, CAN-tunnel, or any other
-backend can be added without touching the dispatcher or callers.
+Two backends ship in-tree, and both are UARTs underneath. Writing
+telemetry frames to a UART is the same job whether the far end is an
+HC-12 radio bridge or an AUX-Tel relay on the stack connector: pack the
+payload, frame it, rate-limit it, and push the bytes from a worker
+thread so the caller never blocks. That job is the **uart-link engine**
+(`lib/telemetry/uart_link`). What differs per far end - a provisioning
+pin, a command set, a modem whose baud rate has to change - stays in the
+backend that owns it, which is why the HC-12 backend is that engine plus
+a SET pin and an AT helper.
+
+The API stays transport-agnostic: a LoRaWAN, CAN-tunnel or any other
+backend can be added without touching the dispatcher or callers, and
+without going through the uart-link engine at all.
 
 ## Architecture
 
@@ -26,12 +36,21 @@ The dispatcher itself never blocks.
 
 ## Backends
 
+- **Plain UART link** (`CONFIG_AURORA_TELEMETRY_UART_LINK`): the
+  uart-link engine with nothing bolted on, bound to an
+  `auxspaceev,telemetry-uart-link` node. For a peer that already speaks
+  the wire format and needs no provisioning - an
+  {doc}`AUX-Tel relay </applications/abby>` on the stack data
+  connector, or a laptop on a USB-serial adapter.
 - **HC-12** (`CONFIG_AURORA_TELEMETRY_HC12`): transparent UART
-  ↔ 433 MHz RF bridge. Selects its UART via the chosen
-  `auxspace,telemetry-uart` node. The module itself is provisioned out
-  of band on the bench (channel, air baud, TX power); firmware only
-  opens the UART. See [HC-12 wire frame] and
-  [HC-12 threading and rate limiting].
+  ↔ 433 MHz RF bridge, bound to an `auxspaceev,hc12` node. The same
+  engine plus a SET pin and an AT helper, so the module can be
+  provisioned at runtime as well as on the bench (channel, air baud, TX
+  power). See [Provisioning].
+
+Several backends can run at once: a board may push the same updates to a
+local HC-12 and to an AUX-Tel relay above it, each on its own UART with
+its own rate limit.
 
 ### Adding a new backend
 
@@ -70,11 +89,38 @@ Add a `CONFIG_AURORA_TELEMETRY_<BACKEND>` symbol under
 to compile it in. No changes to the dispatcher or to callers
 (`telemetry_send_sm_update`) are needed.
 
-## HC-12 wire frame
+(telemetry-wire-frame)=
+## Wire frame
 
-The HC-12 backend frames each state-machine update as a small
-self-describing packet so the ground station can resync after RF
-corruption. All multi-byte fields are little-endian.
+Every state-machine update becomes a small self-describing packet, so a
+receiver can resynchronise after corruption. All multi-byte fields are
+little-endian.
+
+The format is defined once, in `include/aurora/lib/telemetry/wire.h`,
+and both the senders here and the
+{doc}`AUX-Tel relay </applications/abby>` include it. Senders and
+receivers are separate firmwares, and a framing mismatch between them
+is only visible as silent packet loss - so there is deliberately one
+definition rather than a copy per side.
+
+The header carries the framing helpers along with the layout, because
+every side needs the same three operations:
+
+| Helper | Used by |
+|---|---|
+| `telemetry_wire_finalise()` | Senders, to build a frame |
+| `telemetry_wire_crc()` | Byte-stream receivers, which have already reassembled a frame and only need its CRC |
+| `telemetry_wire_validate()` | Packet receivers, where a whole frame arrives at once |
+
+The split between the last two is about the transport. A UART receiver
+reassembles frames from a byte stream and knows the length as it goes, so
+it needs the CRC alone. A packet receiver - a LoRa packet, a datagram -
+is handed a buffer and a length by something else, and has to establish
+that the buffer *is* a frame before trusting anything in it. In
+particular, a corrupt `len` byte would otherwise send the CRC helper
+reading past what was actually received, so `telemetry_wire_validate()`
+cross-checks `len` against the received byte count before computing
+anything.
 
 ```{eval-rst}
 .. list-table::
@@ -176,10 +222,13 @@ Packet types:
 At 10 Hz the link runs at roughly 420 B/s, about 44 % of a 9600-baud
 HC-12 air link, leaving headroom for re-tries and other packet types.
 
-## HC-12 threading and rate limiting
+## Threading and rate limiting
 
-The HC-12 backend hands every outgoing frame to a dedicated worker
-thread via a bounded FIFO message queue. The producer
+This is the uart-link engine's behaviour, so it applies to both
+backends; each instance has its own queue, worker thread and limit.
+
+Every outgoing frame goes to a dedicated worker thread via a bounded
+FIFO message queue. The producer
 ({c:func}`telemetry_send_sm_update`, called from the state-machine task)
 never blocks:
 
@@ -194,7 +243,9 @@ never blocks:
   the UART. Useful when the SM tick rate is higher than the air link
   can carry comfortably (the default 0 disables it).
 
-Tunables (under `AURORA_TELEMETRY_HC12`):
+Each backend exposes the same four tunables under its own prefix -
+`AURORA_TELEMETRY_UART_LINK_*` and `AURORA_TELEMETRY_HC12_*` - so two
+instances can be tuned independently:
 
 ```{eval-rst}
 .. list-table::
@@ -204,23 +255,50 @@ Tunables (under `AURORA_TELEMETRY_HC12`):
    * - Kconfig
      - Default
      - Purpose
-   * - ``AURORA_TELEMETRY_HC12_QUEUE_DEPTH``
-     - 16
+   * - ``..._QUEUE_DEPTH``
+     - 8 / 16
      - Maximum queued frames before overflow drops.
-   * - ``AURORA_TELEMETRY_HC12_MIN_INTERVAL_MS``
+   * - ``..._MIN_INTERVAL_MS``
      - 0
      - Minimum spacing between accepted SM updates (ms).
        0 = unlimited.
-   * - ``AURORA_TELEMETRY_HC12_STACK_SIZE``
+   * - ``..._STACK_SIZE``
      - 1024
      - Worker thread stack size (bytes).
-   * - ``AURORA_TELEMETRY_HC12_THREAD_PRIORITY``
+   * - ``..._THREAD_PRIORITY``
      - 10
      - Worker thread priority. Keep numerically above flight threads
        (priority 5) so telemetry never preempts them.
 ```
 
 ## Device-tree
+
+### Plain UART link
+
+`auxspaceev,telemetry-uart-link` (see
+`dts/bindings/telemetry/auxspaceev,telemetry-uart-link.yaml`) carries
+nothing but a phandle to the UART, because the far end needs nothing
+else. A brain board feeding an AUX-Tel relay through the stack
+connector:
+
+```dts
+/ {
+   telemetry_link: telemetry-uart-link {
+      compatible = "auxspaceev,telemetry-uart-link";
+      uart = <&aux_data_uart_top>;
+      status = "okay";
+   };
+};
+
+&aux_data_uart_top {
+   status = "okay";
+};
+```
+
+Nothing in this backend reconfigures the line, so the node's
+`current-speed` has to match what the far end listens at.
+
+### HC-12
 
 The HC-12 backend is bound to a devicetree node with the compatible
 `auxspaceev,hc12` (see `dts/bindings/hc12/auxspaceev,hc12.yaml`).
