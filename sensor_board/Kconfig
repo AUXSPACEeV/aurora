@@ -40,3 +40,17 @@ config AURORA_SIM_AUTOLAUNCH_TIMEOUT_MS
 	help
 	  Maximum time in milliseconds to wait for SM_LANDED after launching
 	  the flight. Exits with code 1 if this deadline is exceeded.
+
+config SENSOR_BOARD_STATUS_INTERVAL_MS
+	int "Telemetry status heartbeat interval (ms)"
+	depends on AURORA_TELEMETRY && AURORA_STATE_MACHINE
+	default 1000
+	range 0 60000
+	help
+	  Period of the STATUS telemetry frame sent while the vehicle is
+	  not in flight (pad, error hold, landed). It carries the flight
+	  state and sensor/calibration/log health, and unlike SM updates
+	  it does not wait for both sensors to report - so the ground
+	  station hears from a board whose IMU or barometer is down.
+	  Suppressed in flight, where it would compete with SM updates
+	  for airtime. 0 disables it.

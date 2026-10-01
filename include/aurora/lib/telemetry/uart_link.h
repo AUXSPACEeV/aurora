@@ -13,6 +13,7 @@
 #include <zephyr/toolchain.h>
 
 #include <aurora/lib/state/state.h>
+#include <aurora/lib/telemetry.h>
 #include <aurora/lib/telemetry/wire.h>
 
 /**
@@ -118,6 +119,23 @@ int uart_link_init(struct uart_link *link);
 int uart_link_send_sm_update(struct uart_link *link, enum sm_state state,
 			     enum sm_type type,
 			     const struct sm_inputs *inputs);
+
+/**
+ * @brief Frame a STATUS heartbeat and queue it for transmission.
+ *
+ * Never blocks. Not subject to @ref uart_link.min_interval_ms, which
+ * governs SM updates only: the caller paces heartbeats itself.
+ *
+ * @param link   Link instance.
+ * @param status Health snapshot to send.
+ *
+ * @retval 0 on success.
+ * @retval -EINVAL if an argument is NULL.
+ * @retval -ENODEV if the link is not initialised.
+ * @retval -ENOMEM if the transmit queue is full.
+ */
+int uart_link_send_status(struct uart_link *link,
+			  const struct telemetry_status *status);
 
 /**
  * @brief Transmit worker body. Does not return.
