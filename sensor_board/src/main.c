@@ -561,6 +561,61 @@ static void handle_state_transition(enum sm_state prev_state, enum sm_state stat
 	log_handle_flight_lifecycle(prev_state, state);
 }
 
+#if defined(CONFIG_AURORA_TELEMETRY) && (CONFIG_SENSOR_BOARD_STATUS_INTERVAL_MS > 0)
+#define STATUS_HEARTBEAT 1
+
+/* A sensor counts as healthy in the heartbeat only if it delivered within
+ * this long.  Several periods, so one slow read on a sick bus does not
+ * flicker the flag, with a floor for the slow sensors.
+ */
+#define SENSOR_STALE_MS(period_ms) MAX(1000, 3 * (period_ms))
+
+/* Uptime of each sensor's last delivered sample; -1 until the first. */
+#if defined(CONFIG_IMU)
+static int64_t last_imu_sample_ms = -1;
+#endif /* CONFIG_IMU */
+#if defined(CONFIG_BARO)
+static int64_t last_baro_sample_ms = -1;
+#endif /* CONFIG_BARO */
+
+/**
+ * @brief Send a STATUS heartbeat so the ground station knows we are alive.
+ *
+ * Runs independently of the sensor gate in the flight loop: SM updates
+ * stop entirely while either sensor is silent, and that is exactly the
+ * situation the ground station most needs to hear about.  Not sent in
+ * flight, where the SM updates already say we are alive and the
+ * heartbeat would only compete with them for airtime.
+ *
+ * @param now Current uptime in ms.
+ */
+static void send_status_heartbeat(int64_t now)
+{
+	if (sm_inflight()) {
+		return;
+	}
+
+	struct telemetry_status status = {
+		.state = sm_get_state(),
+		.type = sm_get_type(),
+		.armed = sm_get_armed() != 0,
+		.calibrated = calibrated,
+		.log_ready = log_flight_log_online(),
+	};
+
+#if defined(CONFIG_IMU)
+	status.imu_ok = imu_ok && last_imu_sample_ms >= 0 &&
+			(now - last_imu_sample_ms) <= SENSOR_STALE_MS(IMU_PERIOD_MS);
+#endif /* CONFIG_IMU */
+#if defined(CONFIG_BARO)
+	status.baro_ok = baro_ok && last_baro_sample_ms >= 0 &&
+			 (now - last_baro_sample_ms) <= SENSOR_STALE_MS(BARO_PERIOD_MS);
+#endif /* CONFIG_BARO */
+
+	(void)telemetry_send_status(&status);
+}
+#endif /* CONFIG_AURORA_TELEMETRY && CONFIG_SENSOR_BOARD_STATUS_INTERVAL_MS > 0 */
+
 /**
  * @brief Flight thread: reads every sensor and runs the state machine off it.
  */
@@ -652,6 +707,9 @@ void state_machine_task(void *, void *, void *)
 	int64_t baro_due = now;
 	struct baro_data baro_msg;
 #endif /* CONFIG_BARO */
+#if defined(STATUS_HEARTBEAT)
+	int64_t status_due = now;
+#endif /* STATUS_HEARTBEAT */
 
 	while (1) {
 		now = k_uptime_get();
@@ -666,6 +724,9 @@ void state_machine_task(void *, void *, void *)
 				 */
 				if (imu_poll(IMU_DEV, &imu_msg) == 0) {
 					WDT_KICK(AURORA_WDT_SRC_IMU);
+#if defined(STATUS_HEARTBEAT)
+					last_imu_sample_ms = now;
+#endif /* STATUS_HEARTBEAT */
 					handle_imu(&imu_msg);
 					log_imu_data(&imu_msg);
 				}
@@ -690,6 +751,9 @@ void state_machine_task(void *, void *, void *)
 			if (now >= baro_due) {
 				if (baro_measure(BARO_DEV, &baro_msg) == 0) {
 					WDT_KICK(AURORA_WDT_SRC_BARO);
+#if defined(STATUS_HEARTBEAT)
+					last_baro_sample_ms = now;
+#endif /* STATUS_HEARTBEAT */
 					log_baro_data(&baro_msg);
 
 					if (baro_sensor_value_to_altitude(
@@ -763,6 +827,21 @@ void state_machine_task(void *, void *, void *)
 
 			handle_pyro(state, &pyro_state, pyro0);
 		}
+
+#if defined(STATUS_HEARTBEAT)
+		/* Outside the sensor gate above on purpose; see
+		 * send_status_heartbeat().
+		 */
+		now = k_uptime_get();
+		if (now >= status_due) {
+			send_status_heartbeat(now);
+			status_due += CONFIG_SENSOR_BOARD_STATUS_INTERVAL_MS;
+			if (status_due <= now) {
+				status_due = now + CONFIG_SENSOR_BOARD_STATUS_INTERVAL_MS;
+			}
+		}
+		next_due = MIN(next_due, status_due);
+#endif /* STATUS_HEARTBEAT */
 
 #if defined(CONFIG_AURORA_SIM_AUTOTEST)
 		autotest_step(sm_get_state());

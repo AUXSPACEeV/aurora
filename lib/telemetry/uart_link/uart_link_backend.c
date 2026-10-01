@@ -46,6 +46,11 @@ static int uart_link_backend_send(enum sm_state state, enum sm_type type,
 	return uart_link_send_sm_update(&link, state, type, inputs);
 }
 
+static int uart_link_backend_send_status(const struct telemetry_status *status)
+{
+	return uart_link_send_status(&link, status);
+}
+
 static void uart_link_tx_task(void *a, void *b, void *c)
 {
 	ARG_UNUSED(a);
@@ -67,6 +72,7 @@ static int uart_link_backend_init(void)
 static const struct telemetry_backend_api uart_link_api = {
 	.init           = uart_link_backend_init,
 	.send_sm_update = uart_link_backend_send,
+	.send_status    = uart_link_backend_send_status,
 };
 
 TELEMETRY_BACKEND_DEFINE(uart_link, &uart_link_api);

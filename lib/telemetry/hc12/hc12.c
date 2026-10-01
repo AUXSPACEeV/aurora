@@ -63,6 +63,11 @@ static int hc12_send_sm_update(enum sm_state state, enum sm_type type,
 	return uart_link_send_sm_update(&link, state, type, inputs);
 }
 
+static int hc12_send_status(const struct telemetry_status *status)
+{
+	return uart_link_send_status(&link, status);
+}
+
 static void hc12_tx_task(void *a, void *b, void *c)
 {
 	ARG_UNUSED(a);
@@ -105,6 +110,7 @@ static int hc12_init(void)
 static const struct telemetry_backend_api hc12_api = {
 	.init           = hc12_init,
 	.send_sm_update = hc12_send_sm_update,
+	.send_status    = hc12_send_status,
 };
 
 TELEMETRY_BACKEND_DEFINE(hc12, &hc12_api);
