@@ -15,7 +15,6 @@
 		gpio-controller;
 		#gpio-cells = <2>;
 		ngpios = <8>;
-		status = "disabled";
 	};
 
 	ina219_0: ina219@81 {
@@ -23,7 +22,6 @@
 		reg = <0x81>;
 		lsb-microamp = <100>;
 		shunt-milliohm = <150>;
-		status = "disabled";
 	};
 
 };
