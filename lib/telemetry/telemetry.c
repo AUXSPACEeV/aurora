@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <errno.h>
+
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/iterable_sections.h>
 
@@ -39,6 +41,26 @@ int telemetry_send_sm_update(enum sm_state state, enum sm_type type,
 			continue;
 		}
 		int ret = backend->api->send_sm_update(state, type, inputs);
+		if (ret && !rc) {
+			rc = ret;
+		}
+	}
+	return rc;
+}
+
+int telemetry_send_status(const struct telemetry_status *status)
+{
+	int rc = 0;
+
+	if (!status) {
+		return -EINVAL;
+	}
+
+	STRUCT_SECTION_FOREACH(telemetry_backend, backend) {
+		if (!backend->api || !backend->api->send_status) {
+			continue;
+		}
+		int ret = backend->api->send_status(status);
 		if (ret && !rc) {
 			rc = ret;
 		}

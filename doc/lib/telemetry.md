@@ -163,6 +163,9 @@ Packet types:
    * - ``0x01``
      - ``SM_UPDATE``
      - State-machine snapshot (see below)
+   * - ``0x02``
+     - ``STATUS``
+     - Health heartbeat (see below)
 ```
 
 `SM_UPDATE` payload (36 bytes):
@@ -218,6 +221,50 @@ Packet types:
      - ``f32[3]``
      - ``orientation`` (roll/pitch/yaw, rad)
 ```
+
+`STATUS` payload (8 bytes):
+
+```{eval-rst}
+.. list-table::
+   :header-rows: 1
+   :widths: 15 15 15 55
+
+   * - Offset
+     - Size
+     - Type
+     - Field
+   * - 0
+     - 4
+     - ``u32``
+     - ``timestamp_ms`` (system uptime, low 32 bits)
+   * - 4
+     - 1
+     - ``u8``
+     - ``state`` (:c:enum:`sm_state`)
+   * - 5
+     - 1
+     - ``u8``
+     - ``sm_type`` (:c:enum:`sm_type`)
+   * - 6
+     - 1
+     - ``u8``
+     - ``flags``: bit 0 armed, bit 1 IMU ok, bit 2 baro ok,
+       bit 3 calibrated, bit 4 flight log ready; others zero
+   * - 7
+     - 1
+     - ``u8``
+     - reserved (zero)
+```
+
+`SM_UPDATE` only exists once both sensors have reported, so a board
+with a dead IMU or barometer sends none at all. `STATUS` fills that
+gap. The sensor board sends it every
+`CONFIG_SENSOR_BOARD_STATUS_INTERVAL_MS` (default 1000 ms, 0 disables it)
+whenever the vehicle is not in flight: on the pad, in an error hold and
+after landing. It is not subject to a backend's `..._MIN_INTERVAL_MS`,
+which limits SM updates only. A sensor counts as ok only if it
+initialised *and* delivered a sample recently, so a sensor that stalls
+after boot also shows up.
 
 At 10 Hz the link runs at roughly 420 B/s, about 44 % of a 9600-baud
 HC-12 air link, leaving headroom for re-tries and other packet types.
@@ -436,8 +483,9 @@ flow.
 
 ## Usage from the application
 
-`main.c` calls {c:func}`telemetry_init` once at boot, then
-{c:func}`telemetry_send_sm_update` once per state-machine tick:
+`main.c` calls {c:func}`telemetry_init` once at boot,
+{c:func}`telemetry_send_sm_update` once per state-machine tick, and
+{c:func}`telemetry_send_status` on its own timer while not in flight:
 
 ```c
 #if defined(CONFIG_AURORA_TELEMETRY)

@@ -76,6 +76,8 @@
  * anything in between having to learn it.
  */
 #define AURORA_TELEMETRY_WIRE_TYPE_SM_UPDATE 0x01
+/** @brief Low-rate "still here" heartbeat; see @ref telemetry_wire_status. */
+#define AURORA_TELEMETRY_WIRE_TYPE_STATUS    0x02
 
 /**
  * @brief SM_UPDATE payload (64 bytes, packed, little-endian).
@@ -99,6 +101,41 @@ struct __packed telemetry_wire_sm_update {
 	double   accel_vert;
 	double   velocity;
 	double   orientation[3];
+};
+
+/** @name STATUS flag bits
+ *  Bits of @ref telemetry_wire_status.flags. Unassigned bits are zero.
+ *  @{
+ */
+/** @brief The arm input is asserted. */
+#define AURORA_TELEMETRY_WIRE_STATUS_ARMED      (1U << 0)
+/** @brief The IMU initialised and delivered a sample recently. */
+#define AURORA_TELEMETRY_WIRE_STATUS_IMU_OK     (1U << 1)
+/** @brief The barometer initialised and delivered a sample recently. */
+#define AURORA_TELEMETRY_WIRE_STATUS_BARO_OK    (1U << 2)
+/** @brief Attitude calibration has converged. */
+#define AURORA_TELEMETRY_WIRE_STATUS_CALIBRATED (1U << 3)
+/** @brief The flight log is online, so arming will not be refused for it. */
+#define AURORA_TELEMETRY_WIRE_STATUS_LOG_READY  (1U << 4)
+/** @} */
+
+/**
+ * @brief STATUS payload (8 bytes, packed, little-endian).
+ *
+ * A heartbeat that does not depend on the sensors: it goes out while
+ * the vehicle is not in flight even when no SM_UPDATE can be produced,
+ * so a ground station can tell "board up, IMU dead" from "board off".
+ * Kept small because on a duty-cycled radio its airtime competes with
+ * SM_UPDATE frames.
+ *
+ * Changing this layout is a wire break, as for SM_UPDATE.
+ */
+struct __packed telemetry_wire_status {
+	uint32_t timestamp_ms;
+	uint8_t  state;
+	uint8_t  sm_type;
+	uint8_t  flags;
+	uint8_t  reserved;
 };
 
 /**

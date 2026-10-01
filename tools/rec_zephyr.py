@@ -61,6 +61,7 @@ uart = UART(1, baudrate=BAUD, tx=Pin(4), rx=Pin(5),
 MAGIC0 = 0xA5
 MAGIC1 = 0x5A
 HC12_TYPE_SM_UPDATE = 0x01
+HC12_TYPE_STATUS = 0x02
 
 # State-name tables keyed by the sm_type byte from the protocol.
 # Must match enum sm_type in aurora/include/aurora/lib/state/state.h and the
@@ -81,6 +82,15 @@ SM_TYPE_NAMES = {SM_TYPE_SIMPLE: "simple"}
 # scalar bytes were repurposed.
 SM_UPDATE_FMT = "<IBBBB7d"
 SM_UPDATE_LEN = struct.calcsize(SM_UPDATE_FMT)  # 64
+
+# STATUS heartbeat, sent while not in flight even when the sensors are
+# down: uint32 ts, uint8 state, uint8 sm_type, uint8 flags, uint8 reserved.
+# Flag bits match AURORA_TELEMETRY_WIRE_STATUS_* in
+# aurora/include/aurora/lib/telemetry/wire.h.
+STATUS_FMT = "<IBBBB"
+STATUS_LEN = struct.calcsize(STATUS_FMT)  # 8
+STATUS_FLAGS = (("armed", 0x01), ("imu", 0x02), ("baro", 0x04),
+                ("cal", 0x08), ("log", 0x10))
 
 # Precomputed CRC-16/CCITT (reflected, poly 0x8408) table.
 def _build_crc_table():
@@ -113,15 +123,30 @@ read_ix = 0   # next byte to parse
 out_lines = []
 
 
+def state_name(sm_type, state):
+    states = SM_STATE_TABLES.get(sm_type)
+    return states[state] if states and state < len(states) else "?%d" % state
+
+
 def queue_frame(ftype, mv, plen, crc_ok):
     tag = "OK " if crc_ok else "BAD"
+    if ftype == HC12_TYPE_STATUS and plen == STATUS_LEN and crc_ok:
+        ts, state, sm_type, flags, _resv = struct.unpack_from(STATUS_FMT,
+                                                              mv, 0)
+        # Upper case = set, lower case = clear, so a dead sensor stands
+        # out in a scrolling REPL.
+        health = " ".join(n.upper() if flags & bit else n
+                          for n, bit in STATUS_FLAGS)
+        out_lines.append(
+            "[OK ] STATUS[%s] t=%d ms  state=%-9s %s"
+            % (SM_TYPE_NAMES.get(sm_type, "?%d" % sm_type), ts,
+               state_name(sm_type, state), health))
+        return
     if ftype == HC12_TYPE_SM_UPDATE and plen == SM_UPDATE_LEN and crc_ok:
         (ts, state, armed, sm_type, _resv,
          altitude, accel, accel_vert, velocity,
          yaw, pitch, roll) = struct.unpack_from(SM_UPDATE_FMT, mv, 0)
-        states = SM_STATE_TABLES.get(sm_type)
-        name = (states[state] if states and state < len(states)
-                else "?%d" % state)
+        name = state_name(sm_type, state)
         tname = SM_TYPE_NAMES.get(sm_type, "?%d" % sm_type)
         out_lines.append(
             "[OK ] SM[%s] t=%d ms  state=%-9s armed=%d  alt=%+.2f  "

@@ -94,6 +94,60 @@ int uart_link_send_sm_update(struct uart_link *link, enum sm_state state,
 	return 0;
 }
 
+BUILD_ASSERT(sizeof(struct telemetry_wire_status) <=
+		     sizeof(struct telemetry_wire_sm_update),
+	     "uart_link_frame is sized for SM_UPDATE; grow it for STATUS");
+
+int uart_link_send_status(struct uart_link *link,
+			  const struct telemetry_status *status)
+{
+	if (!link || !status) {
+		return -EINVAL;
+	}
+
+	if (!atomic_get(&link->ready)) {
+		return -ENODEV;
+	}
+
+	/* No rate_limit(): the window is shared with SM updates, which
+	 * would then starve the heartbeat on a link that is otherwise
+	 * busy. The caller already sends these at a low fixed rate.
+	 */
+	uint8_t flags = 0;
+
+	flags |= status->armed ? AURORA_TELEMETRY_WIRE_STATUS_ARMED : 0;
+	flags |= status->imu_ok ? AURORA_TELEMETRY_WIRE_STATUS_IMU_OK : 0;
+	flags |= status->baro_ok ? AURORA_TELEMETRY_WIRE_STATUS_BARO_OK : 0;
+	flags |= status->calibrated ?
+		AURORA_TELEMETRY_WIRE_STATUS_CALIBRATED : 0;
+	flags |= status->log_ready ?
+		AURORA_TELEMETRY_WIRE_STATUS_LOG_READY : 0;
+
+	struct telemetry_wire_status p = {
+		.timestamp_ms = (uint32_t)k_uptime_get(),
+		.state        = (uint8_t)status->state,
+		.sm_type      = (uint8_t)status->type,
+		.flags        = flags,
+	};
+
+	struct uart_link_frame f;
+	size_t n = telemetry_wire_finalise(f.buf, sizeof(f.buf),
+					   AURORA_TELEMETRY_WIRE_TYPE_STATUS,
+					   &p, (uint8_t)sizeof(p));
+
+	if (n == 0) {
+		/* Unreachable: see the BUILD_ASSERT above. */
+		return -ENOMEM;
+	}
+	f.len = (uint8_t)n;
+
+	if (k_msgq_put(link->txq, &f, K_NO_WAIT) != 0) {
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
 FUNC_NORETURN void uart_link_tx_worker(struct uart_link *link)
 {
 	struct uart_link_frame f;

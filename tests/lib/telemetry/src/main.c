@@ -7,7 +7,8 @@
  *   - rate:      exercises the uart-link rate limiter (through the
  *                HC-12 backend, which is one instance of it).
  *   - dispatch:  verifies fan-out to multiple registered backends and
- *                the dispatcher's error aggregation.
+ *                the dispatcher's error aggregation, for SM updates
+ *                and STATUS heartbeats.
  *
  * UART traffic from the worker thread is dumped into an emulated UART
  * rather than qemu's uart0, which carries ztest output. Tests never
@@ -41,6 +42,9 @@ static int  stub_a_send_calls;
 static int  stub_a_init_rc;
 static int  stub_a_send_rc;
 
+static int  stub_a_status_calls;
+static struct telemetry_status stub_a_last_status;
+
 static int  stub_b_init_calls;
 static int  stub_b_send_calls;
 static int  stub_b_init_rc;
@@ -55,6 +59,16 @@ static int stub_a_send(enum sm_state s, enum sm_type type,
 	return stub_a_send_rc;
 }
 
+/* Only stub A implements send_status, so the dispatcher's NULL-slot
+ * skip is exercised by stub B.
+ */
+static int stub_a_status(const struct telemetry_status *st)
+{
+	stub_a_status_calls++;
+	stub_a_last_status = *st;
+	return stub_a_send_rc;
+}
+
 static int stub_b_init(void) { stub_b_init_calls++; return stub_b_init_rc; }
 static int stub_b_send(enum sm_state s, enum sm_type type,
 		       const struct sm_inputs *in)
@@ -66,6 +80,7 @@ static int stub_b_send(enum sm_state s, enum sm_type type,
 
 static const struct telemetry_backend_api stub_a_api = {
 	.init = stub_a_init, .send_sm_update = stub_a_send,
+	.send_status = stub_a_status,
 };
 static const struct telemetry_backend_api stub_b_api = {
 	.init = stub_b_init, .send_sm_update = stub_b_send,
@@ -78,6 +93,8 @@ static void stub_reset(void)
 {
 	stub_a_init_calls = 0; stub_a_send_calls = 0;
 	stub_a_init_rc = 0;    stub_a_send_rc = 0;
+	stub_a_status_calls = 0;
+	memset(&stub_a_last_status, 0, sizeof(stub_a_last_status));
 	stub_b_init_calls = 0; stub_b_send_calls = 0;
 	stub_b_init_rc = 0;    stub_b_send_rc = 0;
 }
@@ -154,6 +171,41 @@ ZTEST(telemetry_wire_format, test_sm_update_frame_bytes)
 	zassert_equal(actual_crc, expected_crc,
 		      "CRC mismatch: got %04x want %04x",
 		      actual_crc, expected_crc);
+}
+
+ZTEST(telemetry_wire_format, test_status_frame_bytes)
+{
+	struct telemetry_wire_status p = {
+		.timestamp_ms = 0x01020304,
+		.state        = 0,
+		.sm_type      = 0,
+		.flags        = 0x1B,
+	};
+
+	uint8_t buf[32] = { 0 };
+	size_t  n = telemetry_wire_finalise(buf, sizeof(buf), 0x02, &p,
+					    (uint8_t)sizeof(p));
+
+	/* Total = 4 header + 8 payload + 2 CRC = 14. */
+	zassert_equal(n, 14, "unexpected frame length: %zu", n);
+	zassert_equal(buf[2], 0x02, "type=STATUS");
+	zassert_equal(buf[3], 8,    "payload length byte");
+	zassert_equal(buf[4], 0x04, "ts byte 0 (LE)");
+	zassert_equal(buf[7], 0x01, "ts byte 3");
+	zassert_equal(buf[8], 0,    "state byte");
+	zassert_equal(buf[9], 0,    "sm_type byte");
+	zassert_equal(buf[10], 0x1B, "flags byte");
+	zassert_equal(buf[11], 0,   "reserved byte");
+
+	/* Flag bits are decoded by offset on the ground: lock them. */
+	zassert_equal(AURORA_TELEMETRY_WIRE_TYPE_STATUS, 0x02, "type id");
+	zassert_equal(AURORA_TELEMETRY_WIRE_STATUS_ARMED, 0x01, "armed bit");
+	zassert_equal(AURORA_TELEMETRY_WIRE_STATUS_IMU_OK, 0x02, "imu bit");
+	zassert_equal(AURORA_TELEMETRY_WIRE_STATUS_BARO_OK, 0x04, "baro bit");
+	zassert_equal(AURORA_TELEMETRY_WIRE_STATUS_CALIBRATED, 0x08, "cal bit");
+	zassert_equal(AURORA_TELEMETRY_WIRE_STATUS_LOG_READY, 0x10, "log bit");
+
+	zassert_true(telemetry_wire_validate(buf, n), "status frame validates");
 }
 
 ZTEST(telemetry_wire_format, test_buffer_too_small)
@@ -352,6 +404,27 @@ ZTEST(telemetry_rate, test_recovery_after_window)
 		      "send after window should succeed, got %d", rc);
 }
 
+/* A heartbeat must still go out on a link whose SM update stream keeps
+ * the rate window permanently closed.
+ */
+ZTEST(telemetry_rate, test_status_bypasses_rate_limit)
+{
+	const struct telemetry_status st = { .state = SM_IDLE };
+
+	zassert_equal(telemetry_send_sm_update(SM_IDLE, sm_get_type(),
+		      &DUMMY_INPUTS), 0, "first send");
+
+	int rc = telemetry_send_status(&st);
+
+	zassert_equal(rc, 0, "status inside the SM window, got %d", rc);
+
+	/* And it must not have opened a window of its own. */
+	clear_rate_window();
+	zassert_equal(telemetry_send_status(&st), 0, "status");
+	zassert_equal(telemetry_send_sm_update(SM_IDLE, sm_get_type(),
+		      &DUMMY_INPUTS), 0, "SM update after a status");
+}
+
 ZTEST_SUITE(telemetry_rate, NULL, NULL, rate_before, NULL, NULL);
 
 /* ==========================================================
@@ -428,6 +501,33 @@ ZTEST(telemetry_dispatch, test_send_surfaces_first_error)
 		     "(got %d)", rc);
 	zassert_equal(stub_b_send_calls, 1,
 		      "stub_b must run even after stub_a errors");
+}
+
+ZTEST(telemetry_dispatch, test_status_reaches_backends_with_the_hook)
+{
+	(void)telemetry_init();
+	stub_reset();
+
+	const struct telemetry_status st = {
+		.state = SM_IDLE,
+		.type = sm_get_type(),
+		.imu_ok = true,
+		.log_ready = true,
+	};
+
+	int rc = telemetry_send_status(&st);
+
+	zassert_equal(rc, 0, "all backends accepted, got %d", rc);
+	zassert_equal(stub_a_status_calls, 1, "stub_a saw the status");
+	zassert_true(stub_a_last_status.imu_ok, "imu_ok carried through");
+	zassert_false(stub_a_last_status.baro_ok, "baro_ok carried through");
+	/* stub_b has no hook: skipped, not called through a NULL slot. */
+	zassert_equal(stub_b_send_calls, 0, "stub_b untouched");
+}
+
+ZTEST(telemetry_dispatch, test_status_rejects_null)
+{
+	zassert_equal(telemetry_send_status(NULL), -EINVAL, "NULL status");
 }
 
 ZTEST_SUITE(telemetry_dispatch, NULL, NULL, dispatch_before, NULL, NULL);
