@@ -1,0 +1,296 @@
+/*
+ * Copyright (c) 2026 Auxspace e.V.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * AUX-Tel-65-01 hardware: the telemetry board of the AUX-Stack. A 65 mm
+ * round PCB, revision 01, that stacks on AUX-Core-65-01 through the same
+ * pair of AUX-Stack connectors.
+ *
+ *   - Würth Daphnis-I (STM32WLE5CCU6) LoRa module. The antenna goes to
+ *     the module's UMRF (U.FL / MHF1) connector, so the RF pad is left
+ *     as an unconnected solder pad - which is what the user manual
+ *     requires when the UMRF connector is used, not an omission.
+ *   - MCP2515 SPI CAN controller behind a TCAN334 transceiver, tapped
+ *     off the stack CAN_H/CAN_L pair through R21/R22 (split termination
+ *     on board, 2 x 60R4 = 120.8 Ohm).
+ *   - Inter-board link to AUX-Core over the stack UART on LPUART1.
+ *   - Console and SWD on the J5 2x4 debug header, which also brings
+ *     +3V3 out on pins 5/6 - so a probe can power the board, but never
+ *     at the same time as the on-board LDO.
+ *   - Two green status LEDs (D2, D3), RESET (SW4) and BOOT (SW3)
+ *     buttons.
+ *   - 3V3 from a TPS7B8601 LDO fed by a jumper-selected VBus rail.
+ *
+ * ---------------------------------------------------------------------
+ * Hardware revision this file describes
+ * ---------------------------------------------------------------------
+ * Synced against the AUX-Tel repo at e71a667 (2026-11-03) - still rev 01,
+ * from a netlist exported out of 3_Elektronik/Aux-Tel.kicad_sch.
+ *
+ * Fixed on the PCB since the first version of this file:
+ *
+ *   - SPI_SCK moved from Daphnis pin 2 (PB8) to pin 16 (PA5), and ARM
+ *     took pin 2 in exchange (AUX-Tel d2d27a3, "fixed SPI-Bus"). PB8 has
+ *     no SPI alternate function on the STM32WLE5; PA5 is SPI1_SCK. The
+ *     Lora sheet now carries the STM32/Daphnis/function table this came
+ *     out of. The nodes below already described the post-swap wiring, so
+ *     nothing in devicetree moved with it.
+ *
+ * Still open on the PCB, and NOT worked around here:
+ *
+ *   1. MCP2515 ~INT (U4 pin 12) is still a no-connect, and Daphnis pin 13
+ *      (PA0, /WAKE_UP) went the other way - from a labelled net to an
+ *      unconnected pad. Zephyr's microchip,mcp2515 binding makes
+ *      int-gpios a required property, so aux_data_can below has to name
+ *      some pin; it names PA0 because that is the module's wake-capable
+ *      input and the obvious place to land a CAN interrupt. Until the
+ *      wire exists the node stays status = "disabled": enabling it gets
+ *      you a controller that never reports anything.
+ *   2. MCP2515 ~RESET (U4 pin 17) is a no-connect, i.e. floating. A
+ *      pull-up to +3V3 is enough; one of the unrouted pads (PA15 on pin
+ *      28, say) would give firmware control over it instead.
+ *   3. TCAN334 STB and SHDN (U3 pins 8 and 5) are no-connects, with no
+ *      external pull on either. Tie them low for normal mode rather than
+ *      relying on internal biasing. This is also why the transceiver is a
+ *      plain can-transceiver child node here, and not the
+ *      can-transceiver-gpio AUX-Core uses for its own TCAN334.
+ *   4. BAT_ON lost its only driver. Daphnis pin 21 (PA8, GPIO_5) used to
+ *      carry the stack's "Bat on ext" net; it is now an unconnected pad,
+ *      and "Bat on ext" merely bridges the two stack connectors (J1 pin
+ *      10 to J2 pin 10). AUX-Tel can no longer request the battery rail,
+ *      so AUX_DATA_BAT_ON is absent from the gpio-maps below - the
+ *      schematic's own annotation still reads "Input: Bat enable when
+ *      high", so routing PA8 back to that net is all it would take.
+ *
+ * LED wiring, since an earlier version of this comment had it backwards:
+ * D1, D2 and D3 all sit cathode-to-GND with the anode on a series
+ * resistor up to the driver, so LED_1/LED_2 source current and are active
+ * HIGH, exactly as user manual chapter 5.9 says. D1 hangs off +3V3 as a
+ * power-on indicator; D2 is LED_2 (PA4) and D3 is LED_1 (PA7). The series
+ * resistors went 392R -> 1k in rev 01, so expect dimmer LEDs than on the
+ * first boards.
+ */
+
+#include <auxspace/dt-bindings/gpio/auxspaceev-aux-stack-data-connector.h>
+
+/ {
+	model = "Auxspace e.V. AUX-Tel-65-01";
+	compatible = "auxspaceev,tel65";
+
+	aliases {
+		watchdog0 = &iwdg;
+		lora0 = &lora;
+		led0 = &led_1;
+		led1 = &led_2;
+		uart-0 = &usart1;
+	};
+
+	chosen {
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,code-partition = &slot0_partition;
+		/* J5 debug header; the stack UART stays free for AUX-Core. */
+		zephyr,console = &usart1;
+		zephyr,shell-uart = &usart1;
+		zephyr,system-timer = &lptim1;
+		zephyr,canbus = &aux_data_can;
+	};
+
+	status_leds: status-leds {
+		compatible = "gpio-leds";
+
+		led_1: led_1 {
+			gpios = <&gpioa 7 GPIO_ACTIVE_HIGH>;
+			label = "LED_1 (D3, green)";
+		};
+
+		led_2: led_2 {
+			gpios = <&gpioa 4 GPIO_ACTIVE_HIGH>;
+			label = "LED_2 (D2, green)";
+		};
+	};
+
+	/*
+	 * Both stack connectors are wired in parallel on AUX-Tel: the
+	 * information signals land on the same module pins, CAN_H/CAN_L run
+	 * straight through between J1 and J2, and the UART and I2C pairs are
+	 * bridged top-to-bottom through 0R links (R23/R24 for UART, R25/R26
+	 * for I2C). The other 0R links are taps rather than bridges: R21/R22
+	 * hang the TCAN334 off the CAN pair, R19/R20 hang LPUART1 off the
+	 * UART pair. The board is a pass-through for I2C, so neither
+	 * connector claims an i2c-bus - nothing on AUX-Tel sits on it.
+	 *
+	 * AUX_DATA_BAT_ON is deliberately missing from both maps: PA8 is an
+	 * unconnected pad on rev 01, so there is no GPIO to point it at (see
+	 * the header). A consumer that references it fails at build time,
+	 * which is the behaviour we want.
+	 */
+	top_data_connector: connector_0 {
+		compatible = "auxspaceev,aux-stack-data-connector";
+		#gpio-cells = <2>;
+		gpio-map-mask = <0xffffffff 0xffffffc0>;
+		gpio-map-pass-thru = <0 0x3f>;
+		gpio-map = <AUX_DATA_ARM 0 &gpiob 8 0>,
+			   <AUX_DATA_LIFTOFF 0 &gpiob 7 0>,
+			   <AUX_DATA_PWRFLT 0 &gpiob 6 0>;
+
+		can-bus = <&aux_data_can>;
+		uart-bus = <&lpuart1>;
+	};
+
+	bottom_data_connector: connector_1 {
+		compatible = "auxspaceev,aux-stack-data-connector";
+		#gpio-cells = <2>;
+		gpio-map-mask = <0xffffffff 0xffffffc0>;
+		gpio-map-pass-thru = <0 0x3f>;
+		gpio-map = <AUX_DATA_ARM 0 &gpiob 8 0>,
+			   <AUX_DATA_LIFTOFF 0 &gpiob 7 0>,
+			   <AUX_DATA_PWRFLT 0 &gpiob 6 0>;
+
+		can-bus = <&aux_data_can>;
+		uart-bus = <&lpuart1>;
+	};
+
+	/*
+	 * ARM, LIFTOFF and PWRFLT are all inputs on AUX-Tel - AUX-Core and
+	 * AUX-Pwr drive them - and are reached through the connector nexus
+	 * above. Polarities, from the Baseboard sheet annotations: ARM and
+	 * LIFTOFF assert high, Power Fault asserts low. Consumers set those
+	 * flags themselves, the same way AUX-Core's arm_interlock does.
+	 *
+	 * With BAT_ON unrouted there is no stack signal left for this board
+	 * to drive, so there is no stack-outputs node here.
+	 */
+};
+
+/* HSI16 x 6 / 2 = 48 MHz. HSE is reserved for the radio's TCXO. */
+&pll {
+	div-m = <1>;
+	mul-n = <6>;
+	div-r = <2>;
+	div-q = <2>;
+	clocks = <&clk_hsi>;
+	status = "okay";
+};
+
+&rcc {
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(48)>;
+	cpu1-prescaler = <1>;
+	ahb3-prescaler = <1>;
+	apb1-prescaler = <1>;
+	apb2-prescaler = <1>;
+};
+
+/*
+ * LPTIM1 off the LSE is wired up as zephyr,system-timer, but
+ * CONFIG_STM32_LPTIM_TIMER also depends on CONFIG_PM, so the kernel runs
+ * on SysTick until an application opts into power management. Enabling
+ * CONFIG_PM=y is all it takes to move the tick over.
+ */
+&lptim1 {
+	clocks = <&rcc STM32_CLOCK(APB1, 31)>,
+		 <&rcc STM32_SRC_LSE LPTIM1_SEL(3)>;
+	status = "okay";
+};
+
+&rtc {
+	clocks = <&rcc STM32_CLOCK(APB1, 10)>,
+		 <&rcc STM32_SRC_LSE RTC_SEL(1)>;
+	status = "okay";
+};
+
+&iwdg {
+	status = "okay";
+};
+
+&aes {
+	status = "okay";
+};
+
+&rng {
+	status = "okay";
+};
+
+/* J5 pin 3 (UTXD1) / pin 1 (URXD1), alongside SWDIO and SWDCLK. */
+&usart1 {
+	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+	status = "okay";
+};
+
+/*
+ * The stack UART. Daphnis LPUTXD1 (PA2) drives the connector's UART_RX
+ * pin and LPURXD1 (PA3) listens on UART_TX, i.e. the connector pins are
+ * named from the brain board's point of view, so this mates with
+ * AUX-Core's aux_data_uart_* without a crossover.
+ */
+aux_data_uart: &lpuart1 {
+	pinctrl-0 = <&lpuart1_tx_pa2 &lpuart1_rx_pa3>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+	status = "okay";
+};
+
+/*
+ * The MCP2515 is the only thing on SPI1, so the bus follows the module's
+ * SPI pads: SCK on PA5, MISO on PA6, MOSI on PA12, and CS driven as a
+ * plain GPIO on PB2 (the module's SPI1_NSS pad). The bus is enabled while
+ * its only child stays disabled, so that enabling aux_data_can from an
+ * overlay is enough on its own - a disabled parent bus would otherwise
+ * fail the build with an undeclared __device_dts_ord_* for spi@40013000.
+ * Nothing is instantiated either way until an application turns on
+ * CONFIG_SPI.
+ */
+&spi1 {
+	pinctrl-0 = <&spi1_sck_pa5 &spi1_miso_pa6 &spi1_mosi_pa12>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpiob 2 GPIO_ACTIVE_LOW>;
+	status = "okay";
+
+	/*
+	 * Y2 is an 8 MHz crystal, which caps the MCP2515 at 500 kbit/s
+	 * (Tq = 2 x (BRP + 1) / Fosc, and a bit needs at least 8 Tq). No
+	 * bitrate is set here so both ends of the stack bus fall back to
+	 * CONFIG_CAN_DEFAULT_BITRATE, the same as AUX-Core's TWAI.
+	 */
+	aux_data_can: can@0 {
+		compatible = "microchip,mcp2515";
+		reg = <0x0>;
+		spi-max-frequency = <DT_FREQ_M(4)>;
+		osc-freq = <DT_FREQ_M(8)>;
+		int-gpios = <&gpioa 0 GPIO_ACTIVE_LOW>;
+		status = "disabled";
+
+		can-transceiver {
+			max-bitrate = <1000000>;
+		};
+	};
+};
+
+/*
+ * No MCUboot on this board: the only programming path is SWD on J5, and
+ * 256 kB of flash does not leave room for two image slots plus a
+ * bootloader. The application therefore starts at the bottom of flash.
+ */
+&flash0 {
+	partitions {
+		ranges;
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		slot0_partition: partition@0 {
+			compatible = "zephyr,mapped-partition";
+			label = "image-0";
+			reg = <0x00000000 DT_SIZE_K(248)>;
+		};
+
+		storage_partition: partition@3e000 {
+			compatible = "zephyr,mapped-partition";
+			label = "storage";
+			reg = <0x0003e000 DT_SIZE_K(8)>;
+		};
+	};
+};

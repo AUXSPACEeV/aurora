@@ -1,0 +1,106 @@
+/*
+ * Copyright (c) 2026 Auxspace e.V.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Würth Elektronik Daphnis-I (WIRL-LORA 2618011181000) radio module.
+ *
+ * The module packages an STM32WLE5CCU6 together with its 32 MHz TCXO, its
+ * 32.768 kHz LSE crystal, the RF filter and the 50 Ohm matching network,
+ * all behind a single RF port (Daphnis-I user manual rev. 1.4, chapter 3.1
+ * "Block diagram"). Everything described here belongs to the module, so
+ * this file is shared by any carrier board that places a Daphnis-I.
+ *
+ * ---------------------------------------------------------------------
+ * Daphnis-I is Oceanus-I hardware with firmware pre-flashed
+ * ---------------------------------------------------------------------
+ * Daphnis-I (2618011181000) and Oceanus-I (2618011182000) are the same
+ * module. Comparing the two WE datasheets: identical pad map pin for pin,
+ * identical 15.0 x 16.0 x 3.0 mm outline, identical recommended land
+ * pattern, same STM32WLE5CCU6, same 863..870 MHz band, same UMRF option.
+ * The datasheets differ in exactly one line - Oceanus-I ships with "no
+ * firmware flashed on the module", Daphnis-I ships with WE's LoRaWAN /
+ * WE-ProWare AT firmware.
+ *
+ * That has two consequences for this file:
+ *
+ *   - The RF front-end pins below are not guesswork. They are the same
+ *     silicon as we_oceanus1ev, so zephyr/dts/arm/we/oceanus1.dtsi is the
+ *     upstream twin of this file - diff against it when bumping Zephyr.
+ *   - Daphnis-I's "RESERVED" pads are RESERVED only with respect to the
+ *     factory AT firmware, which uses them internally. They are ordinary
+ *     STM32 GPIOs, and Oceanus-I's own Zephyr board drives four of them
+ *     as SPI1. Under our own firmware they are free - see tel65.dtsi for
+ *     which of them AUX-Tel leaves unrouted.
+ *
+ * Module pads (user manual chapter 5, table 9), with the names the stock
+ * firmware gives them:
+ *
+ *   PB7  GPIO_0 (1)    PA5  GPIO_2 (16)   PA12 GPIO_6 (22)
+ *   PB8  GPIO_1 (2)    PA6  GPIO_3 (17)   PB6  GPIO_7 (23)
+ *   PA2  LPUTXD1 (5)   PB2  GPIO_4 (18)   PA10 URXD1 (24)
+ *   PA3  LPURXD1 (6)   PA9  UTXD1 (19)    PA14 SWDCLK (B1)
+ *   PA4  LED_2 (7)     PA7  LED_1 (20)    PA13 SWDIO (B5)
+ *   PA0  /WAKE_UP (13) PA8  GPIO_5 (21)   PH3  BOOT (14)
+ *
+ *   PA1 (B2), PA11 (25), PA15 (28), PB3 (31), PB4 (29), PB5 (30)
+ *       RESERVED by the factory firmware; plain GPIOs under Zephyr.
+ *
+ * PB0, PB1, PB12 and PC13..PC15 never leave the shield: PC14/PC15 carry
+ * the module's LSE crystal and the rest drive the RF front end.
+ */
+
+#include <st/wl/stm32wle5Xc.dtsi>
+#include <st/wl/stm32wle5ccux-pinctrl.dtsi>
+
+/* 32 MHz TCXO, powered from the radio's DIO3 rail. */
+&clk_hse {
+	clock-frequency = <DT_FREQ_M(32)>;
+	hse-tcxo;
+	status = "okay";
+};
+
+&clk_lse {
+	clock-frequency = <32768>;
+	driving-capability = <1>;
+	status = "okay";
+};
+
+&clk_hsi {
+	status = "okay";
+};
+
+&clk_lsi {
+	status = "okay";
+};
+
+&subghzspi {
+	status = "okay";
+
+	/*
+	 * RF front end, carried over from we_oceanus1ev - the same module
+	 * hardware (see the header above), so these are the real switch
+	 * pins rather than a guess:
+	 *
+	 *   PB12 = RF_SW_VCC, PC13 = RF_SW_CTRL1 (high = TX, low = RX)
+	 *
+	 * The +14 dBm ceiling is documented directly for Daphnis-I (user
+	 * manual chapter 4, "Maximum power transmission 14 dBm"), which is
+	 * the RFO_LP path.
+	 *
+	 * Residual risk: the two switch GPIOs are the one detail neither
+	 * datasheet states outright, since they are internal to the shield.
+	 * If the radio ever boots clean but measures deaf, check these two
+	 * nodes first - a wrong switch pin fails silently.
+	 */
+	lora: radio@0 {
+		antenna-enable-gpios = <&gpiob 12 GPIO_ACTIVE_HIGH>;	/* RF_SW_VCC */
+		tx-enable-gpios = <&gpioc 13 GPIO_ACTIVE_HIGH>;		/* RF_SW_CTRL1 */
+		rx-enable-gpios = <&gpioc 13 GPIO_ACTIVE_LOW>;
+		dio3-tcxo-voltage = <SX126X_DIO3_TCXO_1V8>;
+		tcxo-power-startup-delay-ms = <1>;
+		power-amplifier-output = "rfo-lp";
+		rfo-lp-max-power = <14>;
+		status = "okay";
+	};
+};

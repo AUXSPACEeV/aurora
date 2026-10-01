@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Copyright (c) 2026 Auxspace e.V.
+
+board:
+  name: tel65
+  full_name: AUX-Tel 65
+  vendor: auxspaceev
+  revision:
+    format: number
+    default: "1"
+    revisions:
+    - name: "1"
+  socs:
+  - name: stm32wle5xx

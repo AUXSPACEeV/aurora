@@ -21,6 +21,8 @@ manifest:
           - cmsis_6    # required by the ARM port for Cortex-M
           - hal_rpi_pico   # required by the rpi_pico boards (raspberrypi based)
           - hal_st   # required for st sensors
+          - hal_stm32 # required for the STM32WL boards (AUX-Tel)
+          - loramac-node  # required by the STM32WL sub-GHz radio driver (AUX-Tel)
           - hal_espressif # required for ESP32
           - fatfs      # required for filesystem operations (ff.h)
           - mcuboot    # required as bootloader for ESP32
