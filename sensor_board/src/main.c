@@ -597,6 +597,44 @@ static void handle_state_transition(enum sm_state prev_state, enum sm_state stat
 	log_handle_flight_lifecycle(prev_state, state);
 }
 
+/**
+ * @brief Snapshot the latest flight inputs, as fed to the state machine.
+ *
+ * @param in Filled with the current samples and log/arm/calibration flags.
+ */
+static void fill_sm_inputs(struct sm_inputs *in)
+{
+	*in = (struct sm_inputs){
+		.armed = sm_get_armed(),
+		.log_ready = log_flight_log_online(),
+		.log_busy = log_flight_log_busy(),
+		.calibrated = calibrated,
+		.acceleration = acceleration,
+		.accel_vert = accel_vert,
+		.altitude = altitude,
+	};
+	memcpy(in->orientation, orientation, sizeof(in->orientation));
+}
+
+#if defined(CONFIG_AURORA_TELEMETRY) && !defined(CONFIG_SENSOR_BOARD_TELEMETRY_FOLLOW_SM)
+#define TELEMETRY_DECOUPLED 1
+
+/**
+ * @brief Send an SM_UPDATE frame without waiting for the state machine.
+ *
+ * Runs outside the sensor gate in the flight loop, so the downlink keeps
+ * going while the state machine is held, e.g. with no barometer fitted.
+ * The frame has the same content the gated path would send.
+ */
+static void send_decoupled_sm_update(void)
+{
+	struct sm_inputs inputs;
+
+	fill_sm_inputs(&inputs);
+	(void)telemetry_send_sm_update(sm_get_state(), sm_get_type(), &inputs);
+}
+#endif /* CONFIG_AURORA_TELEMETRY && !CONFIG_SENSOR_BOARD_TELEMETRY_FOLLOW_SM */
+
 #if defined(CONFIG_AURORA_TELEMETRY) && (CONFIG_SENSOR_BOARD_STATUS_INTERVAL_MS > 0)
 #define STATUS_HEARTBEAT 1
 
@@ -757,6 +795,9 @@ void state_machine_task(void *, void *, void *)
 #if defined(STATUS_HEARTBEAT)
 	int64_t status_due = now;
 #endif /* STATUS_HEARTBEAT */
+#if defined(TELEMETRY_DECOUPLED)
+	int64_t telemetry_due = now;
+#endif /* TELEMETRY_DECOUPLED */
 
 	while (1) {
 		now = k_uptime_get();
@@ -869,17 +910,9 @@ void state_machine_task(void *, void *, void *)
 		 * with an update carrying only one fresh sensor.
 		 */
 		if (baro_ready && imu_ready) {
-			struct sm_inputs inputs = {
-				.armed = sm_get_armed(),
-				.log_ready = log_flight_log_online(),
-				.log_busy = log_flight_log_busy(),
-				.calibrated = calibrated,
-				.acceleration = acceleration,
-				.accel_vert = accel_vert,
-				.altitude = altitude,
-			};
-			memcpy(inputs.orientation, orientation, sizeof(inputs.orientation));
+			struct sm_inputs inputs;
 
+			fill_sm_inputs(&inputs);
 			sm_update(&inputs);
 			state = sm_get_state();
 
@@ -891,10 +924,10 @@ void state_machine_task(void *, void *, void *)
 			 */
 			WDT_KICK(AURORA_WDT_SRC_STATE);
 
-#if defined(CONFIG_AURORA_TELEMETRY)
+#if defined(CONFIG_SENSOR_BOARD_TELEMETRY_FOLLOW_SM)
 			/* update telemetry data */
 			telemetry_send_sm_update(state, sm_get_type(), &inputs);
-#endif /*.CONFIG_AURORA_TELEMETRY */
+#endif /* CONFIG_SENSOR_BOARD_TELEMETRY_FOLLOW_SM */
 
 			/* update pad link data */
 			update_pad_link_data();
@@ -928,6 +961,19 @@ void state_machine_task(void *, void *, void *)
 		}
 		next_due = MIN(next_due, status_due);
 #endif /* STATUS_HEARTBEAT */
+
+#if defined(TELEMETRY_DECOUPLED)
+		/* Outside of the sensor gate on purpose */
+		now = k_uptime_get();
+		if (now >= telemetry_due) {
+			send_decoupled_sm_update();
+			telemetry_due += CONFIG_SENSOR_BOARD_TELEMETRY_INTERVAL_MS;
+			if (telemetry_due <= now) {
+				telemetry_due = now + CONFIG_SENSOR_BOARD_TELEMETRY_INTERVAL_MS;
+			}
+		}
+		next_due = MIN(next_due, telemetry_due);
+#endif /* TELEMETRY_DECOUPLED */
 
 #if defined(CONFIG_AURORA_SIM_AUTOTEST)
 		autotest_step(sm_get_state());

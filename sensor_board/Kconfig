@@ -54,3 +54,31 @@ config SENSOR_BOARD_STATUS_INTERVAL_MS
 	  station hears from a board whose IMU or barometer is down.
 	  Suppressed in flight, where it would compete with SM updates
 	  for airtime. 0 disables it.
+
+config SENSOR_BOARD_TELEMETRY_FOLLOW_SM
+	bool "Send SM updates only when the state machine advances"
+	depends on AURORA_TELEMETRY && AURORA_STATE_MACHINE
+	default y
+	help
+	  When enabled, an SM_UPDATE frame goes out on every state machine
+	  step, which only happens once both the IMU and the barometer have
+	  delivered a sample.  Without a working barometer no SM_UPDATE is
+	  ever sent; only the STATUS heartbeat reaches the ground.
+
+	  When disabled, SM_UPDATE frames are sent from the flight loop
+	  every SENSOR_BOARD_TELEMETRY_INTERVAL_MS, independent of the
+	  state machine, carrying whatever the sensors last delivered.
+	  Use this to keep the downlink alive when the state machine cannot
+	  advance, e.g. flying without a barometer.  Altitude then stays 0;
+	  acceleration, vertical acceleration and orientation come from the
+	  IMU.  Backend rate limits (*_MIN_INTERVAL_MS) still apply.
+
+config SENSOR_BOARD_TELEMETRY_INTERVAL_MS
+	int "SM update interval when not following the state machine (ms)"
+	depends on AURORA_TELEMETRY && AURORA_STATE_MACHINE
+	depends on !SENSOR_BOARD_TELEMETRY_FOLLOW_SM
+	default 100
+	range 10 60000
+	help
+	  Period of the SM_UPDATE frames sent while
+	  SENSOR_BOARD_TELEMETRY_FOLLOW_SM is disabled.
