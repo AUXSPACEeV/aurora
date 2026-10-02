@@ -1,6 +1,7 @@
-# AUX-Pwr 65
+```{zephyr:shield} pwr65
+```
 
-## Overview
+# Overview
 
 The Auxspace e.V. AUX-Pwr 65 PCB is the power management board of the
 **AUX-Stack**, a modular avionics stack made up of interconnected PCBs.
@@ -13,12 +14,12 @@ AUX-Stack data connector and is driven over I2C, as a Zephyr
 AUX-Pwr is still under active hardware bring-up.
 ```
 
-## Hardware
+# Hardware
 
 - TI TCA9534 8-bit I2C GPIO expander
 - TI INA219 current/power monitor
 
-## Connections and IOs
+# Connections and IOs
 
 AUX-Pwr attaches to the `aux_data_i2c` bus alias exposed by its brain
 board's AUX-Stack data connector. It therefore only works on boards that
@@ -30,7 +31,7 @@ define that alias — currently {doc}`AUX-Core
 | TCA9534 GPIO expander | `0x20` | `tca9534_0` |
 | INA219 current/power monitor | `0x81` | `ina219_0` |
 
-## Usage
+# Usage
 
 As a shield, AUX-Pwr is not a `west build -b` target on its own. Instead it
 is layered on top of a brain board build with `--shield pwr65`, e.g. for the `core65` board:
