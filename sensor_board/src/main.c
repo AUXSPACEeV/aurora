@@ -32,6 +32,14 @@
 #include <aurora/lib/baro.h>
 #endif /* CONFIG_BARO */
 
+#if defined(CONFIG_HACCEL)
+#include <aurora/lib/haccel.h>
+#endif /* CONFIG_HACCEL */
+
+#if defined(CONFIG_MAG)
+#include <aurora/lib/mag.h>
+#endif /* CONFIG_MAG */
+
 #if defined(CONFIG_AURORA_FAKE_SENSORS)
 #include <aurora/lib/sim.h>
 #endif /* CONFIG_AURORA_FAKE_SENSORS */
@@ -52,22 +60,6 @@
 BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_pyro), okay),
 	     "the 'auxspace,pyro' chosen node must have status \"okay\"");
 #endif /* CONFIG_PYRO */
-
-#if defined (CONFIG_HACCEL)
-#if !DT_HAS_CHOSEN(auxspace_haccel)
-#error "CONFIG_HACCEL requires DT chosen 'auxspace,haccel' to point at a haccel device node."
-#endif
-BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_haccel), okay),
-	     "the 'auxspace,haccel' chosen node must have status \"okay\"");
-#endif /* CONFIG_HACCEL */
-
-#if defined(CONFIG_MAG)
-#if !DT_HAS_CHOSEN(auxspace_mag)
-#error "CONFIG_MAG requires DT chosen 'auxspace,mag' to point at a mag device node."
-#endif
-BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_mag), okay),
-	     "the 'auxspace,mag' chosen node must have status \"okay\"");
-#endif /* CONFIG_MAG */
 
 #if defined(CONFIG_DATA_LOGGER_BIN)
 #include <aurora/lib/data_logger.h>
@@ -177,6 +169,32 @@ BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_baro), okay),
 static bool baro_ok;
 #endif /* CONFIG_BARO */
 
+#if defined(CONFIG_HACCEL)
+#define HACCEL_PERIOD_MS MAX(1, 1000 / CONFIG_HACCEL_FREQUENCY)
+
+#if !DT_HAS_CHOSEN(auxspace_haccel)
+#error "CONFIG_HACCEL requires DT chosen 'auxspace,haccel' to point at a haccel device node."
+#endif
+BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_haccel), okay),
+	     "the 'auxspace,haccel' chosen node must have status \"okay\"");
+#define HACCEL_DEV DEVICE_DT_GET(DT_CHOSEN(auxspace_haccel))
+
+static bool haccel_ok;
+#endif /* CONFIG_HACCEL */
+
+#if defined(CONFIG_MAG)
+#define MAG_PERIOD_MS MAX(1, 1000 / CONFIG_MAG_FREQUENCY)
+
+#if !DT_HAS_CHOSEN(auxspace_mag)
+#error "CONFIG_MAG requires DT chosen 'auxspace,mag' to point at a mag device node."
+#endif
+BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_mag), okay),
+	     "the 'auxspace,mag' chosen node must have status \"okay\"");
+#define MAG_DEV DEVICE_DT_GET(DT_CHOSEN(auxspace_mag))
+
+static bool mag_ok;
+#endif /* CONFIG_MAG */
+
 /**
  * @brief Bring every configured sensor up.
  *
@@ -219,6 +237,24 @@ static void sensors_init(void)
 		LOG_ERR("Baro not ready!");
 	}
 #endif /* CONFIG_BARO */
+
+#if defined(CONFIG_HACCEL)
+	haccel_ok = (haccel_init(HACCEL_DEV) == 0);
+	if (haccel_ok) {
+		LOG_INF("High-g accel ready");
+	} else {
+		LOG_ERR("High-g accel not ready!");
+	}
+#endif /* CONFIG_HACCEL */
+
+#if defined(CONFIG_MAG)
+	mag_ok = (mag_init(MAG_DEV) == 0);
+	if (mag_ok) {
+		LOG_INF("Mag ready");
+	} else {
+		LOG_ERR("Mag not ready!");
+	}
+#endif /* CONFIG_MAG */
 }
 
 /* ============================================================
@@ -652,6 +688,14 @@ void state_machine_task(void *, void *, void *)
 	int64_t baro_due = now;
 	struct baro_data baro_msg;
 #endif /* CONFIG_BARO */
+#if defined(CONFIG_HACCEL)
+	int64_t haccel_due = now;
+	struct haccel_data haccel_msg;
+#endif /* CONFIG_HACCEL */
+#if defined(CONFIG_MAG)
+	int64_t mag_due = now;
+	struct mag_data mag_msg;
+#endif /* CONFIG_MAG */
 
 	while (1) {
 		now = k_uptime_get();
@@ -708,6 +752,45 @@ void state_machine_task(void *, void *, void *)
 			next_due = MIN(next_due, baro_due);
 		}
 #endif /* CONFIG_BARO */
+
+#if defined(CONFIG_HACCEL)
+		if (haccel_ok) {
+			if (now >= haccel_due) {
+				if (haccel_poll(HACCEL_DEV, &haccel_msg) == 0) {
+					log_haccel_data(&haccel_msg);
+				}
+
+				now = k_uptime_get();
+				haccel_due += HACCEL_PERIOD_MS;
+				if (haccel_due <= now) {
+					haccel_due = now + HACCEL_PERIOD_MS;
+				}
+			}
+
+			next_due = MIN(next_due, haccel_due);
+		}
+#endif /* CONFIG_HACCEL */
+
+#if defined(CONFIG_MAG)
+		if (mag_ok) {
+			if (now >= mag_due) {
+				/* -EAGAIN only means the conversion started
+				 * on the previous read is still running.
+				 */
+				if (mag_poll(MAG_DEV, &mag_msg) == 0) {
+					log_mag_data(&mag_msg);
+				}
+
+				now = k_uptime_get();
+				mag_due += MAG_PERIOD_MS;
+				if (mag_due <= now) {
+					mag_due = now + MAG_PERIOD_MS;
+				}
+			}
+
+			next_due = MIN(next_due, mag_due);
+		}
+#endif /* CONFIG_MAG */
 
 #if defined(CONFIG_IMU)
 		calibrated = attitude_is_calibrated(&attitude_state) > 0;
