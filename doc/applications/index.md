@@ -12,4 +12,5 @@ The application code lives in the top-level directories of the
 
 abby
 sensor_board
+telemetry_logger
 ```

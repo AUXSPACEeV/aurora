@@ -1,0 +1,65 @@
+/*
+ * Copyright (c) 2026 Auxspace e.V.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	chosen {
+		/*
+		 * Which AUX-Stack data connector the abby receiver is on.
+		 * telemetry_logger reads the UART out of this node's uart-bus
+		 * phandle, so it names no board-specific peripheral.
+		 *
+		 * Use bottom_data_connector instead if AUX-Tel is stacked
+		 * below.
+		 */
+		auxspace,stack-connector = &top_data_connector;
+		auxspace,ffs = &ffs0;
+		auxspace,disk-led = &sd_activity_led;
+	};
+
+	fstab {
+		compatible = "zephyr,fstab";
+
+		/* Not automounted: the recorder owns the mount, so it can
+		 * unmount after a write error and pick up a swapped card.
+		 */
+		ffs0: ffs_0 {
+			compatible = "zephyr,fstab,fatfs";
+			disk-access;
+			mount-point = "/MMC:";
+		};
+	};
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+&gpio1 {
+	status = "okay";
+};
+
+&aux_data_uart_top {
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&usb_serial {
+	status = "okay";
+};
+
+&sdhc {
+	status = "okay";
+};
+
+&sdhc0 {
+	status = "okay";
+};
+
+&mmc0 {
+	status = "okay";
+};

@@ -1,0 +1,116 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Application Kconfig entry point for telemetry_logger, the AUX-Core
+# ground-side recorder for frames delivered by an abby receiver.
+
+menu "Zephyr"
+
+source "Kconfig.zephyr"
+
+endmenu
+
+module = TELEMETRY_LOGGER
+module-str = TELEMETRY_LOGGER
+source "subsys/logging/Kconfig.template.log_config"
+
+menu "telemetry_logger - ground-side telemetry recorder"
+
+menu "Stack link"
+
+config TELEMETRY_LOGGER_RX_RING_SIZE
+	int "Receive ring buffer size (bytes)"
+	default 1024
+	help
+	  Buffers bytes between the UART interrupt and the frame parser.
+	  Overruns are counted and reported by "tlog status".
+
+config TELEMETRY_LOGGER_LINK_STACK_SIZE
+	int "Link parser thread stack size (bytes)"
+	default 2048
+
+config TELEMETRY_LOGGER_LINK_THREAD_PRIORITY
+	int "Link parser thread priority"
+	default 7
+	help
+	  Above the recorder thread, so parsing keeps up with the UART
+	  while the SD card stalls on a write or a sync.
+
+endmenu # Stack link
+
+menu "Recorder"
+
+config TELEMETRY_LOGGER_DIR
+	string "Directory the recordings are written to"
+	default "/MMC:/RX"
+	help
+	  Created if missing. Each recording session gets the next free
+	  index in here: RX_<n>.BIN holds the frames verbatim, RX_<n>.CSV
+	  the decoded rows.
+
+config TELEMETRY_LOGGER_CSV
+	bool "Also write a decoded CSV next to the raw recording"
+	default y
+	select REQUIRES_FLOAT_PRINTF
+	help
+	  One row per frame with the receive time and the SM_UPDATE /
+	  STATUS fields decoded. The .BIN file is the authoritative
+	  record either way; the CSV only saves a decoding step when
+	  reading the card on a laptop.
+
+config TELEMETRY_LOGGER_QUEUE_DEPTH
+	int "Frames buffered between the parser and the SD card"
+	default 16
+	range 2 256
+	help
+	  Each slot holds one maximum-size frame (~270 bytes). At the
+	  brain board's 2 Hz downlink 16 slots ride out an 8 s card
+	  stall. Frames that find the queue full are counted as dropped.
+
+config TELEMETRY_LOGGER_SYNC_INTERVAL_MS
+	int "Maximum time between file syncs (ms)"
+	default 1000
+	range 100 60000
+	help
+	  Bounds how much of the recording a power cut can take with it.
+	  FAT only commits the directory entry's size on sync, so data
+	  written after the last sync is lost on a hard power-off.
+
+config TELEMETRY_LOGGER_RETRY_MS
+	int "Retry interval while no recording is open (ms)"
+	default 2000
+	range 100 60000
+	help
+	  With no card, an unformatted card or after a write error the
+	  recorder re-mounts and opens a fresh recording at this interval,
+	  so a card inserted after boot is picked up without a reset.
+
+config TELEMETRY_LOGGER_WRITER_STACK_SIZE
+	int "Recorder thread stack size (bytes)"
+	default 4096
+
+config TELEMETRY_LOGGER_WRITER_THREAD_PRIORITY
+	int "Recorder thread priority"
+	default 9
+
+endmenu # Recorder
+
+config TELEMETRY_LOGGER_HEARTBEAT_SEC
+	int "Heartbeat interval (s)"
+	default 30
+	range 1 3600
+
+config TELEMETRY_LOGGER_HEARTBEAT_LOG
+	bool "Log counters on each heartbeat"
+	default y
+
+config TELEMETRY_LOGGER_SHELL
+	bool "tlog shell commands"
+	depends on SHELL
+	default y if SHELL
+	help
+	  Registers the "tlog" command tree: status, and test to record a
+	  synthetic frame so the SD path can be proven without a receiver
+	  attached.
+
+endmenu
