@@ -70,7 +70,9 @@ full are counted as **dropped**.
 The UART comes from the `uart-bus` of the `auxspace,stack-connector` chosen
 node (the top connector by default, see
 `boards/core65_esp32s3_procpu.overlay`). The SD card comes from
-`auxspace,ffs`, and the SD activity LED from `auxspace,disk-led`.
+`auxspace,ffs`. The SD activity LED is the notify library's disk LED on
+`auxspace,disk-led`. The notify core and the disk LED build without the
+flight state machine; the buzzer and PWM LED backends need it and stay off.
 
 ## Building and running
 

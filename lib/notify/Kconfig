@@ -16,6 +16,7 @@ source "subsys/logging/Kconfig.template.log_config"
 
 config AURORA_NOTIFY_BUZZER
 	bool "PWM buzzer notifications"
+	depends on AURORA_STATE_MACHINE
 	depends on PWM
 	depends on DT_HAS_AUXSPACEEV_PWM_BUZZER_ENABLED
 	select AURORA_PWM_MELODY
@@ -56,6 +57,7 @@ endif # AURORA_NOTIFY_BUZZER
 
 config AURORA_NOTIFY_LED
 	bool "PWM LED notifications"
+	depends on AURORA_STATE_MACHINE
 	depends on PWM
 	depends on DT_HAS_PWM_LEDS_ENABLED
 	help

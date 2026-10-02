@@ -31,12 +31,12 @@
 #include <string.h>
 
 #include <zephyr/devicetree.h>
-#include <zephyr/drivers/gpio.h>
 #include <zephyr/fs/fs.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
 
+#include <aurora/lib/disk_led.h>
 #include <aurora/lib/telemetry/wire.h>
 
 #include "recorder.h"
@@ -78,40 +78,6 @@ static struct {
  * is only ever printed.
  */
 static uint64_t bin_bytes;
-
-/* SD activity LED. The notify library has the same thing, but it brings
- * the flight state machine with it, which this application has no use for.
- */
-#if DT_HAS_CHOSEN(auxspace_disk_led)
-#define DISK_LED_HOLD_MS 50
-
-static const struct gpio_dt_spec disk_led =
-	GPIO_DT_SPEC_GET(DT_CHOSEN(auxspace_disk_led), gpios);
-
-static void disk_led_off(struct k_work *work)
-{
-	ARG_UNUSED(work);
-	(void)gpio_pin_set_dt(&disk_led, 0);
-}
-
-static K_WORK_DELAYABLE_DEFINE(disk_led_work, disk_led_off);
-
-static void disk_led_init(void)
-{
-	if (gpio_is_ready_dt(&disk_led)) {
-		(void)gpio_pin_configure_dt(&disk_led, GPIO_OUTPUT_INACTIVE);
-	}
-}
-
-static void disk_led_activity(void)
-{
-	(void)gpio_pin_set_dt(&disk_led, 1);
-	(void)k_work_reschedule(&disk_led_work, K_MSEC(DISK_LED_HOLD_MS));
-}
-#else
-static void disk_led_init(void) { }
-static void disk_led_activity(void) { }
-#endif /* DT_HAS_CHOSEN(auxspace_disk_led) */
 
 static bool mounted;
 static struct fs_file_t bin_file;
@@ -498,7 +464,6 @@ K_THREAD_DEFINE(tlog_recorder_tid, CONFIG_TELEMETRY_LOGGER_WRITER_STACK_SIZE,
 
 int recorder_init(void)
 {
-	disk_led_init();
 	k_thread_start(tlog_recorder_tid);
 	return 0;
 }

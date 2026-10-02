@@ -55,6 +55,7 @@ int notify_boot(void)
 	return rc;
 }
 
+#if defined(CONFIG_AURORA_STATE_MACHINE)
 int notify_state_change(enum sm_state prev, enum sm_state next)
 {
 	int rc = 0;
@@ -77,6 +78,7 @@ int notify_state_change(enum sm_state prev, enum sm_state next)
 	}
 	return rc;
 }
+#endif /* CONFIG_AURORA_STATE_MACHINE */
 
 int notify_calibration_start(void)
 {

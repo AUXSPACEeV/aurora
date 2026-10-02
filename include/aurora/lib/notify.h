@@ -6,7 +6,9 @@
 #ifndef APP_LIB_NOTIFY_H_
 #define APP_LIB_NOTIFY_H_
 
+#if defined(CONFIG_AURORA_STATE_MACHINE)
 #include <aurora/lib/state/state.h>
+#endif /* CONFIG_AURORA_STATE_MACHINE */
 
 /**
  * @defgroup lib_notify Notification library
@@ -19,6 +21,10 @@
  * output devices (buzzer, RGB LED, …).  Each backend registers a
  * static @ref notify_backend and the library fans out every call to
  * all enabled backends.
+ *
+ * The library itself does not depend on the flight state machine: only
+ * the state-change hook does, and it exists only in builds with
+ * @c CONFIG_AURORA_STATE_MACHINE.
  */
 
 /**
@@ -33,8 +39,10 @@ struct notify_backend_api {
 	/** @brief Signal that the system has booted. */
 	int (*on_boot)(void);
 
+#if defined(CONFIG_AURORA_STATE_MACHINE)
 	/** @brief Signal a flight state-machine transition. */
 	int (*on_state_change)(enum sm_state prev, enum sm_state next);
+#endif /* CONFIG_AURORA_STATE_MACHINE */
 
 	/** @brief Signal that IMU calibration has started. */
 	int (*on_calibration_start)(void);
@@ -95,8 +103,11 @@ int notify_init(void);
  */
 int notify_boot(void);
 
+#if defined(CONFIG_AURORA_STATE_MACHINE)
 /**
  * @brief Notify all backends of a state-machine transition.
+ *
+ * Depends on @c CONFIG_AURORA_STATE_MACHINE.
  *
  * @param prev Previous state.
  * @param next New state.
@@ -104,6 +115,7 @@ int notify_boot(void);
  * @retval 0 on success, or first non-zero return from a backend.
  */
 int notify_state_change(enum sm_state prev, enum sm_state next);
+#endif /* CONFIG_AURORA_STATE_MACHINE */
 
 /**
  * @brief Notify all backends that IMU calibration has started.

@@ -13,16 +13,16 @@ common:
   integration_platforms:
     - core65@1/esp32s3/procpu
 tests:
-  app.default.sysbuild:
+  telemetry_logger.default.sysbuild:
     sysbuild: true
-  app.debug.sysbuild:
+  telemetry_logger.debug.sysbuild:
     sysbuild: true
     extra_overlay_confs:
       - debug.conf
-  app.no_csv:
+  telemetry_logger.no_csv:
     extra_configs:
       - CONFIG_TELEMETRY_LOGGER_CSV=n
-  app.no_shell:
+  telemetry_logger.no_shell:
     extra_configs:
       - CONFIG_SHELL=n
       - CONFIG_TELEMETRY_LOGGER_SHELL=n
