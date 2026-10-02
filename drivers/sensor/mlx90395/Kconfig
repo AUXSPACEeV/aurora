@@ -10,3 +10,22 @@ config MLX90395
 	help
 	  Enable driver for the Melexis MLX90395 3-axis magnetometer, in
 	  both its 50 mT and 120 mT variants.
+
+config MLX90395_PIPELINED
+	bool "Do not wait for the conversion in sample_fetch"
+	depends on MLX90395
+	help
+	  By default a fetch starts a single measurement and sleeps until
+	  it is done, which takes up to ~105 ms with the oversampling and
+	  digital filter at their maximum.
+
+	  With this option a fetch instead collects the measurement the
+	  previous fetch started, starts the next one and returns at once.
+	  A fetch made before that conversion is done returns -EBUSY, and
+	  so does the very first fetch. Each sample is therefore as old as
+	  the interval between fetches, which must be at least the
+	  conversion time for every fetch to deliver one.
+
+	  For callers that share a thread with other time-critical work. A
+	  plain fetch-then-get, e.g. the sensor shell, sees -EBUSY or a
+	  stale sample instead.

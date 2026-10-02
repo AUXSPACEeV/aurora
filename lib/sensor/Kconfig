@@ -225,9 +225,23 @@ menu "High Acceleration Sensor (HACCEL)"
 config HACCEL
 	bool "Support for High Acceleration Sensor"
 	depends on AURORA_SENSORS
+	depends on SENSOR
 	default y if ADXL375
 	help
-		This option enables functionality for high acceleration sensors. TODO
+	  Reads the high acceleration sensor alongside the IMU, for the part
+	  of the flight the IMU accelerometer saturates in. Its samples are
+	  logged to the flight log, but not yet fed to the state machine.
+
+config HACCEL_FREQUENCY
+	int "HACCEL update frequency (Hz)"
+	depends on HACCEL
+	default 100
+	range 1 1000
+	help
+	  Rate the sensor is read at. Reading faster than its own output
+	  data rate (the ADXL375 'odr' devicetree property) only logs the
+	  same sample repeatedly.
+
 endmenu
 
 menu "Magnetometer (MAG)"
@@ -235,8 +249,23 @@ menu "Magnetometer (MAG)"
 config MAG
 	bool "Support for Magnetometer"
 	depends on AURORA_SENSORS
+
+	depends on SENSOR
 	default y if MLX90394 || MLX90395
+	# The magnetometer is read from the same thread as the IMU, the
+	# barometer and the state machine, which must not sleep through a
+	# conversion of up to ~105 ms.
+	imply MLX90395_PIPELINED
 	help
-		This option enables functionality for magnetometers. TODO
+	  Reads the magnetometer alongside the IMU. Its samples are logged
+	  to the flight log, but not yet fed to the state machine.
+
+config MAG_FREQUENCY
+	int "MAG update frequency (Hz)"
+	depends on MAG
+	default 5
+	range 1 100
+	help
+	  Rate the sensor is read at.
 
 endmenu

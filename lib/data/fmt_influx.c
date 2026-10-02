@@ -58,6 +58,7 @@ static const char *field_names_for(enum aurora_data type, int channel)
 	case AURORA_DATA_IMU_ACCEL:
 	case AURORA_DATA_IMU_GYRO:
 	case AURORA_DATA_IMU_MAG:
+	case AURORA_DATA_HACCEL:
 		return (channel < 3) ? xyz_fields[channel] : "unknown";
 	case AURORA_DATA_SM_KINEMATICS:
 		return (channel < 3) ? kin_fields[channel] : "unknown";

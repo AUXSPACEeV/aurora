@@ -104,6 +104,7 @@ TYPE_NAMES = {
     5: "sm_pose",
     6: "orientation",
     7: "vbat",
+    8: "haccel",
 }
 
 AURORA_DATA_COUNT = len(TYPE_NAMES)
@@ -123,6 +124,7 @@ STREAM_SPECS = {
     "sm_pose":       (5, (0, 1)),
     "orientation":   (6, (0, 1, 2)),
     "vbat":          (7, (0,)),
+    "haccel":        (8, (0, 1, 2)),
 }
 
 
@@ -428,6 +430,9 @@ CSV_COLUMNS = {
     "gyro_x":                   ("gyro", 0),
     "gyro_y":                   ("gyro", 1),
     "gyro_z":                   ("gyro", 2),
+    "haccel_x":                 ("haccel", 0),
+    "haccel_y":                 ("haccel", 1),
+    "haccel_z":                 ("haccel", 2),
     "mag_x":                    ("mag", 0),
     "mag_y":                    ("mag", 1),
     "mag_z":                    ("mag", 2),

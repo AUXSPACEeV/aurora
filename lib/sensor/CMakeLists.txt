@@ -15,6 +15,14 @@ if(CONFIG_BARO)
     zephyr_library_sources(baro.c)
 endif()
 
+if(CONFIG_HACCEL)
+    zephyr_library_sources(haccel.c)
+endif()
+
+if(CONFIG_MAG)
+    zephyr_library_sources(mag.c)
+endif()
+
 if(CONFIG_AURORA_FAKE_SENSORS)
     # Launch clock, flight profile and `sim` shell, shared by imu.c and baro.c.
     zephyr_library_sources(sim.c)

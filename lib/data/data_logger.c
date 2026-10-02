@@ -92,6 +92,7 @@ static const char *const aurora_data_names[AURORA_DATA_COUNT] = {
 	[AURORA_DATA_SM_POSE]       = "sm_pose",
 	[AURORA_DATA_ORIENTATION]   = "orientation",
 	[AURORA_DATA_VBAT]          = "vbat",
+	[AURORA_DATA_HACCEL]        = "haccel",
 };
 
 /* data_logger_type_name – see data_logger.h */

@@ -219,6 +219,28 @@ ZTEST(data_logger_core, test_type_name_imu_mag)
 			  "mag", NULL);
 }
 
+ZTEST(data_logger_core, test_type_name_haccel)
+{
+	zassert_str_equal(data_logger_type_name(AURORA_DATA_HACCEL),
+			  "haccel", NULL);
+}
+
+/* The binary log stores the raw enum value, so a reordering would make logs
+ * already on disk decode as the wrong type (tools/binlog.py hardcodes these).
+ */
+ZTEST(data_logger_core, test_type_values_stable)
+{
+	zassert_equal(AURORA_DATA_BARO, 0, NULL);
+	zassert_equal(AURORA_DATA_IMU_ACCEL, 1, NULL);
+	zassert_equal(AURORA_DATA_IMU_GYRO, 2, NULL);
+	zassert_equal(AURORA_DATA_IMU_MAG, 3, NULL);
+	zassert_equal(AURORA_DATA_SM_KINEMATICS, 4, NULL);
+	zassert_equal(AURORA_DATA_SM_POSE, 5, NULL);
+	zassert_equal(AURORA_DATA_ORIENTATION, 6, NULL);
+	zassert_equal(AURORA_DATA_VBAT, 7, NULL);
+	zassert_equal(AURORA_DATA_HACCEL, 8, NULL);
+}
+
 ZTEST(data_logger_core, test_type_name_sentinel)
 {
 	zassert_str_equal(data_logger_type_name(AURORA_DATA_COUNT), "unknown",

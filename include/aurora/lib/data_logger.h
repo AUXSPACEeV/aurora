@@ -37,7 +37,9 @@
  * @brief Sensor group identifier.
  *
  * Always add new entries **before** @c AURORA_DATA_COUNT so that the count
- * stays accurate and array-based tables remain valid.
+ * stays accurate and array-based tables remain valid. Add them **after** every
+ * existing entry, too: the value is what the binary log stores, so moving an
+ * entry would make logs already on disk decode as the wrong type.
  */
 enum aurora_data {
 	AURORA_DATA_BARO,          /**< Barometer: [0] temperature, [1] pressure  */
@@ -48,6 +50,7 @@ enum aurora_data {
 	AURORA_DATA_SM_POSE,       /**< SM Pose: [0] velocity, [1] altitude       */
 	AURORA_DATA_ORIENTATION,   /**< Orientation: [0] yaw, [1] pitch, [2] roll */
 	AURORA_DATA_VBAT,          /**< Battery: [0] voltage                      */
+	AURORA_DATA_HACCEL,        /**< High-g accel: [0] x, [1] y, [2] z         */
 	AURORA_DATA_COUNT,         /**< Sentinel — do not use as a type           */
 };
 
