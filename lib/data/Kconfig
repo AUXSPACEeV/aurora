@@ -277,6 +277,18 @@ config DATA_LOGGER_BIN_POST_LANDED_PAD_MS
 
 endif # DATA_LOGGER_BIN
 
+config DATA_LOGGER_LOG_ONLY_INFLIGHT
+	bool "Record only while the state machine is off the pad"
+	default n
+	help
+	  When enabled, the flight log follows the state machine: it is
+	  opened on the IDLE to ARMED transition and closed
+	  POST_LANDED_PAD_MS after LANDED (or immediately on IDLE/ERROR),
+	  so only the flight-adjacent window is recorded.
+
+	  When disabled, the flight log is opened once at boot and kept open
+	  for the rest of the power cycle, independent of the state machine.
+
 config DATA_LOGGER_MOCK
 	bool "Build mock formatter (test only)"
 	help

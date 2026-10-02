@@ -132,8 +132,31 @@ bool log_flight_log_busy(void)
 	return data_logger_convert_busy();
 }
 
+void log_begin_session(void)
+{
+	if (IS_ENABLED(CONFIG_DATA_LOGGER_LOG_ONLY_INFLIGHT)) {
+		return;
+	}
+
+	LOG_INF("Data logger: recording continuously (LOG_ONLY_INFLIGHT=n)");
+	log_begin_flight();
+}
+
 void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state)
 {
+	if (!IS_ENABLED(CONFIG_DATA_LOGGER_LOG_ONLY_INFLIGHT)) {
+		/* The log was opened at boot by log_begin_session() and stays
+		 * open for the whole power cycle; transitions only annotate it.
+		 */
+		if (prev_state == SM_ARMED && state == SM_BOOST) {
+			(void)data_logger_event(&sm_logger, DLE_BOOST);
+		} else if (state == SM_LANDED) {
+			(void)data_logger_event(&sm_logger, DLE_LANDED);
+		}
+		return;
+	}
+
+
 	/* Flight-time logging lifecycle:
 	 *  - IDLE→ARMED:  open the binary log (cancel any
 	 *                 still-pending deferred close from a
@@ -184,6 +207,11 @@ void log_resume_flight_after_reset(const enum sm_state state)
 	 * IDLE and ERROR have nothing to record either.
 	 */
 	if (state == SM_IDLE || state == SM_ERROR || state == SM_LANDED) {
+		return;
+	}
+
+	/* Continuous recording already opened the log at boot. */
+	if (!IS_ENABLED(CONFIG_DATA_LOGGER_LOG_ONLY_INFLIGHT)) {
 		return;
 	}
 

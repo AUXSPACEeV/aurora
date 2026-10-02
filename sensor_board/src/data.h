@@ -15,6 +15,7 @@
 #include <aurora/lib/state/state.h>
 
 #if defined(CONFIG_DATA_LOGGER_BIN)
+void log_begin_session(void);
 void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state);
 void log_flight_telemetry(void);
 void log_vbat_telemetry(void);
@@ -39,6 +40,7 @@ void log_vbat_telemetry(void);
  */
 void log_resume_flight_after_reset(const enum sm_state state);
 #else
+static inline void log_begin_session(void) {}
 static inline void log_handle_flight_lifecycle(const enum sm_state prev_state, const enum sm_state state) {}
 static inline void log_flight_telemetry(void) {}
 static inline void log_vbat_telemetry(void) {}

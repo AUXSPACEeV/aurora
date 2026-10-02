@@ -689,6 +689,9 @@ void state_machine_task(void *, void *, void *)
 
 	sm_init(&state_cfg, &sm_error_handler);
 
+	/* Continuous recording (no-op when logging only in flight) */
+	log_begin_session();
+
 #if defined(CONFIG_IMU) && defined(CONFIG_AURORA_STATE_MACHINE_RETAIN)
 	if (sm_retain_recovered()) {
 		/* Hand back the calibration from before the reset */
