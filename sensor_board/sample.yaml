@@ -12,11 +12,6 @@ common:
   modules:
     - fatfs
 tests:
-  app.default:
-    platform_allow:
-      - sensor_board_v2/rp2350a/hazard3
-    integration_platforms:
-      - sensor_board_v2/rp2350a/hazard3
   app.native_sim.replay:
     build_only: false
     timeout: 180
@@ -40,40 +35,29 @@ tests:
     sysbuild: true
     platform_allow:
       - sensor_board_v2/rp2040
-      - micrometer@1/esp32s3/procpu
       - micrometer@2/esp32s3/procpu
+      - core65@1/esp32s3/procpu
     integration_platforms:
       - sensor_board_v2/rp2040
-      - micrometer@1/esp32s3/procpu
       - micrometer@2/esp32s3/procpu
+      - core65@1/esp32s3/procpu
   app.bench:
     extra_args: SNIPPET="sim;nodisk"
     platform_allow:
       - rpi_pico/rp2040/w
-      - rpi_pico2/rp2350a/m33/w
       - sensor_board_v2/rp2040
-      - sensor_board_v2/rp2350a/hazard3
     integration_platforms:
       - rpi_pico/rp2040/w
-      - rpi_pico2/rp2350a/m33/w
       - sensor_board_v2/rp2040
-      - sensor_board_v2/rp2350a/hazard3
-  app.debug:
-    extra_overlay_confs:
-      - debug.conf
-    platform_allow:
-      - sensor_board_v2/rp2350a/hazard3
-    integration_platforms:
-      - sensor_board_v2/rp2350a/hazard3
   app.debug.sysbuild:
     sysbuild: true
     extra_overlay_confs:
       - debug.conf
     platform_allow:
       - sensor_board_v2/rp2040
-      - micrometer@1/esp32s3/procpu
       - micrometer@2/esp32s3/procpu
+      - core65@1/esp32s3/procpu
     integration_platforms:
       - sensor_board_v2/rp2040
-      - micrometer@1/esp32s3/procpu
       - micrometer@2/esp32s3/procpu
+      - core65@1/esp32s3/procpu
