@@ -1,4 +1,4 @@
-# Raspberry Pi Pico (bench targets)
+# Raspberry Pi Pico
 
 The [Raspberry Pi Pico](https://www.raspberrypi.com/products/raspberry-pi-pico/)
 and [Pico 2](https://www.raspberrypi.com/products/raspberry-pi-pico-2/)
