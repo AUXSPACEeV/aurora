@@ -304,13 +304,14 @@ _gbc.guess_image = _guess_image_safe
 # catalog's vendor display falls back to the raw prefix string.  Patch get_catalog
 # to inject the aurora vendor into the returned catalog's vendors dict.
 #
-# gen_boards_catalog also classifies any binding outside ZEPHYR_BASE/dts/bindings as
-# "misc" (Miscellaneous).  Aurora's pyro bindings live in aurora/dts/bindings/pyro/
-# and should be shown under a "pyro" category instead.  The patch below re-categorizes
-# them after the catalog is built, and we also register "pyro" in the Zephyr domain's
-# BINDING_TYPE_TO_DOCUTILS_NODE dict so the section heading renders correctly.
-_AURORA_VENDOR_PREFIXES = _WORKSPACE / "aurora" / "dts" / "bindings" / "vendor-prefixes.txt"
-_AURORA_PYRO_BINDINGS  = _WORKSPACE / "aurora" / "dts" / "bindings" / "pyro"
+# gen_boards_catalog also derives a binding's type (the "Supported Features" table
+# section) from its first directory below ZEPHYR_BASE/dts/bindings, and classifies
+# any binding outside that tree as "misc" (Miscellaneous).  Aurora's bindings follow
+# the same layout under aurora/dts/bindings/<type>/, so the patch below moves them
+# to <type> after the catalog is built, provided <type> has a section heading (any
+# type from Zephyr's binding-types.txt, plus "pyro", registered further below).
+_AURORA_BINDINGS = _WORKSPACE / "aurora" / "dts" / "bindings"
+_AURORA_VENDOR_PREFIXES = _AURORA_BINDINGS / "vendor-prefixes.txt"
 _orig_get_catalog = _gbc.get_catalog
 
 def _get_catalog_with_aurora_fixes(**kwargs):
@@ -328,8 +329,8 @@ def _get_catalog_with_aurora_fixes(**kwargs):
             e,
         )
 
-    # 2. Re-categorize features whose binding lives in aurora/dts/bindings/pyro/
-    #    from the catch-all "misc" bucket to "pyro".
+    # 2. Re-categorize features whose binding lives in aurora/dts/bindings/<type>/
+    #    from the catch-all "misc" bucket to <type> (e.g. "sensor", "pyro").
     # 3. Fix empty "locations" for DTS nodes whose source files live outside
     #    ZEPHYR_BASE (i.e. in Aurora's own board/SoC trees).  gen_boards_catalog
     #    only classifies files under ZEPHYR_BASE, so every Aurora-specific node
@@ -348,18 +349,17 @@ def _get_catalog_with_aurora_fixes(**kwargs):
             # compat buckets we care about live under the "features" sub-dict.
             features = target_data.get("features", {})
             misc = features.get("misc", {})
-            to_move = {
-                compat: fdata
-                for compat, fdata in misc.items()
-                if any(
-                    Path(n["binding_path"]).is_relative_to(_AURORA_PYRO_BINDINGS)
-                    for n in fdata.get("okay_nodes", []) + fdata.get("disabled_nodes", [])
+            for compat, fdata in list(misc.items()):
+                binding_type = next(
+                    (
+                        Path(n["binding_path"]).relative_to(_AURORA_BINDINGS).parts[0]
+                        for n in fdata.get("okay_nodes", []) + fdata.get("disabled_nodes", [])
+                        if Path(n["binding_path"]).is_relative_to(_AURORA_BINDINGS)
+                    ),
+                    None,
                 )
-            }
-            if to_move:
-                features.setdefault("pyro", {}).update(to_move)
-                for compat in to_move:
-                    del misc[compat]
+                if binding_type in _zd.BINDING_TYPE_TO_DOCUTILS_NODE and binding_type != "misc":
+                    features.setdefault(binding_type, {})[compat] = misc.pop(compat)
 
             for fdata in (
                 fd
@@ -391,6 +391,9 @@ _gbc.get_catalog = _get_catalog_with_aurora_fixes
 # BINDING_TYPE_TO_DOCUTILS_NODE is populated at import time from Zephyr's
 # binding-types.txt, which does not include Aurora's custom types.  Without
 # this entry the table would fall back to rendering the raw key string "pyro".
+#
+# NOTE: zephyr.domain does "from gen_boards_catalog import get_catalog", so it must
+# only be imported *after* the _gbc.get_catalog patch above, or it binds the original.
 import zephyr.domain as _zd
 from docutils import nodes as _nodes
 _zd.BINDING_TYPE_TO_DOCUTILS_NODE["pyro"] = _nodes.Text("Pyrotechnic Ignition")
