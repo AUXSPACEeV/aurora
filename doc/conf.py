@@ -414,8 +414,9 @@ _zd.gh_link_get_url = _gh_link_get_url_clean
 
 # Board status registry: board_id -> (display_name, status_string)
 # Extend this dict when new boards are added or maintenance status changes.
+# TODO: When MAINTAINERS file exists, use it as source for this map
 _AURORA_BOARD_STATUS = {
-    "sensor_board_v2": ("Auxspace Sensor Board V2", "Maintained"),
+    "core65":          ("AUX-Core-65", "Maintained"),
     "micrometer":      ("µMETER", "Maintained"),
 }
 
