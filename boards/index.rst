@@ -1,7 +1,7 @@
-Supported Boards
-################
+Supported Boards and Shields
+############################
 
-This page lists all boards currently supported by AURORA.
+This page lists all boards and shields currently supported by AURORA.
 
 Flight boards
 =============

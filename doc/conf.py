@@ -59,6 +59,7 @@ extensions = [
     'zephyr.domain',
     'zephyr.link-roles',  # registers the zephyr_file role used by board-supported-hw
     'aurora_compat',  # must come after zephyr.domain; fixes missing config values and restores breathe's doxygengroup
+    'aurora_shield',  # must come after zephyr.domain; adds the zephyr:shield directive
     'sphinx_simplepdf',  # WeasyPrint-based PDF builder (`make simplepdf`)
 ]
 
@@ -412,13 +413,16 @@ def _gh_link_get_url_clean(app, pagename, mode="blob"):
 
 _zd.gh_link_get_url = _gh_link_get_url_clean
 
-# Board status registry: board_id -> (display_name, status_string)
-# Extend this dict when new boards are added or maintenance status changes.
+# Board/shield status registry: board_id -> (display_name, status_string)
+# Extend this dict when new boards or shields are added or maintenance status
+# changes.  Also consumed by the zephyr:shield directive (aurora_shield).
 # TODO: When MAINTAINERS file exists, use it as source for this map
 _AURORA_BOARD_STATUS = {
     "core65":          ("AUX-Core-65", "Maintained"),
     "micrometer":      ("µMETER", "Maintained"),
+    "pwr65":           ("AUX-Pwr-65", "Maintained"),
 }
+aurora_board_status = _AURORA_BOARD_STATUS
 
 # Patch ConvertBoardNode to ensure the Board Overview sidebar always has a
 # "Status" field.  ConvertBoardNode.apply() builds the sidebar's field_list
