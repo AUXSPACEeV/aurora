@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <assert.h>
 #include <aurora/lib/baro.h>
 #include <aurora/lib/can.h>
 #include <aurora/lib/imu.h>
@@ -80,7 +81,7 @@ static void tx_irq_callback(const struct device *dev, int error, void *arg) {
   ARG_UNUSED(arg);
 
   if (error != 0) {
-    LOG_ERR("Callback! error-code: %d", error);
+    LOG_ERR("Error while sending data: %d", error);
   }
 }
 
@@ -111,6 +112,8 @@ int init_can() {
 }
 
 int can_send_msg(uint32_t id, const uint8_t *data, uint8_t dlc) {
+  assert(data != NULL);
+
   struct can_frame frame = {
       .id = id,
       .dlc = dlc,
@@ -135,8 +138,13 @@ int can_send_msg(uint32_t id, const uint8_t *data, uint8_t dlc) {
 }
 
 int can_send_baro_msg(struct baro_data *baro) {
-  // converting the sensor value to XXYY
+  if (baro == NULL) {
+    LOG_ERR("baro data is NULL");
+    return -EINVAL;
+  }
+
   struct can_payload_baro p = {
+      // converting the sensor value to XXYY
       .temp_centi_deg = (int16_t)(baro->temperature.val1 * 100 +
                                   baro->temperature.val2 / 10000),
       // converting to XXYYY
@@ -153,6 +161,10 @@ int can_send_baro_msg(struct baro_data *baro) {
 }
 
 int can_send_imu_msg(struct imu_data *imu) {
+  if (imu == NULL) {
+    LOG_ERR("IMU data is NULL");
+    return -EINVAL;
+  }
   int8_t negative_bits_acc = 0;
   check_for_negative_values(imu->accel, &negative_bits_acc);
 
@@ -243,10 +255,10 @@ static void can_rx_callback(const struct device *dev, struct can_frame *frame,
 
     break;
 
-    case CAN_STATE_CHANNEL:
-	enum sm_state state = frame->data[0];
+  case CAN_STATE_CHANNEL:
+    enum sm_state state = frame->data[0];
 
-	LOG_INF("STATE: %d", state);
+    LOG_INF("STATE: %d", state);
     break;
   case CAN_VOLTAGE_CHANNEL:
     // TODO
