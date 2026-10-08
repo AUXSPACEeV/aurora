@@ -103,3 +103,6 @@ int can_send_msg(uint32_t id, const uint8_t *data, uint8_t dlc);
  * @retval see can_add_rx_filter()
  */
 int register_can_receiver();
+
+/** @} */
+
