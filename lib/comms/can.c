@@ -10,11 +10,17 @@
 #include <aurora/lib/state/state.h>
 #include <zephyr/logging/log.h>
 
-#define CAN_BARO_CHANNEL 0x200
-#define CAN_IMU_GYRO_CHANNEL 0x201
-#define CAN_IMU_ACCEL_CHANNEL 0x202
-#define CAN_VOLTAGE_CHANNEL 0x203
-#define CAN_STATE_CHANNEL 0x204
+/**
+ * @name CAN Bus Telemetry Channels
+ * Base message IDs transmitted over the CAN bus.
+ * @{
+ */
+#define CAN_BARO_CHANNEL       0x200 /**< Barometric pressure and temperature data */
+#define CAN_IMU_GYRO_CHANNEL   0x201 /**< Gyroscope angular rate data */
+#define CAN_IMU_ACCEL_CHANNEL  0x202 /**< acceleration data */
+#define CAN_VOLTAGE_CHANNEL    0x203 /**< Voltage supply monitoring */
+#define CAN_STATE_CHANNEL      0x204 /**< system state machine status */
+/** @} */
 
 #define BIT_MASK_FIRST 0b00000100
 #define BIT_MASK_SECOND 0b00000010
@@ -22,7 +28,6 @@
 
 const uint8_t masks[3] = {BIT_MASK_FIRST, BIT_MASK_SECOND, BIT_MASK_THIRD};
 
-// TODO: log level
 LOG_MODULE_REGISTER(can, CONFIG_AURORA_SENSORS_LOG_LEVEL);
 
 const struct device *const can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_canbus));

@@ -9,6 +9,14 @@
 #include <aurora/lib/state/state.h>
 
 /**
+ * @defgroup lib_can CAN library
+ * @ingroup lib
+ * @{
+ *
+ * @brief AURORA CAN library for avionics communication.
+ */
+
+/**
  * @brief Data structure for sending baro data.
  *
  * carries the temperature in the format XXYY, where XX are the whole number and
@@ -50,7 +58,7 @@ int init_can();
  * and sends them on the CAN bus.
  *
  * @param imu Pointer to the IMU data.
- * @return int
+ * @retval see can_send()
  */
 int can_send_imu_msg(struct imu_data *imu);
 
@@ -58,21 +66,22 @@ int can_send_imu_msg(struct imu_data *imu);
  * @brief Sends the baro data over the CAN bus.
  *
  * @param baro Pointer to the baro data.
- * @retval see can_send
+ * @retval see can_send()
  */
 int can_send_baro_msg(struct baro_data *baro);
 
 /**
  * @brief Sends the voltage over the CAN bus.
  *
- * @retval see can_send
+ * @retval see can_send()
  */
 int can_send_voltage();
 
 /**
  * @brief Sends the current state over the CAN bus.
  *
- * @retval see can_send
+ * @param state the current state.
+ * @retval see can_send()
  */
 int can_send_state(enum sm_state state);
 
@@ -87,15 +96,10 @@ int can_send_state(enum sm_state state);
  */
 int can_send_msg(uint32_t id, const uint8_t *data, uint8_t dlc);
 
-/**
- * @brief
- *
- */
-void can_rx_msg();
 
 /**
- * @brief Registers the filters to listen to.
+ * @brief Registers the filters to listen to. See can_rx_callback() for handling incomming data.
  *
- * @retval see can_add_rx_filter
+ * @retval see can_add_rx_filter()
  */
 int register_can_receiver();
