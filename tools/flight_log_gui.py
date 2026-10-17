@@ -627,7 +627,7 @@ class FlightLogViewer(tk.Tk):
         parent.rowconfigure(1, weight=3)
         parent.rowconfigure(3, weight=1)
         parent.rowconfigure(6, weight=2)
-        parent.rowconfigure(9, weight=2)
+        parent.rowconfigure(11, weight=2)
         parent.columnconfigure(0, weight=1)
 
         ttk.Label(parent, text="FLIGHT LOGS",
@@ -733,8 +733,29 @@ class FlightLogViewer(tk.Tk):
             spin.grid(row=row, column=1, sticky="e", pady=2)
             spin.bind("<Return>", lambda _e: self._rerender())
 
+        ttk.Label(parent, text="PLOT TITLE", style="Caption.TLabel").grid(
+            row=9, column=0, sticky="w", pady=(12, 4))
+
+        title_row = ttk.Frame(parent, style="Sidebar.TFrame")
+        title_row.grid(row=10, column=0, sticky="ew")
+        title_row.columnconfigure(0, weight=1)
+
+        #: Overrides _plot_title() for the figure's own title; the label
+        #: above the plot area (showing the file and flight) is separate
+        #: and always stays auto-generated.
+        self.title_var = tk.StringVar(value="")
+        self.title_entry = ttk.Entry(title_row, textvariable=self.title_var,
+                                     style="Side.TEntry")
+        self.title_entry.grid(row=0, column=0, sticky="ew")
+        self.title_entry.bind("<Return>", lambda _e: self._rerender())
+        self.title_entry.bind("<FocusOut>", lambda _e: self._rerender())
+
+        ttk.Button(title_row, text="Reset", style="Ghost.TButton",
+                   command=self._reset_title).grid(row=0, column=1,
+                                                    padx=(6, 0))
+
         summary_wrap = ttk.Frame(parent, style="Sidebar.TFrame")
-        summary_wrap.grid(row=9, column=0, sticky="nsew", pady=(12, 0))
+        summary_wrap.grid(row=11, column=0, sticky="nsew", pady=(12, 0))
         summary_wrap.rowconfigure(1, weight=1)
         summary_wrap.columnconfigure(0, weight=1)
         ttk.Label(summary_wrap, text="SUMMARY", style="Caption.TLabel").grid(
@@ -876,6 +897,10 @@ class FlightLogViewer(tk.Tk):
         s.configure("Side.TSpinbox", fieldbackground=c["field"],
                     background=c["surface"], foreground=c["fg"],
                     arrowcolor=c["brand"], bordercolor=c["border"])
+
+        s.configure("Side.TEntry", fieldbackground=c["field"],
+                    foreground=c["fg"], bordercolor=c["border"],
+                    insertcolor=c["fg"])
 
         for listbox in (self.panel_list, self.audit_list):
             listbox.configure(background=c["field"], foreground=c["fg"],
@@ -1270,6 +1295,7 @@ class FlightLogViewer(tk.Tk):
         if self._current_flight == (log, flight):
             return
         self._current_flight = (log, flight)
+        self.title_var.set(self._plot_title(log, flight))
         self._render()
 
     def _rerender(self, _event=None):
@@ -1320,7 +1346,7 @@ class FlightLogViewer(tk.Tk):
             wanted = self._sync_panel_list(usable)
             figure = pfd.plot_raw_flight(
                 sliced, transitions, self.theme_name, out_path=None,
-                title=self._plot_title(log, flight),
+                title=self.title_var.get(),
                 r_meas=float(self.r_meas.get()), panels=wanted)
         except Exception as exc:                     # noqa: BLE001
             self._set_busy(False)
@@ -1344,6 +1370,14 @@ class FlightLogViewer(tk.Tk):
         if flight.boost_source:
             title += f"  [boost recovered from {flight.boost_source}]"
         return title
+
+    def _reset_title(self):
+        """Put the plot title back to its auto-generated default."""
+        if self._current_flight is None:
+            return
+        log, flight = self._current_flight
+        self.title_var.set(self._plot_title(log, flight))
+        self._rerender()
 
     def _sync_panel_list(self, usable):
         """Refresh the panel picker and return the panels to draw."""
