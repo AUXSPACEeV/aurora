@@ -474,6 +474,8 @@ class FlightLogViewer(tk.Tk):
     PANEL_HEIGHT_IN = 2.4
     #: Resolution used when exporting the figure to a file.
     EXPORT_DPI = 150
+    #: Default sash position (px) for the sidebar pane.
+    SIDEBAR_WIDTH = 330
 
     def __init__(self, theme="light", frame_size=None):
         super().__init__()
@@ -500,6 +502,8 @@ class FlightLogViewer(tk.Tk):
         self._current_path = None
         self._resize_job = None
         self._busy = 0
+        self._sidebar_visible = False
+        self._sidebar_width = self.SIDEBAR_WIDTH
         # _figure / _fig_canvas / _fig_window / _toolbar / _panel_count are
         # created once by _build_plot_area().
 
@@ -581,6 +585,9 @@ class FlightLogViewer(tk.Tk):
                    command=self.open_card).pack(side="left", padx=4)
         ttk.Button(buttons, text="Export PNG…", style="Ghost.TButton",
                    command=self.export_png).pack(side="left", padx=4)
+        self.sidebar_button = ttk.Button(buttons, style="Ghost.TButton",
+                                         command=self.toggle_sidebar)
+        self.sidebar_button.pack(side="left", padx=4)
         self.theme_button = ttk.Button(buttons, style="Ghost.TButton",
                                        width=10, command=self.toggle_theme)
         self.theme_button.pack(side="left", padx=(4, 0))
@@ -592,16 +599,20 @@ class FlightLogViewer(tk.Tk):
         body = ttk.PanedWindow(self, orient="horizontal")
         body.grid(row=1, column=0, sticky="nsew")
 
-        sidebar = ttk.Frame(body, style="Sidebar.TFrame", padding=(10, 10))
-        body.add(sidebar, weight=0)
-        self._build_sidebar(sidebar)
+        self._body = body
+        self._sidebar = ttk.Frame(body, width=100, style="Sidebar.TFrame",
+                                  padding=(10, 10))
+        self._build_sidebar(self._sidebar)
+        # Not added to the PanedWindow yet — the sidebar has nothing to
+        # show until a log is opened, so it starts hidden and is brought
+        # in by _ensure_sidebar_shown() once load_path() has something to
+        # put in it.
 
         plot_area = ttk.Frame(body, style="Plot.TFrame")
         body.add(plot_area, weight=1)
         self._build_plot_area(plot_area)
 
-        # PanedWindow ignores the child's requested width unless nudged.
-        self.after(50, lambda: body.sashpos(0, 330))
+        self._update_sidebar_button()
 
         # -- status bar --------------------------------------------------
         self.status = tk.StringVar(
@@ -945,6 +956,47 @@ class FlightLogViewer(tk.Tk):
         self._apply_theme()
         self._rerender()
 
+    # -- sidebar -----------------------------------------------------------
+
+    def toggle_sidebar(self):
+        self._set_sidebar_visible(not self._sidebar_visible)
+
+    def _set_sidebar_visible(self, visible):
+        if visible == self._sidebar_visible:
+            return
+        if visible:
+            self._body.insert(0, self._sidebar, weight=0)
+            self.after(10, self._apply_sidebar_width)
+        else:
+            self._sidebar_width = max(self._body.sashpos(0),
+                                      self.SIDEBAR_WIDTH)
+            self._body.forget(self._sidebar)
+        self._sidebar_visible = visible
+        self._update_sidebar_button()
+        self.after(20, self._fit_figure)
+
+    def _apply_sidebar_width(self):
+        """Push the sash to :attr:`_sidebar_width`.
+
+        ``sashpos`` is a no-op until the pane's geometry has been
+        negotiated, which happens on an idle task — so this forces one
+        first rather than hoping enough time has passed.
+        """
+        self.update_idletasks()
+        self._body.sashpos(0, self._sidebar_width)
+
+    def _ensure_sidebar_shown(self):
+        """Bring the sidebar on screen, e.g. once a log has been opened."""
+        if self._sidebar_visible:
+            self.after(10, self._apply_sidebar_width)
+        else:
+            self._set_sidebar_visible(True)
+
+    def _update_sidebar_button(self):
+        self.sidebar_button.configure(
+            text="Hide Sidebar" if self._sidebar_visible
+                 else "Show Sidebar")
+
     # -- opening ---------------------------------------------------------
 
     def open_file(self):
@@ -967,6 +1019,7 @@ class FlightLogViewer(tk.Tk):
     def load_path(self, path):
         """Open a log file, a ``DATA`` directory or a card root."""
         path = os.path.abspath(path)
+        self._ensure_sidebar_shown()
         if os.path.isdir(path):
             self._populate_card(path)
         elif os.path.isfile(path):
