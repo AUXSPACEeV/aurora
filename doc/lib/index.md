@@ -14,4 +14,5 @@ sensors
 state
 telemetry
 watchdog
+comms
 ```
