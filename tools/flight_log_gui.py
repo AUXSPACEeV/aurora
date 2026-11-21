@@ -60,6 +60,8 @@ from tkinter import filedialog, messagebox, ttk                 # noqa: E402
 import numpy as np                                              # noqa: E402
 
 import binlog                                                   # noqa: E402
+import flight_export                                            # noqa: E402
+import flight_export_dialog                                     # noqa: E402
 import plot_flight_data as pfd                                  # noqa: E402
 
 try:
@@ -583,8 +585,8 @@ class FlightLogViewer(tk.Tk):
                    command=self.open_file).pack(side="left", padx=4)
         ttk.Button(buttons, text="Open Card…", style="Brand.TButton",
                    command=self.open_card).pack(side="left", padx=4)
-        ttk.Button(buttons, text="Export PNG…", style="Ghost.TButton",
-                   command=self.export_png).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Export…", style="Ghost.TButton",
+                   command=self.export).pack(side="left", padx=4)
         self.sidebar_button = ttk.Button(buttons, style="Ghost.TButton",
                                          command=self.toggle_sidebar)
         self.sidebar_button.pack(side="left", padx=4)
@@ -1498,14 +1500,55 @@ class FlightLogViewer(tk.Tk):
 
     # -- export ----------------------------------------------------------
 
-    def export_png(self):
+    def _export_stem(self, log, flight):
+        """File name stem: the plot title once edited, else log + flight."""
+        title = self.title_var.get().strip()
+        if title and title != self._plot_title(log, flight):
+            return flight_export.safe_filename(title)
+        stem = os.path.splitext(os.path.basename(log.path))[0]
+        return f"{stem}_{flight.label.replace(' · ', '_')}".replace(" ", "_")
+
+    def export(self):
+        """Ask what to export, then hand over to the matching writer."""
         if self._current_flight is None:
             messagebox.showinfo("AURORA", "Nothing to export yet.")
             return
+        _log, flight = self._current_flight
+        sliced, _transitions = self._slice(flight)
+        dialog = flight_export_dialog.ExportDialog(
+            self, flight_export.suggest_rate_hz(sliced),
+            flight_export.describe_rates(sliced))
+        if dialog.result is None:
+            return
+        choice, rate = dialog.result
+        if choice == flight_export_dialog.CHOICE_IMAGE:
+            self.export_png()
+        else:
+            self.export_csv(choice, rate, sliced)
+
+    def export_csv(self, mode, rate, sliced):
+        """Write the flight as it is windowed on screen to CSV."""
         log, flight = self._current_flight
-        stem = os.path.splitext(os.path.basename(log.path))[0]
-        suggested = f"{stem}_{flight.label.replace(' · ', '_')}" \
-                    f"_{self.theme_name}.png".replace(" ", "_")
+        spec = flight_export.MODES[mode]
+        path = filedialog.asksaveasfilename(
+            title=spec.title, defaultextension=spec.ext,
+            initialfile=flight_export.default_filename(
+                mode, self._export_stem(log, flight), rate),
+            filetypes=[("ZIP archive", "*.zip") if spec.ext == ".zip"
+                       else ("CSV file", "*.csv")])
+        if not path:
+            return
+        try:
+            flight_export.export(mode, sliced, path, rate_hz=rate)
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("Export failed", str(exc))
+            return
+        self.status.set(f"Exported {path}")
+
+    def export_png(self):
+        log, flight = self._current_flight
+        suggested = (f"{self._export_stem(log, flight)}_plot_"
+                     f"{self.theme_name}.png")
         path = filedialog.asksaveasfilename(
             title="Export plot", defaultextension=".png",
             initialfile=suggested,

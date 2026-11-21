@@ -73,7 +73,7 @@ python3 tools/flight_log_gui.py [PATH]
 | **Graphs** | The panels this flight has data for. Multi-select (ctrl/shift-click) to stack a subset; **All** / **None** are shortcuts. |
 | **Window** | *Flight window* trims to the detected flight plus the pre-boost / post-end margins; *Whole log* plots the recording end to end. `Kalman R` feeds the NIS-gate replay and should match `CONFIG_FILTER_R_MILLISCALE / 1000`. |
 | **Summary** | Frame and record counts, `flight_id`, peak altitude and velocity, per-stream sample counts, and any decode warnings. |
-| **Plot** | The stacked panels, scrollable, with the matplotlib pan/zoom toolbar underneath. **Export PNG…** writes the current view at 150 dpi (PDF and SVG also work). |
+| **Plot** | The stacked panels, scrollable, with the matplotlib pan/zoom toolbar underneath. **Export…** in the header saves the plot or the data, see [Exporting](#exporting). |
 
 Panels are only offered for streams the log actually contains, so the
 list is shorter for a `.csv` (the firmware's CSV formatter has no
@@ -87,6 +87,39 @@ audit from another boot puts the flight window somewhere the log has no
 samples — the plot area then says so instead of drawing an empty
 window.
 ```
+
+## Exporting
+
+**Export…** in the header opens a dialog that explains each export and
+asks for the details (the rate, for the resampled table). CSV exports
+cover the flight as it is currently windowed (same *Flight window* /
+*Whole log* and margins as the plot). The writers live in
+[`flight_export.py`](https://github.com/AUXSPACEeV/aurora/blob/main/tools/flight_export.py).
+
+Every CSV has a `time [s]` column (floating point seconds, `0` at the
+start of the window, so the plot's time axis) and one
+`<stream>_<field> [<unit>]` column per value. The state machine and
+orientation streams are included when the log has them.
+
+| Export | Output | Default file name |
+|---|---|---|
+| **Plot image** | The graphs as shown, PNG at 150 dpi (PDF and SVG also work). | `<log>_<flight>_plot_<theme>.png` |
+| **CSV: single table, resampled** | A row every 1/rate seconds, every column linearly interpolated onto that grid, so each row is complete. Values are estimates, not measurements. The default rate is that of the fastest stream. Cells outside a stream's recorded range stay empty. | `<log>_<flight>_resampled_<rate>Hz.csv` |
+| **CSV: single table, raw samples** | Every sample exactly as logged, one row per timestamp. A sensor that did not sample at that moment leaves its cells empty. Nothing is interpolated. | `<log>_<flight>_raw.csv` |
+| **CSV: one file per sensor (ZIP)** | `accel.csv`, `baro.csv`, … each at that sensor's own sample times, zipped. No empty cells and no interpolation. Streams without samples are left out. | `<log>_<flight>_per-sensor.zip` |
+
+Units in the column headers:
+
+| Stream | Columns |
+|---|---|
+| `accel`, `haccel` | `x`, `y`, `z` in m/s^2 |
+| `gyro` | `x`, `y`, `z` in rad/s |
+| `mag` | `x`, `y`, `z` in gauss |
+| `baro` | `pres` in kPa, `temp` in degC |
+| `vbat` | `voltage` in V |
+| `sm_kinematics` | `accel`, `accel_vert` in m/s^2 |
+| `sm_pose` | `velocity` in m/s, `altitude` in m |
+| `orientation` | `yaw`, `pitch`, `roll` in deg |
 
 ## Requirements
 
