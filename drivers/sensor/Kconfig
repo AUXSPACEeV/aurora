@@ -1,8 +1,0 @@
-# Copyright (c) 2026 Auxspace e.V.
-# SPDX-License-Identifier: Apache-2.0
-
-if SENSOR
-
-rsource "adxl375/Kconfig"
-
-endif # SENSOR
