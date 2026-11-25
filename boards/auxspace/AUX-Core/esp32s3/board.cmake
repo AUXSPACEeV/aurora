@@ -2,7 +2,7 @@
 
 if(NOT SYSBUILD)
   message(WARNING
-    "micrometer requires sysbuild (MCUboot). "
+    "AUX-Core requires sysbuild (MCUboot). "
     "Use: west build --sysbuild")
 endif()
 
