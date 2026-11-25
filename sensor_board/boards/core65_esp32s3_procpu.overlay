@@ -157,8 +157,6 @@
 
 &mlx90394_0 {
 	status = "okay";
-	oversampling = <3>;
-	digital-filter = <7>;
 };
 
 &adxl375_0 {
