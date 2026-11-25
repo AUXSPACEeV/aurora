@@ -4,6 +4,5 @@
 if SENSOR
 
 rsource "adxl375/Kconfig"
-rsource "mlx90395/Kconfig"
 
 endif # SENSOR
