@@ -3,6 +3,12 @@
  * Copyright (c) 2026 Auxspace e.V.
  *
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Pin assignments for AUX-Core-6501.
+ *
+ * The board has no I2S or SPI peripherals: GPIO4-7 and GPIO40-42 are taken
+ * by the native SDHC slot and the bottom connector's UART, so no I2S or SPI
+ * groups are defined here.  Adding one would collide with the SD card.
  */
 
 #include <zephyr/dt-bindings/pinctrl/esp-pinctrl-common.h>
@@ -10,6 +16,7 @@
 #include <zephyr/dt-bindings/pinctrl/esp32s3-gpio-sigmap.h>
 
 &pinctrl {
+	/* Debug header J5 (GND / VBus / TX / RX) */
 	uart0_default: uart0_default {
 		group1 {
 			pinmux = <UART0_TX_GPIO43>;
@@ -22,6 +29,7 @@
 		};
 	};
 
+	/* Top AUX-Stack data connector J1 (UART_TX_top / UART_RX_top) */
 	uart1_default: uart1_default {
 		group1 {
 			pinmux = <UART1_TX_GPIO1>;
@@ -34,9 +42,10 @@
 		};
 	};
 
+	/* Bottom AUX-Stack data connector J2 (UART_TX_bot / UART_RX_bot) */
 	uart2_default: uart2_default {
 		group1 {
-			pinmux = <UART2_TX_GPIO14>;
+			pinmux = <UART2_TX_GPIO9>;
 			output-high;
 		};
 
@@ -46,6 +55,7 @@
 		};
 	};
 
+	/* On-board sensor bus. */
 	i2c0_default: i2c0_default {
 		group1 {
 			pinmux = <I2C0_SDA_GPIO11>,
@@ -56,69 +66,27 @@
 		};
 	};
 
+	/* AUX-Stack data connector bus, shared by J1 and J2 through the R5/R7
+	 * links.
+	 */
 	i2c1_default: i2c1_default {
 		group1 {
-			pinmux = <I2C1_SDA_GPIO47>,
-				 <I2C1_SCL_GPIO46>;
+			pinmux = <I2C1_SDA_GPIO13>,
+				 <I2C1_SCL_GPIO14>;
 			bias-disable;
 			drive-open-drain;
 			output-high;
 		};
 	};
 
-	i2s0_default: i2s0_default {
-		group1 {
-			pinmux = <I2S0_MCLK_GPIO42>,
-				 <I2S0_O_WS_GPIO36>,
-				 <I2S0_O_BCK_GPIO37>,
-				 <I2S0_O_SD_GPIO38>,
-				 <I2S0_I_SD_GPIO41>;
-		};
-	};
-
-	i2s1_default: i2s1_default {
-		group1 {
-			pinmux = <I2S1_MCLK_GPIO48>,
-				 <I2S1_O_WS_GPIO4>,
-				 <I2S1_O_BCK_GPIO5>,
-				 <I2S1_O_SD_GPIO6>,
-				 <I2S1_I_SD_GPIO12>;
-		};
-	};
-
-	spim2_default: spim2_default {
-		group1 {
-			pinmux = <SPIM2_MISO_GPIO7>,
-				 <SPIM2_SCLK_GPIO6>,
-				 <SPIM2_CSEL_GPIO4>;
-		};
-
-		group2 {
-			pinmux = <SPIM2_MOSI_GPIO5>;
-			output-low;
-		};
-	};
-
-	spim3_default: spim3_default {
-		group1 {
-			pinmux = <SPIM3_MISO_GPIO10>,
-				 <SPIM3_SCLK_GPIO8>,
-				 <SPIM3_CSEL_GPIO11>;
-		};
-
-		group2 {
-			pinmux = <SPIM3_MOSI_GPIO9>;
-			output-low;
-		};
-	};
-
+	/* Channel 0 drives the buzzer, channel 1 the STATE LED. */
 	ledc0_default: ledc0_default {
 		group1 {
-			pinmux = <LEDC_CH0_GPIO48>;
+			pinmux = <LEDC_CH0_GPIO45>;
 			output-enable;
 		};
 		group2 {
-			pinmux = <LEDC_CH1_GPIO40>;
+			pinmux = <LEDC_CH1_GPIO3>;
 			output-enable;
 		};
 	};

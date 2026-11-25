@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <zephyr/dt-bindings/sensor/lps22hh.h>
 #include <zephyr/dt-bindings/sensor/lsm6dso.h>
+#include <zephyr/dt-bindings/sensor/lsm6dsvxxx.h>
+#include <zephyr/dt-bindings/sensor/lsm6dsv320x.h>
 
 / {
 	chosen {
@@ -16,14 +17,11 @@
 		auxspace,led = &pwmleds;
 		auxspace,flight-log-disk = &flight_log_disk;
 		auxspace,sm-config = &sm_config_partition;
-		auxspace,baro = &dps310_0;
-		auxspace,mag = &mlx90394_0;
-		auxspace,haccel = &adxl375_0;
+		auxspace,baro = &ms5607_0;
+		auxspace,mag = &lis3mdl0;
+		auxspace,haccel = &lsm6dsv320x0;
 		auxspace,disk-led = &sd_activity_led;
-		/* no dedicated RBF connector.
-		 * The BOOT button stands in for the plug (shorted = safe).
-		 */
-		auxspace,rbf = &button0;
+		auxspace,rbf = &arm_interlock;
 	};
 
 	fstab {
@@ -143,7 +141,7 @@
 	status = "okay";
 };
 
-&dps310_0 {
+&ms5607_0 {
 	status = "okay";
 };
 
@@ -155,10 +153,16 @@
 	status = "okay";
 };
 
-&mlx90394_0 {
+&lis3mdl0 {
 	status = "okay";
 };
 
-&adxl375_0 {
+&lsm6dsv320x0 {
 	status = "okay";
+	/* The 320g high-g channel has to be clocked for accel-range >= 32g. */
+	accel-range = <LSM6DSV320X_DT_FS_320G>;
+	accel-hg-odr = <LSM6DSV320X_HG_XL_ODR_AT_1920Hz>;
+	accel-odr = <LSM6DSVXXX_DT_ODR_AT_120Hz>;
+	gyro-range = <LSM6DSV320X_DT_FS_4000DPS>;
+	gyro-odr = <LSM6DSVXXX_DT_ODR_AT_120Hz>;
 };

@@ -49,12 +49,33 @@ config AURORA_STATE_MACHINE_RBF
 	  Take the arm signal from the mechanical safety interlock -
 	  streamer, key or shorting plug - on the GPIO selected by the
 	  auxspace,rbf dt chosen node, instead of from orientation.
-	  The line is asserted while the interlock is installed (safe); the
-	  vehicle counts as armed once it is pulled.  The pin overrides
-	  sm_inputs.armed on every update and the orientation gate (ARM_ANGLE
-	  / DISARM_ANGLE) is not applied in this mode.
+	  By default the line is asserted while the interlock is installed
+	  (safe) and the vehicle counts as armed once it is pulled; see
+	  AURORA_STATE_MACHINE_RBF_ASSERT_ARMS for the inverted sense.  The
+	  pin overrides sm_inputs.armed on every update and the orientation
+	  gate (ARM_ANGLE / DISARM_ANGLE) is not applied in this mode.
 
 endchoice
+
+config AURORA_STATE_MACHINE_RBF_ASSERT_ARMS
+	bool "The auxspace,rbf line is asserted while ARMED"
+	depends on AURORA_STATE_MACHINE_RBF
+	help
+	  Invert the sense of the auxspace,rbf line.
+
+	  By default the line follows a mechanical interlock: it is asserted
+	  while the plug, key or streamer is installed, which is the SAFE
+	  state, and the vehicle counts as armed once the contact is pulled.
+	  That matches a plug wired to pull the pin, and it fails safe when
+	  the plug is missing. A disconnected line reads as installed.
+
+	  Enable this when the chosen line is an arm *assertion* driven by
+	  something else instead, so that asserted means ARMED and deasserted
+	  means SAFE.
+
+	  Either way the GPIO flags in devicetree describe the electrical
+	  polarity of the line, and the machine still boots SAFE and only
+	  arms on an observed edge or an explicit resync.
 
 config AURORA_STATE_MACHINE_RBF_DEBOUNCE_MS
 	int "RBF input debounce window (ms)"

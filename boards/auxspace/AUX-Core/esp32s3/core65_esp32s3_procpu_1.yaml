@@ -12,8 +12,6 @@ supported:
   - gpio
   - uart
   - i2c
-  - i2s
-  - spi
   - can
   - counter
   - watchdog

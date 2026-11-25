@@ -3,13 +3,21 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * AUX-Stack-Core hardware:
- *   - Native SDHC SD card (espressif,esp32-sdhc slot, 4-bit) instead of the
- *     rev.1 SPI-attached card.
- *   - Updated barometer to the Bosch BMP581.
- *   - Separate Remove Before Flight Pin.
- *   - Extra Status LEDs
- *   - USB-C
+ * AUX-Core-6501 hardware:
+ *   - ESP32-S3-WROOM-1 (U4)
+ *   - Native SDHC micro-SD slot (J6), 4-bit, no separate card-detect line
+ *   - ST LSM6DSO32 6-DoF IMU (U5) at 0x6a, INT1 on GPIO21
+ *   - ST LSM6DSV320X high-g IMU (U1) at 0x6b, INT1 on GPIO10
+ *   - TE MS5607-02BA barometer (U6) at 0x77, no interrupt line
+ *   - ST LIS3MDL magnetometer (U7) at 0x1c, DRDY on GPIO48
+ *   - TI TCAN334 CAN transceiver (U3) with STB and SHDN under GPIO control
+ *   - Two AUX-Stack data connectors (J1 top, J2 bottom)
+ *   - Green STATE LED (D4) and SD LED (D5); D3 is a hard-wired power LED
+ *   - Buzzer (BZ1) driven through the Q1 FET
+ *   - USB-C (J7) with a CH224A PD sink, native USB-Serial/JTAG console
+ *
+ * There is no remove-before-flight connector on rev 01; the stack-wide ARM
+ * signal is the arm interlock instead (see arm_interlock below).
  */
 
 #include <zephyr/dt-bindings/adc/adc.h>
@@ -17,7 +25,8 @@
 #include <zephyr/dt-bindings/input/esp32-touch-sensor-input.h>
 #include <zephyr/dt-bindings/pwm/pwm.h>
 #include <zephyr/dt-bindings/sensor/lsm6dso.h>
-#include <zephyr/dt-bindings/sensor/adxl372.h>
+#include <zephyr/dt-bindings/sensor/lsm6dsvxxx.h>
+#include <zephyr/dt-bindings/sensor/lsm6dsv320x.h>
 #include <auxspace/dt-bindings/gpio/auxspaceev-aux-stack-data-connector.h>
 
 / {
@@ -45,6 +54,7 @@
 	buttons: buttons {
 	compatible = "gpio-keys";
 
+		/* SW3 shorts GPIO0 to GND through R23. */
 		button0: button_0 {
 			gpios = <&gpio0 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 			label = "BOOT Button";
@@ -52,6 +62,9 @@
 		};
 	};
 
+	/* BZ1 sits between +3V3 and the drain of Q1, so a high on GPIO45
+	 * sounds the buzzer.
+	 */
 	buzzer0: buzzer_0 {
 		compatible = "auxspaceev,pwm-buzzer";
 		pwms = <&ledc0 0 PWM_MSEC(200) PWM_POLARITY_NORMAL>;
@@ -62,29 +75,33 @@
 		compatible = "pwm-leds";
 		status = "disabled";
 
-		red_pwm_led: led_pwm_0 {
+		state_pwm_led: led_pwm_0 {
 			pwms = <&ledc0 1 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
-			label = "RED Notifier LED";
+			label = "STATE Notifier LED";
 		};
 	};
 
 	status_leds: status-leds {
 		compatible = "gpio-leds";
 
+		/* SD LED; active high. */
 		sd_activity_led: led_sd {
-			gpios = <&gpio0 3 GPIO_ACTIVE_HIGH>;
+			gpios = <&gpio1 6 GPIO_ACTIVE_HIGH>;
 			label = "SD Activity LED";
 		};
 	};
 
+	/* J1 and J2 are wired in parallel for the information signals, so both
+	 * connectors map onto the same MCU pins.
+	 */
 	top_data_connector: connector_0 {
 		compatible = "auxspaceev,aux-stack-data-connector";
 		#gpio-cells = <2>;
 		gpio-map-mask = <0xffffffff 0xffffffc0>;
 		gpio-map-pass-thru = <0 0x3f>;
 		gpio-map = <AUX_DATA_ARM 0 &gpio0 15 0>,
-			   <AUX_DATA_LIFTOFF 0 &gpio0 21 0>,
-			   <AUX_DATA_PWRFLT 0 &gpio1 6 0>;
+			   <AUX_DATA_LIFTOFF 0 &gpio1 14 0>,
+			   <AUX_DATA_PWRFLT 0 &gpio1 7 0>;
 
 		can-bus = <&twai>;
 		i2c-bus = <&i2c1>;
@@ -97,21 +114,27 @@
 		gpio-map-mask = <0xffffffff 0xffffffc0>;
 		gpio-map-pass-thru = <0 0x3f>;
 		gpio-map = <AUX_DATA_ARM 0 &gpio0 15 0>,
-			   <AUX_DATA_LIFTOFF 0 &gpio0 21 0>,
-			   <AUX_DATA_PWRFLT 0 &gpio1 6 0>;
+			   <AUX_DATA_LIFTOFF 0 &gpio1 14 0>,
+			   <AUX_DATA_PWRFLT 0 &gpio1 7 0>;
 
 		can-bus = <&twai>;
 		i2c-bus = <&i2c1>;
 		uart-bus = <&uart2>;
 	};
 
+	/* The ARM line is this board's arm interlock (1: ARMED, 0: DISARMED) */
+	arm_interlock: arm-interlock {
+		compatible = "auxspaceev,arm-interlock";
+		gpios = <&top_data_connector AUX_DATA_ARM
+			 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+	};
+
+	/* Outputs this board drives onto the stack. Polarities per the
+	 * Baseboard sheet annotations: LIFTOFF is asserted high, Power Fault
+	 * is asserted low.
+	 */
 	status_signals: status-signals {
 		compatible = "gpio-leds";
-
-		arm_status: arm0 {
-			gpios = <&top_data_connector AUX_DATA_ARM GPIO_ACTIVE_HIGH>;
-			label = "ARM Status";
-		};
 
 		liftoff_status: liftoff0 {
 			gpios = <&top_data_connector AUX_DATA_LIFTOFF GPIO_ACTIVE_HIGH>;
@@ -119,18 +142,31 @@
 		};
 
 		pwrflt_status: pwrflt0 {
-			gpios = <&top_data_connector AUX_DATA_PWRFLT GPIO_ACTIVE_HIGH>;
+			gpios = <&top_data_connector AUX_DATA_PWRFLT GPIO_ACTIVE_LOW>;
 			label = "PWRFLT Status";
 		};
+	};
+
+	/* U3 TCAN334: SHDN (GPIO17) high shuts the transceiver down, STB
+	 * (GPIO16) high puts it in standby. Both have to be driven low for
+	 * normal operation, and neither has an external pull.
+	 */
+	can_phy0: can-phy0 {
+		compatible = "ti,tcan334", "can-transceiver-gpio";
+		enable-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+		standby-gpios = <&gpio0 16 GPIO_ACTIVE_HIGH>;
+		max-bitrate = <5000000>;
+		#phy-cells = <0>;
 	};
 
 };
 
 &pinctrl {
+	/* J6 micro-SD slot. CD and DAT3 is shared, so there is no CD here. */
 	sdmmc_default: sdmmc_default {
 		group1 {
 			pinmux = <SDHC0_CLKOUT_GPIO6>,
-				 <SDHC0_CMD_GPIO39>,
+				 <SDHC0_CMD_GPIO40>,
 				 <SDHC0_DATA0_GPIO5>,
 				 <SDHC0_DATA1_GPIO4>,
 				 <SDHC0_DATA2_GPIO42>,
@@ -141,8 +177,8 @@
 
 	twai_default: twai_default {
 		group1 {
-			pinmux = <TWAI_RX_GPIO18>,
-				 <TWAI_TX_GPIO8>;
+			pinmux = <TWAI_TX_GPIO18>,
+				 <TWAI_RX_GPIO8>;
 		};
 	};
 };
@@ -182,37 +218,43 @@ aux_data_uart_bottom: &uart2 {
 	pinctrl-0 = <&i2c0_default>;
 	pinctrl-names = "default";
 
-	lsm6dso320: lsm6dso32@6b {
+	/* U5, IMU. */
+	lsm6dso320: lsm6dso32@6a {
 		compatible = "st,lsm6dso32";
-		reg = <0x6b>;
-		irq-gpios = <&gpio0 9 GPIO_ACTIVE_HIGH>;
+		reg = <0x6a>;
+		irq-gpios = <&gpio0 21 GPIO_ACTIVE_HIGH>;
 		int-pin = <1>;
 		status = "disabled";
 	};
 
-	dps310_0: dps310@76 {
-		compatible = "infineon,dps310";
-		// TODO: Check for Interrupt support
-		reg = <0x76>;
+	/* U1, High-G Accel. Reaching the 32g..320g ranges needs
+	 * accel-hg-odr to turn the high-g sensor on; left to the application.
+	 */
+	lsm6dsv320x0: lsm6dsv320x@6b {
+		compatible = "st,lsm6dsv320x";
+		reg = <0x6b>;
+		int1-gpios = <&gpio0 10 GPIO_ACTIVE_HIGH>;
+		drdy-pin = <1>;
 		status = "disabled";
 	};
 
-	adxl375_0: adxl375@1d{
-		compatible = "adi,adxl372";
-		reg = <0x1d>;
-		int1-gpios = <&gpio1 13 GPIO_ACTIVE_HIGH>;
+	/* U7, Magnetometer. Only DRDY is wired; INT is unconnected since it is
+	 * not supported by the driver anyways. Also there is pin shortage */
+	lis3mdl0: lis3mdl@1c {
+		compatible = "st,lis3mdl-magn";
+		reg = <0x1c>;
+		irq-gpios = <&gpio1 16 GPIO_ACTIVE_HIGH>;
 		status = "disabled";
 	};
 
-	// TODO: Check if this supports the MLX90395
-	mlx90394_0: mlx90394@0c {
-		compatible = "melexis,mlx90394";
-		// TODO: Check for Interrupt support
-		reg = <0x0c>;
+	/* U6, Baro.
+	 * The MS5607 has no interrupt output, so it has to be polled.
+	 */
+	ms5607_0: ms5607@77 {
+		compatible = "meas,ms5607";
+		reg = <0x77>;
 		status = "disabled";
 	};
-
-
 };
 
 aux_data_i2c: &i2c1 {
@@ -221,19 +263,10 @@ aux_data_i2c: &i2c1 {
 	pinctrl-names = "default";
 };
 
-&i2s0 {
-	pinctrl-0 = <&i2s0_default>;
-	pinctrl-names = "default";
-};
-
-&i2s1 {
-	pinctrl-0 = <&i2s1_default>;
-	pinctrl-names = "default";
-};
-
 aux_data_can: &twai {
 	pinctrl-0 = <&twai_default>;
 	pinctrl-names = "default";
+	phys = <&can_phy0>;
 };
 
 &ledc0 {

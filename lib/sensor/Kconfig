@@ -225,9 +225,14 @@ menu "High Acceleration Sensor (HACCEL)"
 config HACCEL
 	bool "Support for High Acceleration Sensor"
 	depends on AURORA_SENSORS
-	default y if ADXL367
+	default y if ADXL367 || LSM6DSVXXX
 	help
-		This option enables functionality for high acceleration sensors. TODO
+		This option enables functionality for high acceleration sensors.
+
+		Note that there is no sampling path yet: enabling this only
+		requires the auxspace,haccel chosen node to be present and
+		enabled, so that a board carrying a high-g part says so.
+		TODO: add the acquisition thread.
 endmenu
 
 menu "Magnetometer (MAG)"
@@ -235,8 +240,13 @@ menu "Magnetometer (MAG)"
 config MAG
 	bool "Support for Magnetometer"
 	depends on AURORA_SENSORS
-	default y if MLX90394
+	default y if MLX90394 || LIS3MDL
 	help
-		This option enables functionality for magnetometers. TODO
+		This option enables functionality for magnetometers.
+
+		Note that there is no sampling path yet: enabling this only
+		requires the auxspace,mag chosen node to be present and
+		enabled, so that a board carrying a magnetometer says so.
+		TODO: add the acquisition thread.
 
 endmenu
