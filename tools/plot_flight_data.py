@@ -86,7 +86,6 @@ FIELD_SPECS = {
     "sm_pose":       ("velocity", "altitude"),
     "orientation":   ("yaw", "pitch", "roll"),
     "vbat":          ("voltage",),
-    "haccel":        ("x", "y", "z"),
 }
 
 
@@ -713,8 +712,7 @@ PANEL_LABELS = {
     "sm_accel":     "Acceleration (state-machine inputs)",
     "body_accel":   "Body acceleration (IMU)",
     "body_gyro":    "Body rotation rate (IMU)",
-    "haccel":       "High-g acceleration",
-    "mag":          "Magnetometer",
+    "mag":          "Magnetometer (IMU)",
     "orientation":  "Orientation (yaw / pitch / roll)",
     "vbat":         "Battery voltage",
     "apogee_votes": "Apogee detection votes",
@@ -747,8 +745,6 @@ def available_panels(sliced, disable_votes=False):
         panels.append("body_accel")
     if _has(sliced, "gyro"):
         panels.append("body_gyro")
-    if _has(sliced, "haccel"):
-        panels.append("haccel")
     if _has(sliced, "mag"):
         panels.append("mag")
     if _has(sliced, "orientation"):
@@ -892,17 +888,6 @@ def plot_raw_flight(sliced, transitions, theme_name, out_path=None,
                     label="ω[z]")
             ax.axhline(0, color=c["zero_line"], linewidth=0.5)
             ax.set_ylabel("ω (rad/s)")
-            ax.legend(loc="upper right", ncol=3)
-        elif panel == "haccel":
-            t_s, vals = sliced["haccel"]
-            ax.plot(t_s, vals[:, 0], color=c["g_x"], linewidth=0.8,
-                    label="a_hg[x]")
-            ax.plot(t_s, vals[:, 1], color=c["g_y"], linewidth=0.8,
-                    label="a_hg[y]")
-            ax.plot(t_s, vals[:, 2], color=c["g_z"], linewidth=0.8,
-                    label="a_hg[z]")
-            ax.axhline(0, color=c["zero_line"], linewidth=0.5)
-            ax.set_ylabel("a_hg (m/s²)")
             ax.legend(loc="upper right", ncol=3)
         elif panel == "mag":
             t_s, vals = sliced["mag"]

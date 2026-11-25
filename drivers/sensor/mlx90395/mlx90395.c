@@ -8,11 +8,6 @@
  * written to address 0x80, each answered with a status byte, and it has no
  * identification register. The upstream mlx90394 driver therefore cannot be
  * used for it. Only I2C and single measurement mode are implemented.
- *
- * With CONFIG_MLX90395_PIPELINED a fetch does not wait for its conversion:
- * it collects the measurement the previous fetch started and starts the next
- * one, so the calling thread never sleeps through a conversion that can take
- * over 100 ms.
  */
 
 #define DT_DRV_COMPAT melexis_mlx90395
@@ -92,12 +87,6 @@ struct mlx90395_data {
 	int16_t t;
 	uint16_t lsb_per_mt;
 	uint32_t conv_time_us;
-#if defined(CONFIG_MLX90395_PIPELINED)
-	/* A measurement was started and has not been collected yet */
-	bool pending;
-	/* When that measurement is expected to be done */
-	k_timepoint_t ready;
-#endif /* CONFIG_MLX90395_PIPELINED */
 };
 
 static int mlx90395_command(const struct device *dev, uint8_t cmd, uint8_t *status)
@@ -168,10 +157,26 @@ static uint32_t mlx90395_conv_time_us(uint16_t conf2)
 	return t + t / 20;
 }
 
-static int mlx90395_start(const struct device *dev)
+static int mlx90395_sample_fetch(const struct device *dev, enum sensor_channel chan)
 {
+	const struct mlx90395_config *cfg = dev->config;
+	struct mlx90395_data *data = dev->data;
+	/* Status, CRC, then X, Y, Z, T and V, each big endian */
+	uint8_t buf[12];
 	uint8_t status;
 	int ret;
+
+	switch (chan) {
+	case SENSOR_CHAN_ALL:
+	case SENSOR_CHAN_MAGN_X:
+	case SENSOR_CHAN_MAGN_Y:
+	case SENSOR_CHAN_MAGN_Z:
+	case SENSOR_CHAN_MAGN_XYZ:
+	case SENSOR_CHAN_DIE_TEMP:
+		break;
+	default:
+		return -ENOTSUP;
+	}
 
 	ret = mlx90395_command(dev, MLX90395_CMD_SM | MLX90395_ZYXT_ALL, &status);
 	if (ret < 0) {
@@ -183,17 +188,7 @@ static int mlx90395_start(const struct device *dev)
 		return -EIO;
 	}
 
-	return 0;
-}
-
-static int mlx90395_collect(const struct device *dev)
-{
-	const struct mlx90395_config *cfg = dev->config;
-	struct mlx90395_data *data = dev->data;
-	/* Status, CRC, then X, Y, Z, T and V, each big endian */
-	uint8_t buf[12];
-	uint8_t status;
-	int ret;
+	k_usleep(data->conv_time_us);
 
 	/* The IC returns to idle with DRDY set once the measurement is done */
 	for (int i = 0;; i++) {
@@ -233,74 +228,6 @@ static int mlx90395_collect(const struct device *dev)
 	data->t = (int16_t)sys_get_be16(&buf[8]);
 
 	return 0;
-}
-
-#if defined(CONFIG_MLX90395_PIPELINED)
-static int mlx90395_fetch(const struct device *dev)
-{
-	struct mlx90395_data *data = dev->data;
-	bool collected = false;
-	int ret;
-
-	if (data->pending) {
-		if (!sys_timepoint_expired(data->ready)) {
-			return -EBUSY;
-		}
-
-		/* This measurement is finished done.
-		 * fails are not retried: the next fetch starts fresh.
-		 */
-		data->pending = false;
-		ret = mlx90395_collect(dev);
-		if (ret < 0) {
-			return ret;
-		}
-		collected = true;
-	}
-
-	/* Keep a conversion running between fetches, so a caller polling no
-	 * faster than the conversion time gets a fresh sample every time.
-	 * Should this start fail, the next fetch simply tries again.
-	 */
-	if (mlx90395_start(dev) == 0) {
-		data->pending = true;
-		data->ready = sys_timepoint_calc(K_USEC(data->conv_time_us));
-	}
-
-	return collected ? 0 : -EBUSY;
-}
-#else
-static int mlx90395_fetch(const struct device *dev)
-{
-	struct mlx90395_data *data = dev->data;
-	int ret;
-
-	ret = mlx90395_start(dev);
-	if (ret < 0) {
-		return ret;
-	}
-
-	k_usleep(data->conv_time_us);
-
-	return mlx90395_collect(dev);
-}
-#endif /* CONFIG_MLX90395_PIPELINED */
-
-static int mlx90395_sample_fetch(const struct device *dev, enum sensor_channel chan)
-{
-	switch (chan) {
-	case SENSOR_CHAN_ALL:
-	case SENSOR_CHAN_MAGN_X:
-	case SENSOR_CHAN_MAGN_Y:
-	case SENSOR_CHAN_MAGN_Z:
-	case SENSOR_CHAN_MAGN_XYZ:
-	case SENSOR_CHAN_DIE_TEMP:
-		break;
-	default:
-		return -ENOTSUP;
-	}
-
-	return mlx90395_fetch(dev);
 }
 
 static void mlx90395_convert_magn(const struct device *dev, struct sensor_value *val,
