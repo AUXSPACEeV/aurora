@@ -21,7 +21,6 @@
 		auxspace,mag = &lis3mdl0;
 		auxspace,haccel = &lsm6dsv320x0;
 		auxspace,disk-led = &sd_activity_led;
-		auxspace,rbf = &arm_interlock;
 	};
 
 	fstab {

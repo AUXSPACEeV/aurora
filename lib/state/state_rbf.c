@@ -49,26 +49,12 @@ static struct k_work_delayable rbf_debounce_work;
 static K_THREAD_STACK_DEFINE(rbf_wq_stack, RBF_WQ_STACK);
 static struct k_work_q rbf_wq;
 
-#if defined(CONFIG_AURORA_STATE_MACHINE_RBF_ASSERT_ARMS)
-#define RBF_ARMED_STR   "asserted"
-#define RBF_UNARMED_STR "released"
-#else
-#define RBF_ARMED_STR   "removed"
-#define RBF_UNARMED_STR "installed"
-#endif
-
 /** @brief Translate the raw pin level into an arm verdict. */
 static inline atomic_val_t rbf_armed_from_level(int level)
 {
-#if defined(CONFIG_AURORA_STATE_MACHINE_RBF_ASSERT_ARMS)
-	/* The line is an arm assertion driven by something else on the stack:
-	 * asserted means armed. */
-	return (level > 0) ? 1 : 0;
-#else
 	/* The line is asserted while the interlock is installed, which is the
 	 * *safe* state; pulling it arms the vehicle. */
 	return (level > 0) ? 0 : 1;
-#endif
 }
 
 /**
@@ -93,14 +79,13 @@ static void rbf_debounce_handler(struct k_work *work)
 	/* The contact bounced back to where it started */
 	if (armed == prev) {
 		LOG_DBG("edge on %s pin %d, RBF still %s", rbf_pin.port->name,
-			rbf_pin.pin, armed ? RBF_ARMED_STR : RBF_UNARMED_STR);
+			rbf_pin.pin, armed ? "removed" : "installed");
 		return;
 	}
 
-	LOG_INF("RBF %s: vehicle %s",
-		armed ? RBF_ARMED_STR : RBF_UNARMED_STR,
-		armed ? "ARMED"       : "SAFE");
-	sm_event(armed ? "RBF " RBF_ARMED_STR : "RBF " RBF_UNARMED_STR);
+	LOG_INF("RBF %s: vehicle %s", armed ? "removed" : "installed",
+		armed ? "ARMED" : "SAFE");
+	sm_event(armed ? "RBF removed" : "RBF installed");
 }
 
 static void rbf_isr(const struct device *dev, struct gpio_callback *cb,
@@ -168,11 +153,9 @@ int sm_rbf_init(void)
 
 	wired = true;
 
-	/* This should always print "SAFE": the level is deliberately not
-	 * latched on the first init, so neither a forgotten RBF plug nor an
-	 * ARM line that is already asserted at boot can bring the machine up
-	 * armed. It takes an observed edge, or sm_rbf_resync() after a
-	 * watchdog reset, to arm.
+	/* This should always print "SAFE", since the RBF is not latched on
+	 * boot, so that forgetting to insert the RBF-Plug does not result in
+	 * the sm arming.
 	 */
 	LOG_INF("RBF arm input ready on %s pin %d, vehicle %s",
 		rbf_pin.port->name, rbf_pin.pin,

@@ -46,8 +46,8 @@ needs, but none of it has been verified against real hardware yet.
 - USB-C with a CH224A PD sink (9V PD); USB Serial/JTAG for console, programming
   and debugging
 
-There is no remove-before-flight connector on rev 01. The stack-wide `ARM`
-signal takes its place as the arm interlock - see [Arming](#arming).
+There is no remove-before-flight connector on rev 01 and none is needed: the
+AUX-Pwr board gates this board's power instead - see [Arming](#arming).
 
 The board has no I2S or SPI peripherals: the pins those would use are taken
 by the SD slot and the bottom connector's UART.
@@ -76,38 +76,40 @@ signals, so the two `gpio-map`s point at the same three MCU pins. The signal
 names are defined in
 `<auxspace/dt-bindings/gpio/auxspaceev-aux-stack-data-connector.h>`:
 
-| Signal             | Purpose                       | GPIO | Dir | Asserted |
-|--------------------|-------------------------------|------|-----|----------|
-| `AUX_DATA_ARM`     | Stack-wide arm/disarm state   | 15   | in  | high     |
-| `AUX_DATA_LIFTOFF` | Stack-wide liftoff indication | 46   | out | high     |
-| `AUX_DATA_PWRFLT`  | Stack-wide power-fault signal | 39   | out | **low**  |
+| Signal             | Purpose                       | GPIO | Asserted |
+|--------------------|-------------------------------|------|----------|
+| `AUX_DATA_ARM`     | Stack-wide arm/disarm state   | 15   | high    |
+| `AUX_DATA_LIFTOFF` | Stack-wide liftoff indication | 46   | high    |
+| `AUX_DATA_PWRFLT`  | Stack-wide power-fault signal | 39   | **low** |
+
+All three are **outputs**, grouped as `status_signals`: they report this
+board's own state to the rest of the stack. None of them is read back as an
+input - see [Arming](#arming).
 
 `AUX_DATA_BAT_ON` is carried between the two connectors but is not wired to
 the MCU on this board, so it is absent from both `gpio-map`s.
 
-`LIFTOFF` and `PWRFLT` are outputs, grouped as `status_signals`. `ARM` is
-treated as an **input** instead - see [Arming](#arming) - so it is not in
-that group, since a pin cannot be both a `gpio-leds` output and an input.
-Note that the Baseboard schematic sheet annotates `ARM` as an output of this
-board; the devicetree deliberately differs.
-
 ### Arming
 
-Rev 01 has no remove-before-flight connector, so the stack-wide `ARM` signal
-is the arm authority: the board is armed while `ARM` is asserted. The
-`arm_interlock` node (`auxspaceev,arm-interlock`) names that line, and
-applications point the `auxspace,rbf` chosen node at it.
+AUX-Core has no remove-before-flight input, and does not need one: the
+{doc}`AUX-Pwr </boards/shields/AUX-Pwr/doc/pwr65>` board *is* the
+remove-before-flight device. It withholds power from the Core board until
+the vehicle should be armed, so the firmware running at all means the
+vehicle is armed, and cutting that power is the disarm.
 
-Because this is the opposite sense to a plug-style interlock - which is
-asserted while it is *installed* and therefore safe - such an application
-must also set `CONFIG_AURORA_STATE_MACHINE_RBF_ASSERT_ARMS=y`. Without it
-the state machine reads an asserted `ARM` as SAFE.
+Applications therefore select `CONFIG_AURORA_STATE_MACHINE_ARM_POWER=y` and
+declare no `auxspace,rbf` node. The orientation gate (`ARM_ANGLE` /
+`DISARM_ANGLE`) does not apply in this mode either, and the state machine
+cannot disarm itself.
 
-Nothing on the board pulls `ARM`; the node requests an internal pull-down so
-that an undriven stack reads SAFE rather than floating. The state machine
-additionally always boots SAFE and arms only on an observed edge or an
-explicit resync after a watchdog reset, so a stack already asserting `ARM`
-at power-on does not come up armed.
+`AUX_DATA_ARM` is an *output* under this scheme: it is how AUX-Core tells the
+rest of the stack that it considers itself armed, not how it is told to arm.
+
+Flight recovery needs no extra interlock check here: a power cycle latches
+`RESET_POR`, which the retain module refuses, so cutting power brings the
+board up in `SM_IDLE` as the disarm requires. Note that this makes the reset
+cause the *only* interlock in this mode - there is no RBF pin left to
+re-sample before resuming a flight.
 
 The top and bottom connectors' UART and I2C pins are bridged by the 0 Ω
 links R1/R3 (UART) and R5/R7 (I2C). The devicetree describes the I2C bridge

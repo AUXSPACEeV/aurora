@@ -263,8 +263,14 @@ int sm_get_armed() {
 	 * the caller put in .armed is overridden by the pin.
 	 */
 	return sm_rbf_armed() ? 1 : 0;
-#endif /* CONFIG_AURORA_STATE_MACHINE_RBF */
+#else
+	/* No arm input to override .armed with, by design:
+	 *   ARM_TILT  - the orientation gate in the backend is the interlock.
+	 *   ARM_POWER - the upstream power rail is the interlock, so running
+	 *               at all means armed (see AURORA_STATE_MACHINE_ARM_POWER).
+	 */
 	return 1;
+#endif /* CONFIG_AURORA_STATE_MACHINE_RBF */
 }
 
 /*-----------------------------------------------------------

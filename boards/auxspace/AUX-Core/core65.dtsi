@@ -16,8 +16,9 @@
  *   - Buzzer (BZ1) driven through the Q1 FET
  *   - USB-C (J7) with a CH224A PD sink, native USB-Serial/JTAG console
  *
- * There is no remove-before-flight connector on rev 01; the stack-wide ARM
- * signal is the arm interlock instead (see arm_interlock below).
+ * There is no remove-before-flight input on rev 01 and none is needed: the
+ * AUX-Pwr board is the interlock, and only powers the Core board when the
+ * vehicle should be armed. ARM and LIFTOFF are outputs towards the stack.
  */
 
 #include <zephyr/dt-bindings/adc/adc.h>
@@ -122,19 +123,17 @@
 		uart-bus = <&uart2>;
 	};
 
-	/* The ARM line is this board's arm interlock (1: ARMED, 0: DISARMED) */
-	arm_interlock: arm-interlock {
-		compatible = "auxspaceev,arm-interlock";
-		gpios = <&top_data_connector AUX_DATA_ARM
-			 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
-	};
-
-	/* Outputs this board drives onto the stack. Polarities per the
-	 * Baseboard sheet annotations: LIFTOFF is asserted high, Power Fault
-	 * is asserted low.
+	/* Signals this board drives onto the stack. ARM and LIFTOFF report
+	 * this board's own state outwards; neither is ever read back as an
+	 * input
 	 */
 	status_signals: status-signals {
 		compatible = "gpio-leds";
+
+		arm_status: arm0 {
+			gpios = <&top_data_connector AUX_DATA_ARM GPIO_ACTIVE_HIGH>;
+			label = "ARM Status";
+		};
 
 		liftoff_status: liftoff0 {
 			gpios = <&top_data_connector AUX_DATA_LIFTOFF GPIO_ACTIVE_HIGH>;
