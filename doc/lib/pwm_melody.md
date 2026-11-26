@@ -5,13 +5,19 @@ One simple way of making it easier to find is to play loud buzzer sounds in an
 endless loop until the recovery team finds it.
 
 But only playing loud noises is boring and annoying in testing.
-Instead, use the PWM Melody API to play music of your liking:
+Instead, use the PWM Melody API to play music of your liking.
+
+Melodies are played through Zephyr's generic buzzer API
+(`<zephyr/drivers/buzzer.h>`), so the buzzer is described with the upstream
+`pwm-buzzer` binding and enabled with `CONFIG_BUZZER`
+(`CONFIG_BUZZER_PWM` follows from the devicetree). The period in `pwms` is the
+tone `buzzer_beep()` plays; every note sets its own frequency.
 
 ```devicetree
 / {
    buzzer0: buzzer_0 {
-      compatible = "auxspaceev,pwm-buzzer";
-      pwms = <&ledc0 0 PWM_MSEC(200) PWM_POLARITY_NORMAL>;
+      compatible = "pwm-buzzer";
+      pwms = <&ledc0 0 PWM_HZ(4000) PWM_POLARITY_NORMAL>;
    };
 };
 ```
@@ -19,15 +25,15 @@ Instead, use the PWM Melody API to play music of your liking:
 ```c
 #include <aurora/lib/pwm_melody.h>
 
-// dt node that contains a "pwms" child node
-static const struct pwm_dt_spec buzzer =
-   PWM_DT_SPEC_GET(DT_NODELABEL(buzzer0));
-
 // play astronomia from aurora/lib/pwm_melody.h
-PWM_MELODY_CTX_DEFINE(melody_ctx, &buzzer, astronomia, 1024);
+PWM_MELODY_CTX_DEFINE(melody_ctx, DEVICE_DT_GET(DT_NODELABEL(buzzer0)),
+                      astronomia, 1024);
 
 int main()
 {
+   // optional: the pwm-buzzer driver boots at 50 % volume
+   buzzer_set_volume(DEVICE_DT_GET(DT_NODELABEL(buzzer0)), BUZZER_VOLUME_MAX);
+
    pwm_melody_start(&melody_ctx);
 
    // --snip--
@@ -41,7 +47,7 @@ int main()
 ## Several Tunes, One Buzzer
 
 A board has one buzzer, so two playback threads would fight over the
-same PWM output. Melodies therefore share a single context and are
+same buzzer. Melodies therefore share a single context and are
 switched with {c:func}`pwm_melody_play`, which stops the current tune,
 waits for its thread to be gone, and starts the new one:
 

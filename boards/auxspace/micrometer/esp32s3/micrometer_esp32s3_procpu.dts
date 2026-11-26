@@ -6,7 +6,19 @@
  */
 /dts-v1/;
 
-#include <espressif/esp32s3/esp32s3_wroom_n8r8.dtsi>
+#include <espressif/esp32s3/esp32s3.dtsi>
 #include <espressif/partitions_0x0_amp.dtsi>
 #include "../common/micrometer-pinctrl-common.dtsi"
 #include "../common/micrometer.dtsi"
+
+/* ESP32-S3-WROOM-1-N8R8: 8 MB quad flash, 8 MB octal PSRAM. Zephyr 4.5
+ * dropped the per-module SoC dtsi, so the board describes both itself.
+ */
+&flash0 {
+	reg = <0x0 DT_SIZE_M(8)>;
+	ranges = <0x0 0x0 DT_SIZE_M(8)>;
+};
+
+&psram0 {
+	size = <DT_SIZE_M(8)>;
+};

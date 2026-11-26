@@ -183,3 +183,11 @@ zephyr_udc0: &usbd {
 		compatible = "zephyr,cdc-acm-uart";
 	};
 };
+
+/* Ground support does not use Wi-Fi, so the CYW43 GPIO driver (which needs
+ * CONFIG_WIFI_AIROC) is not built. Disable its node, or the GPIO shell links
+ * against a device that does not exist.
+ */
+&cyw43_gpio {
+	status = "disabled";
+};

@@ -8,8 +8,9 @@ The library fans out every call to all enabled backends.
 
 ## Backends
 
-- **PWM Buzzer** (`CONFIG_AURORA_NOTIFY_BUZZER`): drives a passive
-  buzzer via PWM to signal boot, calibration start/completion, state
+- **Buzzer** (`CONFIG_AURORA_NOTIFY_BUZZER`): drives a passive
+  buzzer through Zephyr's `pwm-buzzer` driver to signal boot,
+  calibration start/completion, state
   changes, and errors. Runs on
   a dedicated worker thread so that the blocking tone sequences do
   not stall the caller (typically the state-machine task).
@@ -70,9 +71,14 @@ itself on the next event after `on_powerfail(recover=1)`.
 
 ### Buzzer Patterns
 
-The buzzer backend drives a passive PWM buzzer on the
-`auxspace_buzzer` chosen node. Every state transition first stops any
-currently playing melody before issuing the new pattern.
+The buzzer backend drives the buzzer behind the `auxspace,buzzer` chosen
+node through Zephyr's buzzer API; on Auxspace boards that is a passive piezo
+described with the upstream `pwm-buzzer` binding. Enabling
+`CONFIG_AURORA_NOTIFY_BUZZER` pulls in `CONFIG_BUZZER`. The volume is set
+once at boot from `CONFIG_AURORA_NOTIFY_BUZZER_VOLUME` (default 100 %, the
+loudest a piezo gets: keep it for flight, lower it on the bench). Every state
+transition first stops any currently playing melody before issuing the new
+pattern.
 
 | Event / State | Pattern | Meaning |
 | --- | --- | --- |

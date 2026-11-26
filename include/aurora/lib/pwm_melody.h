@@ -7,7 +7,8 @@
 #define APP_LIB_PWM_MELODY_H_
 
 #include <inttypes.h>
-#include <zephyr/drivers/pwm.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/buzzer.h>
 #include <zephyr/kernel.h>
 
 /**
@@ -15,11 +16,16 @@
  * @ingroup lib
  * @{
  *
- * @brief PWM-based melody player for buzzer output.
+ * @brief Melody player for buzzer output.
  *
- * Plays a sequence of notes on a PWM-driven buzzer in a dedicated thread.
+ * Plays a sequence of notes on a buzzer device in a dedicated thread. The
+ * buzzer is driven through Zephyr's generic buzzer API
+ * (@c <zephyr/drivers/buzzer.h>), so any buzzer driver works; on Auxspace
+ * boards that is the upstream @c pwm-buzzer driver.  Volume is whatever the
+ * buzzer device is set to (see @c buzzer_set_volume()).
+ *
  * Each note is defined by a frequency and a duration divisor. A frequency
- * of 0 represents a rest (silence).
+ * of 0 (@c BUZZER_FREQ_REST) represents a rest (silence).
  */
 
 /**
@@ -36,8 +42,8 @@ struct pwm_melody_note {
  * @brief Runtime context for a melody player instance.
  */
 struct pwm_melody_ctx {
-	/** PWM device specification from devicetree. */
-	const struct pwm_dt_spec *pwm;
+	/** Buzzer device the melody is played on. */
+	const struct device *buzzer;
 	/** Pointer to the array of notes to play. */
 	const struct pwm_melody_note *notes;
 	/** Number of notes in the array. */
@@ -58,14 +64,15 @@ struct pwm_melody_ctx {
  * This macro allocates the thread stack and initialises the context struct.
  *
  * @param _name       Variable name for the context.
- * @param _pwm        Pointer to a @c pwm_dt_spec for the buzzer output.
+ * @param _buzzer     Buzzer device, e.g.
+ *                    @c DEVICE_DT_GET(DT_CHOSEN(auxspace_buzzer)).
  * @param _notes      Array of @ref pwm_melody_note to play.
  * @param _stack_size Stack size in bytes for the playback thread.
  */
-#define PWM_MELODY_CTX_DEFINE(_name, _pwm, _notes, _stack_size)                \
+#define PWM_MELODY_CTX_DEFINE(_name, _buzzer, _notes, _stack_size)             \
 	static K_THREAD_STACK_DEFINE(_name##_stack, _stack_size);               \
 	static struct pwm_melody_ctx _name = {                                  \
-		.pwm = _pwm,                                                    \
+		.buzzer = _buzzer,                                              \
 		.notes = _notes,                                                \
 		.num_notes = ARRAY_SIZE(_notes),                                \
 		.stack = _name##_stack,                                         \
@@ -76,11 +83,12 @@ struct pwm_melody_ctx {
  * @brief Start playing a melody.
  *
  * Stops any melody already playing, then spawns a thread that iterates over
- * the notes in @p ctx and drives the PWM output accordingly.
+ * the notes in @p ctx and drives the buzzer accordingly.
  *
  * @param ctx Melody player context (must have been initialised, e.g. via
  *            @ref PWM_MELODY_CTX_DEFINE).
  * @return 0 on success, or a negative error code.
+ * @retval -ENODEV The buzzer device is not ready.  Nothing was started.
  * @retval -EBUSY The previous playback thread did not terminate in time, so
  *                its context could not be reused.  Nothing was started.
  */
@@ -90,13 +98,13 @@ int pwm_melody_start(struct pwm_melody_ctx *ctx);
  * @brief Stop a melody that is currently playing.
  *
  * Signals the playback thread to stop and waits for it to terminate.
- * The PWM output is turned off before returning.
+ * The buzzer is silenced before returning.
  *
  * @param ctx Melody player context.
  * @return 0 once no playback thread is running (including when none was).
  * @retval -EBUSY The thread did not terminate within the join timeout.  The
- *                context is still in use and must not be restarted; the PWM
- *                output is left untouched.
+ *                context is still in use and must not be restarted; the
+ *                buzzer is left untouched.
  */
 int pwm_melody_stop(struct pwm_melody_ctx *ctx);
 
@@ -111,6 +119,7 @@ int pwm_melody_stop(struct pwm_melody_ctx *ctx);
  * @param num_notes Number of notes in @p notes.
  * @return 0 on success, or a negative error code.
  * @retval -EINVAL  @p ctx or @p notes is NULL, or @p num_notes is 0.
+ * @retval -ENODEV  The buzzer device is not ready.  Nothing was started.
  * @retval -EBUSY   The previous playback thread did not terminate in time.
  *                  Nothing was changed and nothing was started.
  */

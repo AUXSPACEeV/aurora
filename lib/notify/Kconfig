@@ -14,16 +14,29 @@ module = AURORA_NOTIFY
 module-str = AURORA_NOTIFY
 source "subsys/logging/Kconfig.template.log_config"
 
+DT_CHOSEN_AURORA_BUZZER := auxspace,buzzer
+
 config AURORA_NOTIFY_BUZZER
-	bool "PWM buzzer notifications"
-	depends on PWM
-	depends on DT_HAS_AUXSPACEEV_PWM_BUZZER_ENABLED
+	bool "Buzzer notifications"
+	depends on $(dt_chosen_enabled,$(DT_CHOSEN_AURORA_BUZZER))
+	select BUZZER
 	select AURORA_PWM_MELODY
 	help
-	  Drive a passive buzzer via PWM to signal boot, state changes,
-	  and errors. Plays a melody when landed.
+	  Drive the buzzer behind the "auxspace,buzzer" chosen node (normally
+	  a "pwm-buzzer" passive piezo) through Zephyr's buzzer API to signal
+	  boot, state changes, and errors. Plays a melody when landed.
 
 if AURORA_NOTIFY_BUZZER
+
+config AURORA_NOTIFY_BUZZER_VOLUME
+	int "Buzzer volume (percent)"
+	default 100
+	range 1 100
+	help
+	  Volume handed to buzzer_set_volume() at boot. For the "pwm-buzzer"
+	  driver 100 % is a 50 % duty cycle, the loudest a piezo gets, so keep
+	  the default for flight: it is the recovery beacon. Lower it to
+	  spare your ears on the bench.
 
 config AURORA_NOTIFY_BUZZER_QUEUE_SIZE
 	int "Buzzer event queue depth"

@@ -1,13 +1,14 @@
 /**
  * @file buzzer.c
- * @brief PWM-Buzzer notification backend.
+ * @brief Buzzer notification backend.
  *
- * Drives the board's PWM-backed passive buzzer (via @c auxspace_buzzer chosen
- * node) to indicate boot, flight state-machine transitions, calibration
+ * Drives the board's buzzer (the device behind the @c auxspace,buzzer chosen
+ * node, normally an upstream @c pwm-buzzer) through Zephyr's generic buzzer
+ * API to indicate boot, flight state-machine transitions, calibration
  * start/completion, post-flight log conversion and error.  Registered at link
  * time as a @ref notify_backend via @ref NOTIFY_BACKEND_DEFINE.
  *
- * All tone sequences are blocking (they interleave @c pwm_set_dt with
+ * All tone sequences are blocking (they interleave @c buzzer_tone with
  * @c k_sleep); to keep them off the caller's thread (typically the state
  * machine task, which runs at 10 Hz), events are posted to a bounded
  * FIFO and played by a dedicated worker thread. The queue preserves
@@ -24,24 +25,21 @@
 
 #include <aurora/lib/notify.h>
 #include <aurora/lib/pwm_melody.h>
-#include <zephyr/drivers/pwm.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/buzzer.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(notify_buzzer, CONFIG_AURORA_NOTIFY_LOG_LEVEL);
 
-/* Build-time dependency: AURORA_NOTIFY_BUZZER needs the board/app to select a
- * pwm-buzzer (auxspaceev,pwm-buzzer) via the 'auxspace,buzzer' chosen node. */
-#if !DT_HAS_CHOSEN(auxspace_buzzer)
-#error "CONFIG_AURORA_NOTIFY_BUZZER requires DT chosen 'auxspace,buzzer' to point at a pwm-buzzer (auxspaceev,pwm-buzzer) node."
-#endif
-BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_CHOSEN(auxspace_buzzer), okay),
-	     "the 'auxspace,buzzer' chosen node must have status \"okay\"");
+/* Kconfig only offers AURORA_NOTIFY_BUZZER when 'auxspace,buzzer' points at an
+ * enabled node; that node must be a buzzer device (e.g. "pwm-buzzer").
+ */
+#define BUZZER_NODE DT_CHOSEN(auxspace_buzzer)
 
-static const struct pwm_dt_spec buzzer =
-	PWM_DT_SPEC_GET(DT_CHOSEN(auxspace_buzzer));
+static const struct device *const buzzer_dev = DEVICE_DT_GET(BUZZER_NODE);
 
-PWM_MELODY_CTX_DEFINE(melody_ctx, &buzzer, astronomia, 1024);
+PWM_MELODY_CTX_DEFINE(melody_ctx, DEVICE_DT_GET(BUZZER_NODE), astronomia, 1024);
 
 /** @brief Buzzer event types. */
 enum buzzer_evt_type {
@@ -66,29 +64,36 @@ K_THREAD_STACK_DEFINE(buzzer_thread_stack,
 		      CONFIG_AURORA_NOTIFY_BUZZER_STACK_SIZE);
 static struct k_thread buzzer_thread;
 
-/** @brief Play a tone for @p duration_ms then silence. */
-static int buzz(uint32_t period_ns, uint32_t duration_ms)
+/**
+ * @brief Play a @p freq_hz tone for @p duration_ms, then silence.
+ *
+ * Blocks for the tone's duration so sequences can be built from plain
+ * calls. The driver is handed the duration as well, so the buzzer still
+ * goes quiet if this thread stalls; the explicit stop keeps the timing
+ * exact when the system workqueue running the driver's auto-stop is busy.
+ */
+static int buzz(uint32_t freq_hz, uint32_t duration_ms)
 {
 	int ret;
 
-	ret = pwm_set_dt(&buzzer, period_ns, period_ns / 2);
+	ret = buzzer_tone(buzzer_dev, freq_hz, duration_ms);
 	if (ret) {
 		return ret;
 	}
-	k_sleep(K_MSEC(duration_ms));
-	return pwm_set_dt(&buzzer, period_ns, 0);
+	k_msleep(duration_ms);
+	return buzzer_stop(buzzer_dev);
 }
 
 static void play_boot(void)
 {
-	(void)buzz(PWM_HZ(4000), 500);
+	(void)buzz(4000, 500);
 }
 
 static void play_calibration_start(void)
 {
 	/* Two short low beeps: stationary calibration window has begun. */
 	for (int i = 0; i < 2; i++) {
-		if (buzz(PWM_HZ(1000), 100)) {
+		if (buzz(1000, 100)) {
 			return;
 		}
 		k_sleep(K_MSEC(100));
@@ -97,14 +102,14 @@ static void play_calibration_start(void)
 
 static void play_calibration_complete(void)
 {
-	(void)buzz(PWM_HZ(1000), 500);
+	(void)buzz(1000, 500);
 }
 
 static void play_error(void)
 {
 	/* Three short high-pitched beeps. */
 	for (int i = 0; i < 3; i++) {
-		if (buzz(PWM_HZ(4000), 100)) {
+		if (buzz(4000, 100)) {
 			return;
 		}
 		k_sleep(K_MSEC(100));
@@ -172,21 +177,21 @@ static void play_state_change(enum sm_state next)
 
 	switch (next) {
 	case SM_ARMED:
-		(void)buzz(PWM_HZ(2000), 200);
+		(void)buzz(2000, 200);
 		break;
 	case SM_IDLE:
-		(void)buzz(PWM_HZ(500), 50);
+		(void)buzz(500, 50);
 		break;
 	case SM_APOGEE:
-		(void)buzz(PWM_HZ(3000), 300);
+		(void)buzz(3000, 300);
 		break;
 	case SM_MAIN:
-		(void)buzz(PWM_HZ(2500), 300);
+		(void)buzz(2500, 300);
 		break;
 	case SM_REDUNDANT:
 		/* Two short mid-high beeps: backup deployment active. */
 		for (int i = 0; i < 2; i++) {
-			if (buzz(PWM_HZ(2500), 150)) {
+			if (buzz(2500, 150)) {
 				return;
 			}
 			k_sleep(K_MSEC(100));
@@ -264,9 +269,22 @@ static int enqueue(const struct buzzer_evt *evt)
 
 static int buzzer_init(void)
 {
-	if (!pwm_is_ready_dt(&buzzer)) {
-		LOG_ERR("Buzzer PWM device not ready");
+	int ret;
+
+	if (!device_is_ready(buzzer_dev)) {
+		LOG_ERR("Buzzer %s not ready", buzzer_dev->name);
 		return -ENODEV;
+	}
+
+	if (!DEVICE_API_IS(buzzer, buzzer_dev)) {
+		LOG_ERR("%s is not a buzzer device", buzzer_dev->name);
+		return -ENOTSUP;
+	}
+
+	ret = buzzer_set_volume(buzzer_dev, CONFIG_AURORA_NOTIFY_BUZZER_VOLUME);
+	if (ret) {
+		/* Not fatal: the driver keeps its default volume. */
+		LOG_WRN("Could not set buzzer volume (%d)", ret);
 	}
 
 	k_thread_create(&buzzer_thread, buzzer_thread_stack,
