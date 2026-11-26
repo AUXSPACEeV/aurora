@@ -124,7 +124,7 @@ int telemetry_send_sm_update(enum sm_state state, enum sm_type type,
 /**
  * @brief Fan out a STATUS heartbeat to all registered backends.
  *
- * Same contract as @ref telemetry_send_sm_update: never blocks, and
+ * Same contract as telemetry_send_sm_update(): never blocks, and
  * every backend is tried even after one fails. Backends without a
  * @c send_status hook are skipped.
  *

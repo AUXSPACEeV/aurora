@@ -37,7 +37,7 @@ as the receiver can tell. Building both ends from one application keeps
 them in step instead of leaving it to two separate sets of constants.
 
 The same trap applies to anything else listening, including Zephyr's
-`samples/drivers/lora/receive`, which hardcodes 865.1 MHz and SF10 - 
+`samples/drivers/lora/receive`, which hardcodes 865.1 MHz and SF10 -
 neither of which matches `Abby`'s defaults. `abby status` prints the radio
 parameters so two boards can be compared at a glance.
 ```
@@ -48,7 +48,7 @@ AUX-Tel carries an MCP2515 CAN controller on the stack's CAN pair, and CAN
 was the original plan for this link. The link is UART instead, for two
 reasons: the stack UART reaches the Daphnis-I module directly, whereas the
 CAN controller needs
-{ref}`two netlist fixes <required-rev-01-fixes>` that rev 01 does not have;
+{ref}`two netlist fixes <outstanding-rev-01-fixes>` that rev 01 does not have;
 and the telemetry library's
 {doc}`uart-link engine </lib/telemetry>` already frames its data for a
 transparent UART bridge, so an HC-12 and an AUX-Tel are interchangeable

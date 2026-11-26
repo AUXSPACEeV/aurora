@@ -104,7 +104,7 @@ struct __packed telemetry_wire_sm_update {
 };
 
 /** @name STATUS flag bits
- *  Bits of @ref telemetry_wire_status.flags. Unassigned bits are zero.
+ *  Bits of @ref telemetry_wire_status::flags. Unassigned bits are zero.
  *  @{
  */
 /** @brief The arm input is asserted. */
@@ -134,7 +134,7 @@ struct __packed telemetry_wire_status {
 	uint32_t timestamp_ms;
 	uint8_t  state;
 	uint8_t  sm_type;
-	uint8_t  flags;
+	uint8_t  flags;        /**< AURORA_TELEMETRY_WIRE_STATUS_* bits. */
 	uint8_t  reserved;
 };
 
