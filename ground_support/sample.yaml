@@ -10,23 +10,23 @@ sample:
 common:
   build_only: true
 tests:
-  app.default:
+  ground_support.default:
     platform_allow:
-      - rpi_pico2/rp2350a/m33
+      - rpi_pico2/rp2350a/m33_0/w
     integration_platforms:
-      - rpi_pico2/rp2350a/m33
-  app.debug:
+      - rpi_pico2/rp2350a/m33_0/w
+  ground_support.debug:
     extra_overlay_confs:
       - debug.conf
     platform_allow:
-      - rpi_pico2/rp2350a/m33
+      - rpi_pico2/rp2350a/m33_0/w
     integration_platforms:
-      - rpi_pico2/rp2350a/m33
-  app.debug.sysbuild:
+      - rpi_pico2/rp2350a/m33_0/w
+  ground_support.debug.sysbuild:
     sysbuild: true
     extra_overlay_confs:
       - debug.conf
     platform_allow:
-      - rpi_pico2/rp2350a/m33
+      - rpi_pico2/rp2350a/m33_0/w
     integration_platforms:
-      - rpi_pico2/rp2350a/m33
+      - rpi_pico2/rp2350a/m33_0/w

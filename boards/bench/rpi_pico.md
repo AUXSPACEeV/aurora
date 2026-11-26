@@ -15,9 +15,8 @@ to validate against.
 
 | Upstream board target | SoC | Core | Notes |
 |---|---|---|---|
-| `rpi_pico/rp2040/w`              | RP2040  | Cortex-M0+ | Same RP2040 silicon as the sensor_board v2 (Pico variant). |
-| `rpi_pico2/rp2350a/m33/w`        | RP2350A | Cortex-M33 | RP2350A Arm core. |
-| `rpi_pico2/rp2350a/hazard3/w`    | RP2350A | Hazard3 (RISC-V) | Same RP2350A silicon, RISC-V core selected. |
+| `rpi_pico/rp2040/w`                | RP2040  | Cortex-M0+ | Same RP2040 silicon as the sensor_board v2 (Pico variant). |
+| `rpi_pico2/rp2350a/m33_0/w`        | RP2350A | Cortex-M33 | RP2350A Arm core. |
 
 The non-W (no Wi-Fi) versions of each target also work. The bench
 overlay does not touch the Wi-Fi peripheral, but the `_w` variants
@@ -49,7 +48,7 @@ flight data logger).
 ```{note}
 Zephyr resolves board overlays and confs by exact board id, so each
 buildable target needs its own file pair. There is no implicit
-fall-back from `rpi_pico2/rp2350a/m33/w` to a generic `rpi_pico2`
+fall-back from `rpi_pico2/rp2350a/m33_0/w` to a generic `rpi_pico2`
 overlay. The Kconfig bodies are kept identical across the bench
 variants on purpose; the only per-target differences are the pinctrl
 header include and the pinmux group in the overlay.
@@ -64,10 +63,7 @@ Pick the line that matches your hardware:
 west build -p -b rpi_pico/rp2040/w -S sim -S nodisk sensor_board
 
 # Pico 2 W (RP2350A, Cortex-M33)
-west build -p -b rpi_pico2/rp2350a/m33/w -S sim -S nodisk sensor_board
-
-# Pico 2 W (RP2350A, Hazard3 RISC-V)
-west build -p -b rpi_pico2/rp2350a/hazard3/w -S sim -S nodisk sensor_board
+west build -p -b rpi_pico2/rp2350a/m33_0/w -S sim -S nodisk sensor_board
 ```
 
 What each piece does:

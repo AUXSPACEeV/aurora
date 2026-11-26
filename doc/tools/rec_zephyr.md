@@ -295,11 +295,11 @@ State APOGEE is so short-lived that the 10Hz LoRa rate is not enough to display 
 
 For bench work it is useful to flash a Pico 2 W with a minimal AURORA
 build that only exercises the telemetry stack. No real IMU, no
-barometer, no SD card. This is what the `rpi_pico2/rp2350a/m33/w` board
+barometer, no SD card. This is what the `rpi_pico2/rp2350a/m33_0/w` board
 target plus the `sim` and `nodisk` snippets provide:
 
 ```bash
-west build -p -b rpi_pico2/rp2350a/m33/w -S sim -S nodisk sensor_board
+west build -p -b rpi_pico2/rp2350a/m33_0/w -S sim -S nodisk sensor_board
 ```
 
 After flashing the resulting `build/zephyr/zephyr.uf2` onto the Pico,

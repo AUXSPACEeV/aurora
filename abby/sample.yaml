@@ -16,26 +16,26 @@ common:
   integration_platforms:
     - tel65@1
 tests:
-  app.default: {}
-  app.debug:
+  abby.default: {}
+  abby.debug:
     extra_overlay_confs:
       - debug.conf
-  app.no_shell:
+  abby.no_shell:
     extra_configs:
       - CONFIG_SHELL=n
       - CONFIG_ABBY_SHELL=n
-  app.duty_cycle_off:
+  abby.duty_cycle_off:
     extra_configs:
       - CONFIG_ABBY_DUTY_CYCLE_ENFORCE=n
       - CONFIG_ABBY_LORA_SF=12
-  app.receive:
+  abby.receive:
     extra_overlay_confs:
       - receive.conf
-  app.receive_debug:
+  abby.receive_debug:
     extra_overlay_confs:
       - receive.conf
       - debug.conf
-  app.receive_no_shell:
+  abby.receive_no_shell:
     extra_overlay_confs:
       - receive.conf
     extra_configs:

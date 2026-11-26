@@ -67,8 +67,9 @@
 	 * sounds the buzzer.
 	 */
 	buzzer0: buzzer_0 {
-		compatible = "auxspaceev,pwm-buzzer";
-		pwms = <&ledc0 0 PWM_MSEC(200) PWM_POLARITY_NORMAL>;
+		compatible = "pwm-buzzer";
+		/* Default tone for buzzer_beep(); tones set their own period. */
+		pwms = <&ledc0 0 PWM_HZ(4000) PWM_POLARITY_NORMAL>;
 		status = "disabled";
 	};
 
