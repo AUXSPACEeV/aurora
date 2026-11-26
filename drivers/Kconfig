@@ -3,5 +3,4 @@
 
 menu "Drivers"
 rsource "pyro/Kconfig"
-rsource "sensor/Kconfig"
 endmenu
