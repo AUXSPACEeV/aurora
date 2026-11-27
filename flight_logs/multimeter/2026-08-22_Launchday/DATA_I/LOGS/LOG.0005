@@ -1,0 +1,23 @@
+[00:00:00.053,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 1, clock 0Hz, card power OFF, timing LEGACY, voltage 3.3V
+[00:00:00.053,000] <inf> [  0 main] sdhc: Bus width set successfully to 1 bit
+[00:00:00.053,000] <inf> [  0 main] sdhc: Bus timing successfully changed to LEGACY
+[00:00:00.553,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 1, clock 0Hz, card power ON, timing LEGACY, voltage 3.3V
+[00:00:01.053,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 1, clock 400000Hz, card power ON, timing LEGACY, voltage 3.3V
+[00:00:01.053,000] <inf> [  0 main] sdhc: Bus clock successfully set to 400 kHz
+[00:00:01.090,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 1, clock 25000000Hz, card power ON, timing LEGACY, voltage 3.3V
+[00:00:01.090,000] <inf> [  0 main] sdhc: Bus clock successfully set to 25000 kHz
+[00:00:01.093,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 1, clock 40000000Hz, card power ON, timing HS, voltage 3.3V
+[00:00:01.093,000] <inf> [  0 main] sdhc: Bus clock successfully set to 40000 kHz
+[00:00:01.093,000] <inf> [  0 main] sdhc: Bus timing successfully changed to HS
+[00:00:01.093,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 4, clock 40000000Hz, card power ON, timing HS, voltage 3.3V
+[00:00:01.093,000] <inf> [  0 main] sdhc: Bus width set successfully to 4 bit
+*** Booting AURORA 9691e9ae8bf6 ***
+[00:00:01.094,000] <inf> [  0 main] main: Auxspace AURORA 0.5.2
+[00:00:01.094,000] <inf> [  0 main] main: Reset cause: power-on
+[00:00:01.096,000] <inf> [  6 state_machine] main: IMU ready
+[00:00:01.096,000] <err> [  6 state_machine] baro: bmp581@47: device not ready
+[00:00:01.096,000] <err> [  6 state_machine] main: Baro not ready!
+[00:00:01.096,000] <inf> [  6 state_machine] state_machine: no stored thresholds, using defaults
+[00:00:01.097,000] <inf> [  6 state_machine] state_machine: RBF arm input ready on gpio@60004800 pin 6, vehicle SAFE
+[00:00:01.111,000] <inf> [ 10 audit_writer_th] state_audit: State machine audit file created: /MMC:/STATE/AUDIT.6
+[00:00:01.116,000] <inf> [ 10 audit_writer_th] state_audit: 1097100000   event        IDLE         state machine initialized

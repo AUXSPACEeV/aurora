@@ -1,0 +1,9 @@
+Time (ms)    Type         From         To / Event  
+---------------------------------------------------
+1283700000   event        IDLE         state machine initialized
+1322289300000 event        IDLE         RBF removed
+1322695200000 event        IDLE         RBF installed
+1327316700000 event        IDLE         RBF removed
+1328168900000 event        IDLE         RBF installed
+1574776600000 event        IDLE         RBF removed
+1576895300000 event        IDLE         RBF installed

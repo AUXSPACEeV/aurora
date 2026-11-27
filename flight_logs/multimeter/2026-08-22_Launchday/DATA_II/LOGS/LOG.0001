@@ -1,0 +1,45 @@
+[00:00:00.042,000] <inf> [  0 main] LSM6DSO: Initialize device lsm6dso32@6b
+[00:00:00.043,000] <inf> [  0 main] LSM6DSO: chip id 0x6c
+[00:00:00.057,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 1, clock 0Hz, card power OFF, timing LEGACY, voltage 3.3V
+[00:00:00.057,000] <inf> [  0 main] sdhc: Bus width set successfully to 1 bit
+[00:00:00.057,000] <inf> [  0 main] sdhc: Bus timing successfully changed to LEGACY
+[00:00:00.557,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 1, clock 0Hz, card power ON, timing LEGACY, voltage 3.3V
+[00:00:01.057,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 1, clock 400000Hz, card power ON, timing LEGACY, voltage 3.3V
+[00:00:01.057,000] <inf> [  0 main] sdhc: Bus clock successfully set to 400 kHz
+[00:00:01.287,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 1, clock 25000000Hz, card power ON, timing LEGACY, voltage 3.3V
+[00:00:01.287,000] <inf> [  0 main] sdhc: Bus clock successfully set to 25000 kHz
+[00:00:01.290,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 1, clock 40000000Hz, card power ON, timing HS, voltage 3.3V
+[00:00:01.290,000] <inf> [  0 main] sdhc: Bus clock successfully set to 40000 kHz
+[00:00:01.290,000] <inf> [  0 main] sdhc: Bus timing successfully changed to HS
+[00:00:01.290,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 4, clock 40000000Hz, card power ON, timing HS, voltage 3.3V
+[00:00:01.290,000] <inf> [  0 main] sdhc: Bus width set successfully to 4 bit
+*** Booting AURORA 9691e9ae8bf6 ***
+[00:00:01.291,000] <inf> [  0 main] main: Auxspace AURORA 0.5.2
+[00:00:01.291,000] <inf> [  0 main] main: Reset cause: power-on
+[00:00:01.293,000] <inf> [  6 state_machine] main: IMU ready
+[00:00:01.293,000] <inf> [  6 state_machine] main: Baro ready
+[00:00:01.293,000] <inf> [  6 state_machine] state_machine: no stored thresholds, using defaults
+[00:00:01.294,000] <inf> [  6 state_machine] state_machine: RBF arm input ready on gpio@60004800 pin 6, vehicle SAFE
+[00:00:01.298,000] <inf> [ 10 audit_writer_th] state_audit: State machine audit file created: /MMC:/STATE/AUDIT.1
+[00:00:01.312,000] <inf> [ 10 audit_writer_th] state_audit: 1294100000   event        IDLE         state machine initialized
+[00:00:01.792,000] <wrn> [  0 main] aurora_watchdog: breadcrumb: stage-0 bite never ran, so interrupts were masked or the core was spinning at or above its level; only the stage-1 hardware reset could recover it
+[00:00:01.792,000] <inf> [  0 main] aurora_watchdog: no watchdog breadcrumb retained: cold boot, or the previous boot never reached the first feed
+[00:00:01.792,000] <inf> [  0 main] aurora_watchdog: watchdog armed: 2000 ms timeout, fed every 500 ms
+[00:00:01.792,000] <inf> [  0 main] aurora_watchdog: hardware backstop at 1000 ms, SoC reset at 2000 ms
+[00:00:01.792,000] <inf> [  0 main] telemetry_hc12: HC-12 SET pin not wired: runtime AT disabled
+[00:00:01.792,000] <inf> [  0 main] telemetry_hc12: HC-12 backend up on uart@60000000
+I (BLE_INIT): BT controller compile version [51d9dfd]
+W (BLE_INIT): CONFIG_BT_CTRL_CHECK_CONFIG_EFF is not defined; using compile-time default BLE controller feature options
+I (BLE_INIT): Using main XTAL as clock source
+I (BLE_INIT): Feature Config, ADV:1, BLE_50:1, DTM:1, SCAN:1, CCA:0, SMP:1, CONNECT:1
+I (BLE_INIT): Bluetooth MAC: f0:9e:9e:15:13:ca
+[00:00:01.826,000] <wrn> [  0 main] bt_hci_core: Num of Controller's ACL packets != ACL bt_conn_tx contexts (12 != 10)
+[00:00:01.827,000] <inf> [  0 main] bt_hci_core: HW Platform: Espressif Systems (0x0004)
+[00:00:01.827,000] <inf> [  0 main] bt_hci_core: HW Variant: ESP32-S3 (0x0002)
+[00:00:01.827,000] <inf> [  0 main] bt_hci_core: Firmware: Standard Bluetooth controller (0x00) Version 4.4 Build 99
+[00:00:01.827,000] <inf> [  0 main] bt_hci_core: HCI transport: BT ESP32
+[00:00:01.827,000] <inf> [  0 main] bt_hci_core: Identity: F0:9E:9E:15:13:CA (public)
+[00:00:01.827,000] <inf> [  0 main] bt_hci_core: HCI: version 5.0 (0x09) revision 0x0016, manufacturer 0x02e5
+[00:00:01.827,000] <inf> [  0 main] bt_hci_core: LMP: version 5.0 (0x09) subver 0x0016
+[00:00:01.827,000] <inf> [  0 main] pad_link: BLE host up; board_id="micrometer"
+[00:00:01.828,000] <inf> [ -1 sysworkq] pad_link: advertising as AURORA-Rocket

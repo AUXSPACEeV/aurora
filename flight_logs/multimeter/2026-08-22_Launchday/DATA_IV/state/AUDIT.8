@@ -1,0 +1,19 @@
+Time (ms)    Type         From         To / Event  
+---------------------------------------------------
+1283600000   event        IDLE         state machine initialized
+266164900000 event        IDLE         RBF removed
+266172600000 event        IDLE         attitude calibration complete, arming
+266172700000 transition   IDLE         ARMED
+429546600000 event        ARMED        orientation and altitude threshold reached
+429749500000 event        ARMED        orientation, altitude and timing threshold reached
+429749500000 transition   ARMED        BOOST
+432543600000 transition   BOOST        BURNOUT
+432570600000 transition   BURNOUT      APOGEE
+432580600000 transition   APOGEE       MAIN
+434589500000 transition   MAIN         REDUNDANT
+438321500000 transition   REDUNDANT    LANDED
+946643200000 event        LANDED       RBF installed
+946650600000 transition   LANDED       IDLE
+949485100000 event        IDLE         RBF removed
+14615010500000 event        IDLE         RBF installed
+14615105600000 event        IDLE         RBF removed

@@ -1,0 +1,9 @@
+Time (ms)    Type         From         To / Event  
+---------------------------------------------------
+1305100000   event        IDLE         state machine initialized
+884179600000 event        IDLE         RBF removed
+884189500000 event        IDLE         attitude calibration complete, arming
+884189600000 transition   IDLE         ARMED
+1208964500000 event        ARMED        orientation and altitude threshold reached
+1209179700000 event        ARMED        orientation, altitude and timing threshold reached
+1209179700000 transition   ARMED        BOOST

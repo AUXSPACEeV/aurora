@@ -1,0 +1,15 @@
+Time (ms)    Type         From         To / Event  
+---------------------------------------------------
+1294100000   event        IDLE         state machine initialized
+192700800000 event        IDLE         RBF removed
+192703700000 event        IDLE         attitude calibration complete, arming
+192703700000 transition   IDLE         ARMED
+254259700000 event        ARMED        orientation and altitude threshold reached
+254466500000 event        ARMED        orientation, altitude and timing threshold reached
+254466500000 transition   ARMED        BOOST
+257715500000 transition   BOOST        BURNOUT
+263844600000 transition   BURNOUT      APOGEE
+283851500000 event        APOGEE       apogee timeout expired
+283851500000 transition   APOGEE       ERROR
+283851800000 event        ERROR        error mitigated, returning to IDLE
+283851800000 transition   ERROR        IDLE

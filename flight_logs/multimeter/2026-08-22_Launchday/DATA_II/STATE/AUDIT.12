@@ -1,0 +1,5 @@
+Time (ms)    Type         From         To / Event  
+---------------------------------------------------
+1102400000   event        IDLE         state machine initialized
+59518300000  event        IDLE         thresholds changed
+150527800000 event        IDLE         thresholds changed

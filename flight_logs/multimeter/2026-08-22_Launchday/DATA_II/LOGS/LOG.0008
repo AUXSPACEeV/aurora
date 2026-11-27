@@ -1,0 +1,313 @@
+[00:00:00.042,000] <inf> [  0 main] LSM6DSO: Initialize device lsm6dso32@6b
+[00:00:00.043,000] <inf> [  0 main] LSM6DSO: chip id 0x6c
+[00:00:00.057,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 1, clock 0Hz, card power OFF, timing LEGACY, voltage 3.3V
+[00:00:00.057,000] <inf> [  0 main] sdhc: Bus width set successfully to 1 bit
+[00:00:00.057,000] <inf> [  0 main] sdhc: Bus timing successfully changed to LEGACY
+[00:00:00.557,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 1, clock 0Hz, card power ON, timing LEGACY, voltage 3.3V
+[00:00:01.057,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 1, clock 400000Hz, card power ON, timing LEGACY, voltage 3.3V
+[00:00:01.057,000] <inf> [  0 main] sdhc: Bus clock successfully set to 400 kHz
+[00:00:01.287,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 1, clock 25000000Hz, card power ON, timing LEGACY, voltage 3.3V
+[00:00:01.287,000] <inf> [  0 main] sdhc: Bus clock successfully set to 25000 kHz
+[00:00:01.290,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 1, clock 40000000Hz, card power ON, timing HS, voltage 3.3V
+[00:00:01.290,000] <inf> [  0 main] sdhc: Bus clock successfully set to 40000 kHz
+[00:00:01.290,000] <inf> [  0 main] sdhc: Bus timing successfully changed to HS
+[00:00:01.290,000] <inf> [  0 main] sdhc: SDHC I/O: slot: 0, bus width 4, clock 40000000Hz, card power ON, timing HS, voltage 3.3V
+[00:00:01.290,000] <inf> [  0 main] sdhc: Bus width set successfully to 4 bit
+*** Booting AURORA 9691e9ae8bf6 ***
+[00:00:01.291,000] <inf> [  0 main] main: Auxspace AURORA 0.5.2
+[00:00:01.291,000] <inf> [  0 main] main: Reset cause: power-on
+[00:00:01.293,000] <inf> [  6 state_machine] main: IMU ready
+[00:00:01.293,000] <inf> [  6 state_machine] main: Baro ready
+[00:00:01.293,000] <inf> [  6 state_machine] state_machine: no stored thresholds, using defaults
+[00:00:01.293,000] <inf> [  6 state_machine] state_machine: RBF arm input ready on gpio@60004800 pin 6, vehicle SAFE
+[00:00:01.307,000] <inf> [ 10 audit_writer_th] state_audit: State machine audit file created: /MMC:/STATE/AUDIT.8
+[00:00:01.314,000] <inf> [ 10 audit_writer_th] state_audit: 1293900000   event        IDLE         state machine initialized
+[00:00:01.792,000] <wrn> [  0 main] aurora_watchdog: breadcrumb: stage-0 bite never ran, so interrupts were masked or the core was spinning at or above its level; only the stage-1 hardware reset could recover it
+[00:00:01.792,000] <inf> [  0 main] aurora_watchdog: no watchdog breadcrumb retained: cold boot, or the previous boot never reached the first feed
+[00:00:01.792,000] <inf> [  0 main] aurora_watchdog: watchdog armed: 2000 ms timeout, fed every 500 ms
+[00:00:01.792,000] <inf> [  0 main] aurora_watchdog: hardware backstop at 1000 ms, SoC reset at 2000 ms
+[00:00:01.792,000] <inf> [  0 main] telemetry_hc12: HC-12 SET pin not wired: runtime AT disabled
+[00:00:01.792,000] <inf> [  0 main] telemetry_hc12: HC-12 backend up on uart@60000000
+I (BLE_INIT): BT controller compile version [51d9dfd]
+W (BLE_INIT): CONFIG_BT_CTRL_CHECK_CONFIG_EFF is not defined; using compile-time default BLE controller feature options
+I (BLE_INIT): Using main XTAL as clock source
+I (BLE_INIT): Feature Config, ADV:1, BLE_50:1, DTM:1, SCAN:1, CCA:0, SMP:1, CONNECT:1
+I (BLE_INIT): Bluetooth MAC: f0:9e:9e:15:13:ca
+[00:00:01.826,000] <wrn> [  0 main] bt_hci_core: Num of Controller's ACL packets != ACL bt_conn_tx contexts (12 != 10)
+[00:00:01.827,000] <inf> [  0 main] bt_hci_core: HW Platform: Espressif Systems (0x0004)
+[00:00:01.827,000] <inf> [  0 main] bt_hci_core: HW Variant: ESP32-S3 (0x0002)
+[00:00:01.827,000] <inf> [  0 main] bt_hci_core: Firmware: Standard Bluetooth controller (0x00) Version 4.4 Build 99
+[00:00:01.827,000] <inf> [  0 main] bt_hci_core: HCI transport: BT ESP32
+[00:00:01.828,000] <inf> [  0 main] bt_hci_core: Identity: F0:9E:9E:15:13:CA (public)
+[00:00:01.828,000] <inf> [  0 main] bt_hci_core: HCI: version 5.0 (0x09) revision 0x0016, manufacturer 0x02e5
+[00:00:01.828,000] <inf> [  0 main] bt_hci_core: LMP: version 5.0 (0x09) subver 0x0016
+[00:00:01.828,000] <inf> [  0 main] pad_link: BLE host up; board_id="micrometer"
+[00:00:01.829,000] <inf> [ -1 sysworkq] pad_link: advertising as AURORA-Rocket
+[00:00:03.621,000] <inf> [  6 state_machine] attitude: Attitude calibrated: n=220 g_mag=9.805 g_b=[0.00 -1.00 0.00]
+[00:00:14.129,000] <inf> [  5 rbf_wq] state_machine: RBF removed: vehicle ARMED
+[00:00:14.131,000] <inf> [ 10 audit_writer_th] state_audit: 14129800000  event        IDLE         RBF removed
+[00:00:14.140,000] <inf> [  6 state_machine] data_logger: 'flight': new log session at index 0
+[00:00:14.140,000] <err> [  6 state_machine] fs: directory open error (-2)
+[00:00:14.157,000] <inf> [  6 state_machine] data_logger: bin_fs: new flight log /MMC:/DATA/flight_0.bin (flight_id=14157300000)
+[00:00:14.158,000] <inf> [  6 state_machine] main: Armed pyro0 channel 0
+[00:00:14.158,000] <inf> [  6 state_machine] main: Armed pyro0 channel 1
+[00:00:14.160,000] <inf> [ 10 audit_writer_th] state_audit: 14138600000  event        IDLE         attitude calibration complete, arming
+[00:00:14.163,000] <inf> [ 10 audit_writer_th] state_audit: 14138600000  transition   IDLE         ARMED
+[00:00:17.592,000] <inf> [  5 rbf_wq] state_machine: RBF installed: vehicle SAFE
+[00:00:17.596,000] <inf> [ 10 audit_writer_th] state_audit: 17593000000  event        ARMED        RBF installed
+[00:00:17.604,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 0
+[00:00:17.604,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 1
+[00:00:17.604,000] <inf> [ 10 audit_writer_th] state_audit: 17597700000  transition   ARMED        IDLE
+[00:00:17.615,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:00:17.642,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:00:17.705,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (3 samples discarded)
+[00:00:17.786,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:00:17.876,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:00:17.939,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (2 samples discarded)
+[00:00:18.029,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (2 samples discarded)
+[00:00:18.164,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (4 samples discarded)
+[00:00:18.227,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:00:18.263,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:00:18.308,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (4 samples discarded)
+[00:00:18.533,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (20 samples discarded)
+[00:00:18.803,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (23 samples discarded)
+[00:00:19.127,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (7 samples discarded)
+[00:00:19.244,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (8 samples discarded)
+[00:00:19.298,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (2 samples discarded)
+[00:00:20.279,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:00:20.306,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:00:22.628,000] <inf> [  6 state_machine] attitude: Attitude calibrated: n=220 g_mag=9.816 g_b=[0.00 -1.00 0.00]
+[00:27:51.834,000] <inf> [  5 rbf_wq] state_machine: RBF removed: vehicle ARMED
+[00:27:51.836,000] <inf> [ 10 audit_writer_th] state_audit: 1671834200000 event        IDLE         RBF removed
+[00:27:51.846,000] <inf> [  6 state_machine] data_logger: bin_fs: appending to /MMC:/DATA/flight_0.bin at frame 18 (flight_id=14157300000)
+[00:27:51.846,000] <inf> [  6 state_machine] main: Armed pyro0 channel 0
+[00:27:51.846,000] <inf> [  6 state_machine] main: Armed pyro0 channel 1
+[00:27:51.846,000] <inf> [ 10 audit_writer_th] state_audit: 1671839800000 event        IDLE         attitude calibration complete, arming
+[00:27:51.852,000] <inf> [ 10 audit_writer_th] state_audit: 1671839900000 transition   IDLE         ARMED
+[00:32:40.669,000] <inf> [  5 rbf_wq] state_machine: RBF installed: vehicle SAFE
+[00:32:40.670,000] <inf> [ 10 audit_writer_th] state_audit: 1960669800000 event        ARMED        RBF installed
+[00:32:40.680,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 0
+[00:32:40.680,000] <inf> [  6 state_machine] main: Disarmed pyro0 channel 1
+[00:32:40.681,000] <inf> [ 10 audit_writer_th] state_audit: 1960676800000 transition   ARMED        IDLE
+[00:33:05.894,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:33:05.913,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:05.966,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (2 samples discarded)
+[00:33:06.380,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:33:06.443,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:06.560,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:07.586,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:07.883,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:07.919,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:07.955,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:33:08.018,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:33:08.064,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:08.108,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:08.477,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:33:08.576,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:09.188,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:33:09.476,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:09.971,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:09.989,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:10.034,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:10.233,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:11.294,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:11.366,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:11.420,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:12.131,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:14.264,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:14.283,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:14.327,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:14.373,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:14.597,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:14.633,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:33:14.651,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:14.750,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:14.795,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:33:15.065,000] <inf> [  6 state_machine] attitude: Calibration restarted: accelerometer tilt (1 samples discarded)
+[00:33:15.128,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:33:15.173,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:33:15.236,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:33:16.955,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:16.991,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:17.064,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:17.288,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:17.523,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:33:17.666,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:33:18.098,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:33:18.243,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:33:18.359,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:18.854,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:33:18.881,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:33:18.899,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:29.763,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:36:29.825,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:29.854,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:36:30.124,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:30.158,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:30.194,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:30.410,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:30.437,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:36:30.563,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:36:30.860,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:32.723,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:36:32.939,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:33.290,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:33.335,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:33.587,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:33.605,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:33.974,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:36:33.993,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:34.208,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:34.235,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:34.307,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:36:34.919,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (3 samples discarded)
+[00:36:35.468,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:36:35.594,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:36:35.945,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:36:37.043,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:37.233,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:37.331,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:36:37.664,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:37.727,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:36:37.907,000] <inf> [  6 state_machine] attitude: Calibration restarted: accelerometer tilt (1 samples discarded)
+[00:36:39.410,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:36:39.959,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:40.103,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:36:40.293,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:40.463,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:40.625,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:40.769,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:40.886,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:41.003,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:41.138,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:41.390,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:41.831,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:41.975,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:42.065,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:42.083,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:42.119,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:42.227,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:36:42.363,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (3 samples discarded)
+[00:36:42.479,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:42.614,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:36:42.740,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (3 samples discarded)
+[00:36:43.100,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:36:43.623,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:43.748,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:43.865,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:43.937,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:44.126,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:36:45.647,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:45.674,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:45.917,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:36:45.935,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:45.963,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:46.233,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:46.414,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:47.897,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:47.996,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:36:48.113,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:36:48.131,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:48.194,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:48.239,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:36:48.968,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:49.194,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:49.427,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:36:49.743,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:36:50.237,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:36:50.255,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:36:50.643,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:36:55.205,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:36:55.286,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:36:55.323,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:37:48.143,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:37:55.307,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (2 samples discarded)
+[00:37:55.469,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:37:55.757,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:38:06.881,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:38:15.809,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:38:15.899,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:38:24.513,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:38:24.629,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:38:27.050,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:38:27.114,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:38:35.699,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:15.980,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:41:16.025,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:41:16.070,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:41:16.143,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:41:16.413,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (1 samples discarded)
+[00:41:17.519,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:17.591,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:17.618,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:41:17.663,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:41:17.744,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:41:18.221,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:18.266,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:18.419,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:18.644,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:18.779,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:41:18.806,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:18.833,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:19.076,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:19.193,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:19.293,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:41:19.391,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:19.445,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:19.760,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:19.796,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:19.958,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:20.129,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:41:20.165,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:20.354,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:41:20.381,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:21.038,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:21.227,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:21.264,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:21.749,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:41:21.776,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:23.018,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:23.477,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:24.566,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:24.899,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:24.944,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:24.980,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:25.143,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:25.196,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:25.214,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:25.439,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:25.511,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:41:25.565,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:25.773,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:25.799,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:25.853,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:25.907,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:26.006,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:26.060,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:41:26.213,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:41:26.240,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:26.348,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (3 samples discarded)
+[00:41:26.429,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:26.465,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:26.501,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:41:26.609,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (2 samples discarded)
+[00:41:27.329,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:34.736,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:34.844,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (3 samples discarded)
+[00:41:35.033,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (4 samples discarded)
+[00:41:35.276,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (22 samples discarded)
+[00:41:35.348,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (4 samples discarded)
+[00:41:37.923,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (2 samples discarded)
+[00:41:38.201,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (3 samples discarded)
+[00:41:38.408,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (19 samples discarded)
+[00:41:39.155,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:39.218,000] <inf> [  6 state_machine] attitude: Calibration restarted: gyro rate (2 samples discarded)
+[00:41:39.245,000] <inf> [  6 state_machine] attitude: Calibration restarted: held out of tolerance (1 samples discarded)
+[00:41:41.603,000] <inf> [  6 state_machine] attitude: Attitude calibrated: n=220 g_mag=9.829 g_b=[0.00 -1.00 0.00]
+[00:43:43.806,000] <inf> [  5 rbf_wq] state_machine: RBF removed: vehicle ARMED
+[00:43:43.808,000] <inf> [ 10 audit_writer_th] state_audit: 2623806500000 event        IDLE         RBF removed
+[00:43:43.817,000] <inf> [ 10 audit_writer_th] state_audit: 2623810700000 event        IDLE         attitude calibration complete, arming
+[00:43:43.818,000] <inf> [  6 state_machine] data_logger: bin_fs: appending to /MMC:/DATA/flight_0.bin at frame 1455 (flight_id=14157300000)
+[00:43:43.819,000] <inf> [  6 state_machine] main: Armed pyro0 channel 0
+[00:43:43.819,000] <inf> [  6 state_machine] main: Armed pyro0 channel 1
+[00:43:43.821,000] <inf> [ 10 audit_writer_th] state_audit: 2623810700000 transition   IDLE         ARMED
