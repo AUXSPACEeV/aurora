@@ -21,7 +21,7 @@ implementation defines a 9-state flight sequence driven by sensor thresholds.
 ```{table} Signals
 | Signal | Comment |
 | --- | --- |
-| ARM | *ARM* signal from extern. Arms the pyro channels as well |
+| ARM | *ARM* signal, asserted after the state machine enters "armed" and deasserted only when it falls back to idle. Arms the pyro channels as well |
 | DISARM | *DISARM* signal from extern. Disarms the pyro channels as well |
 ```
 
