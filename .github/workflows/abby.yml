@@ -1,0 +1,84 @@
+# Copyright (c) 2026 Auxspace e.V.
+# SPDX-License-Identifier: Apache-2.0
+
+name: abby
+
+# Only run when something abby builds from has changed: the application
+# itself, its board, the aurora libraries and module glue it links against,
+# and the west manifest that pins Zephyr and the HALs.
+on:
+  push:
+    branches: [ "main" ]
+    paths: &abby_paths
+      - 'abby/**'
+      - 'boards/auxspace/AUX-Tel/**'
+      - 'dts/**'
+      - 'lib/**'
+      - 'include/**'
+      - 'drivers/**'
+      - 'CMakeLists.txt'
+      - 'Kconfig'
+      - 'zephyr/module.yml'
+      - 'west.yml'
+      - '.github/workflows/abby.yml'
+  pull_request:
+    branches: [ "main" ]
+    paths: *abby_paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build abby
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: aurora
+          persist-credentials: false
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Zephyr project
+        uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: aurora
+          toolchains: arm-zephyr-eabi
+          ccache-cache-key: ubuntu-22.04-abby
+
+      - name: Build abby
+        working-directory: aurora
+        shell: bash
+        run: |
+          west twister -T abby -v --inline-logs --integration --outdir twister-out-abby
+
+      - name: Collect firmware binaries
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p abby-artifacts
+          for board_dir in aurora/twister-out-abby/*/; do
+            [ -d "$board_dir" ] || continue
+            board=$(basename "$board_dir")
+            find "$board_dir" \( -name "zephyr.bin" -o -name "zephyr.elf" -o -name "zephyr.hex" -o -name "zephyr.signed.bin" -o -name "zephyr.signed.hex" \) \
+              | while read -r f; do
+                rel="${f#"$board_dir"}"
+                mkdir -p "abby-artifacts/$board/$(dirname "$rel")"
+                cp "$f" "abby-artifacts/$board/$rel"
+              done
+          done
+
+      - name: Upload firmware binaries
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: abby-artifacts
+          path: abby-artifacts/
+          if-no-files-found: warn
