@@ -178,7 +178,7 @@ pulses, nothing is arriving at all.
 The relay role is the default:
 
 ```bash
-west build -p -b tel65 abby
+west build -p --sysbuild -b tel65 abby
 west flash
 ```
 
@@ -186,9 +186,11 @@ The receive role is the same application with one option, kept in
 `receive.conf` so the radio settings stay shared:
 
 ```bash
-west build -p -b tel65 abby -- -DEXTRA_CONF_FILE=receive.conf
+west build -p --sysbuild -b tel65 abby -- -DEXTRA_CONF_FILE=receive.conf
 west flash
 ```
+
+`west flash` writes MCUboot and the signed application in one go.
 
 A factory module needs unlocking before its first flash; see
 {doc}`the board doc </boards/auxspace/AUX-Tel/stm32wl/doc/tel65>`.
