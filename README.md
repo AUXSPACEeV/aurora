@@ -100,22 +100,29 @@ Using a python virtualenv, install west, zephyr's pythondependencies and
 the zephyr sdk with the required toolchains:
 
 ```bash
+# Setup python virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
+# Install west
 python3 -m pip install west
 
+# Initialize the zephyr workspace
 west init -m https://github.com/AUXSPACEeV/aurora --mr main .
 cd aurora
 west update
 west zephyr-export
 west packages pip --install
 
+# Install the desired toolchains
 west sdk install -t \
     riscv64-zephyr-elf \
     arm-zephyr-eabi \
     xtensa-espressif_esp32s3_zephyr-elf \
     x86_64-zephyr-elf
+
+# Add the binary blobs
+west blobs fetch
 ```
 
 This should leave a directory setup like so:
@@ -209,15 +216,15 @@ application.
 Start the command from the **\<aurora\>** dir:
 
 ```bash
-# Build the sensor_board project for the sensor_board_v2/rp2040
-west build -b sensor_board_v2/rp2040 sensor_board
+# Build the sensor_board application for the AUX-Core-6501 PCB:
+west build -p --sysbuild -b core65/esp32s3/procpu sensor_board
 
-# Another example: build for the custom Auxspace Micrometer PCB:
-west build -b micrometer/esp32s3/procpu --sysbuild sensor_board/
+# Another example: build the telemetry app for AUX-Tel-6501
+west build -p --sysbuild -b tel65/stm32wle5xx abby
 ```
 
 The output from the build will be at
-**\<aurora\>/build/zephyr**,
+**\<aurora\>/build/zephyr/\<APP\>**,
 called `zephyr.uf2` and `zephyr.elf`.
 
 ## :rocket: Deployment
