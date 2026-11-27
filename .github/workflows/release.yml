@@ -20,26 +20,44 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - board: sensor_board_v2/rp2040
+          - app: sensor_board
+            board: sensor_board_v2/rp2040
             artifact: sensor_board_v2_rp2040
             toolchain: arm-zephyr-eabi
             extra_args: "--sysbuild"
-          - board: sensor_board_v2/rp2350a/hazard3
+          - app: sensor_board
+            board: sensor_board_v2/rp2350a/hazard3
             artifact: sensor_board_v2_rp2350a_hazard3
             toolchain: riscv64-zephyr-elf
             extra_args: ""
-          - board: micrometer@1/esp32s3/procpu
+          - app: sensor_board
+            board: micrometer@1/esp32s3/procpu
             artifact: micrometer_v1
             toolchain: xtensa-espressif_esp32s3_zephyr-elf
             extra_args: "--sysbuild"
-          - board: micrometer@2/esp32s3/procpu
+          - app: sensor_board
+            board: micrometer@2/esp32s3/procpu
             artifact: micrometer_v2
             toolchain: xtensa-espressif_esp32s3_zephyr-elf
             extra_args: "--sysbuild"
-          - board: native_sim
+          - app: sensor_board
+            board: native_sim
             artifact: native_sim
             toolchain: x86_64-zephyr-elf
             extra_args: ""
+          # abby: both ends of the AUX-Tel LoRa link, built from the same
+          # sources so their radio settings match.
+          - app: abby
+            board: tel65@1
+            artifact: abby_tel65_relay
+            toolchain: arm-zephyr-eabi
+            extra_args: "--sysbuild"
+          - app: abby
+            board: tel65@1
+            artifact: abby_tel65_receive
+            toolchain: arm-zephyr-eabi
+            extra_args: "--sysbuild"
+            cmake_args: "-DEXTRA_CONF_FILE=receive.conf"
 
     steps:
       - name: Checkout
@@ -68,7 +86,8 @@ jobs:
         working-directory: aurora
         shell: bash
         run: |
-          west build -b ${{ matrix.board }} ${{ matrix.extra_args }} sensor_board
+          west build -b ${{ matrix.board }} ${{ matrix.extra_args }} ${{ matrix.app }} \
+            -- ${{ matrix.cmake_args }}
 
       - name: Collect artifacts
         working-directory: aurora
@@ -80,10 +99,10 @@ jobs:
             for f in build/mcuboot/zephyr/zephyr.{elf,bin,hex}; do
               [ -f "${f}" ] && cp "${f}" "dist/${{ matrix.artifact }}/mcuboot.${f##*.}"
             done
-            for f in build/sensor_board/zephyr/zephyr.signed.{elf,bin}; do
+            for f in build/${{ matrix.app }}/zephyr/zephyr.signed.{elf,bin,hex}; do
               [ -f "${f}" ] && cp "${f}" "dist/${{ matrix.artifact }}/${{ matrix.artifact }}.signed.${f##*.}"
             done
-            for f in build/sensor_board/zephyr/zephyr.{elf,bin,hex}; do
+            for f in build/${{ matrix.app }}/zephyr/zephyr.{elf,bin,hex}; do
               [ -f "${f}" ] && cp "${f}" "dist/${{ matrix.artifact }}/${{ matrix.artifact }}.${f##*.}"
             done
           else
