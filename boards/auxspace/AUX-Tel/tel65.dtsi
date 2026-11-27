@@ -271,9 +271,11 @@ aux_data_uart: &lpuart1 {
 };
 
 /*
- * No MCUboot on this board: the only programming path is SWD on J5, and
- * 256 kB of flash does not leave room for two image slots plus a
- * bootloader. The application therefore starts at the bottom of flash.
+ * MCUboot in single-app mode (see stm32wl/Kconfig.sysbuild): the only
+ * programming path is SWD on J5, so a second image slot would never be
+ * filled. MCUboot takes the bottom of flash and the one application slot
+ * gets everything up to the storage partition. All boundaries sit on the
+ * 2 kB erase pages.
  */
 &flash0 {
 	partitions {
@@ -281,10 +283,17 @@ aux_data_uart: &lpuart1 {
 		#address-cells = <1>;
 		#size-cells = <1>;
 
-		slot0_partition: partition@0 {
+		boot_partition: partition@0 {
+			compatible = "zephyr,mapped-partition";
+			label = "mcuboot";
+			reg = <0x00000000 DT_SIZE_K(48)>;
+			read-only;
+		};
+
+		slot0_partition: partition@c000 {
 			compatible = "zephyr,mapped-partition";
 			label = "image-0";
-			reg = <0x00000000 DT_SIZE_K(248)>;
+			reg = <0x0000c000 DT_SIZE_K(200)>;
 		};
 
 		storage_partition: partition@3e000 {

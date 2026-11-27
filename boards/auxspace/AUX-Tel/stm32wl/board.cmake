@@ -1,5 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
+if(NOT SYSBUILD)
+  message(WARNING
+    "AUX-Tel boots through MCUboot. "
+    "Use: west build --sysbuild")
+endif()
+
 # SWD on J5 pins 2 and 4 is the only working path - see the board doc's
 # "Why the UART bootloader is unusable". Note that a factory module sits at
 # RDP level 1, so the first flash of any new module needs the one-time

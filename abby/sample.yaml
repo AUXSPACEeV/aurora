@@ -11,6 +11,7 @@ sample:
   name: abby
 common:
   build_only: true
+  sysbuild: true
   platform_allow:
     - tel65@1
   integration_platforms:

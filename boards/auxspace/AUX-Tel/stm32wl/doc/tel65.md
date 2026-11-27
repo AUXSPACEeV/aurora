@@ -262,10 +262,21 @@ the first boards.
 SWD on the J5 header is the only programming path. The Daphnis-I has no
 USB, and its UART bootloader will not accept a Zephyr image (see
 [Why the UART bootloader is unusable](#why-the-uart-bootloader-is-unusable)).
-AUX-Tel therefore does **not** use MCUboot or `sysbuild`, unlike AUX-Core:
-256 kB of flash does not leave room for a bootloader plus two image slots,
-so the application starts at the bottom of flash with an 8 kB `storage`
-partition at the top.
+AUX-Tel boots through MCUboot in **single-app mode**, so build with
+`--sysbuild`. With SWD as the only programming path a second image slot would
+never be filled, so there is just one:
+
+| Partition | Offset    | Size   |
+|-----------|-----------|--------|
+| `mcuboot` | `0x00000` | 48 kB  |
+| `image-0` | `0x0c000` | 200 kB |
+| `storage` | `0x3e000` | 8 kB   |
+
+MCUboot itself takes about 25 kB. The rest of its partition is headroom
+for serial recovery. It checks the image's ECDSA P-256 signature before
+every boot. Unless `SB_CONFIG_BOOT_SIGNATURE_KEY_FILE` names a key of your
+own, sysbuild signs with MCUboot's **public** development key, which is fine on
+the bench, not for EUROC.
 
 ```{warning}
 Flashing AURORA replaces Würth's firmware, and you cannot put it back.
@@ -295,8 +306,12 @@ variant Zephyr supports upstream.
 ## Building
 
 ```bash
-west build -p -b tel65 <application>
+west build -p --sysbuild -b tel65 <application>
 ```
+
+`west flash` then writes MCUboot and the signed `zephyr.signed.hex` in
+order. A build without `--sysbuild` links the application at the bottom
+of flash and overwrites MCUboot when flashed.
 
 `hal_stm32` and `loramac-node` must be present in the workspace; both were
 added to the manifest allowlist for this board, so run `west update` once
@@ -477,8 +492,8 @@ ANR036 points at the plain LoRa driver samples for this module family,
 which are the quickest way to prove the RF front-end pins are right:
 
 ```bash
-west build -p -b tel65 $ZEPHYR_BASE/samples/drivers/lora/send
-west build -p -b tel65 $ZEPHYR_BASE/samples/drivers/lora/receive
+west build -p --sysbuild -b tel65 $ZEPHYR_BASE/samples/drivers/lora/send
+west build -p --sysbuild -b tel65 $ZEPHYR_BASE/samples/drivers/lora/receive
 ```
 
 Running `send` on this board against `receive` on a
